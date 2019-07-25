@@ -830,6 +830,7 @@ struct nand_manufacturer_ops {
  *			additional error status checks (determine if errors are
  *			correctable).
  * @manufacturer:	[INTERN] Contains manufacturer information
+ * @drv_options		[OPTIONAL] stores driver private bit options for the chip.
  */
 
 struct nand_chip {
@@ -921,6 +922,8 @@ struct nand_chip {
 		const struct nand_manufacturer *desc;
 		void *priv;
 	} manufacturer;
+
+	unsigned int drv_options;
 };
 
 extern const struct mtd_ooblayout_ops nand_ooblayout_sp_ops;
@@ -1045,7 +1048,8 @@ static inline void *nand_get_manufacturer_data(struct nand_chip *chip)
  *               NAND_ECC_INFO(4, 512).
  * @onfi_timing_mode_default: the default ONFI timing mode entered after a NAND
  *			      reset. Should be deduced from timings described
- *			      in the datasheet.
+ *			      in the datasheet. 
+ * @drv_options: stores driver private bit options for the chip.
  *
  */
 struct nand_flash_dev {
@@ -1068,6 +1072,7 @@ struct nand_flash_dev {
 		uint16_t step_ds;
 	} ecc;
 	int onfi_timing_mode_default;
+	unsigned int drv_options;
 };
 
 /**

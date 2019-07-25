@@ -76,6 +76,14 @@
 
 #define __exit          __section(.exit.text) __exitused __cold notrace
 
+/* Used for HOTPLUG */
+#define __devinit        __section(.devinit.text) __cold notrace
+#define __devinitdata    __section(.devinit.data)
+#define __devinitconst   __section(.devinit.rodata)
+#define __devexit        __section(.devexit.text) __exitused __cold notrace
+#define __devexitdata    __section(.devexit.data)
+#define __devexitconst   __section(.devexit.rodata)
+
 /* Used for MEMORY_HOTPLUG */
 #define __meminit        __section(.meminit.text) __cold notrace \
 						  __latent_entropy
@@ -271,6 +279,12 @@ void __init parse_early_options(char *cmdline);
 
 /* Data marked not to be saved by software suspend */
 #define __nosavedata __section(.data..nosave)
+
+#if defined(MODULE) || defined(CONFIG_HOTPLUG)
+#define __devexit_p(x) x
+#else
+#define __devexit_p(x) NULL
+#endif
 
 #ifdef MODULE
 #define __exit_p(x) x

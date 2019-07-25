@@ -560,4 +560,10 @@ config MTD_NAND_MTK
 	  Enables support for NAND controller on MTK SoCs.
 	  This controller is found on mt27xx, mt81xx, mt65xx SoCs.
 
+config MTD_SPINAND_SP
+	tristate "Support for SPI NAND controller on SUNPLUS SoCs"
+	help
+	  Enables support for SPI NAND controller on SUNPLUS SoCs.
+	  This controller is found on Sunplus SoCs.	  
+	  
 endif # MTD_NAND

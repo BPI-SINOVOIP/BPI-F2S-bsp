@@ -1,0 +1,9 @@
+config PWM_SP7021
+	tristate "SP7021 PWM support"
+	depends on ARCH_PENTAGRAM
+	help
+	  Generic PWM framework driver for SP7021.
+
+	  To compile this driver as a module, choose M here: the module
+	  will be called pwm_sp7021.
+

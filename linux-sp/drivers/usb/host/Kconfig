@@ -3,6 +3,26 @@
 #
 comment "USB Host Controller Drivers"
 
+config USB_LOGO_TEST
+	bool "GEMINI USB Logo Test support"
+	depends on USB
+	select USB_BAD_DEVICE_INFO
+
+# workaround hw bug that randomly happen abnormal when host controller send packet
+config USB_HOST_RESET_SP
+	bool "Enable Reset SUNPLUS usb host controllor with wait_event"
+	depends on USB
+	select PINCTRL_SPPCTL
+
+config USB_OHCI_MSI_WORKAROUND
+	bool "Enable Workaround USB Ohci Msi Problem"
+	depends on USB
+
+config USB_USE_PLATFORM_RESOURCE
+	bool "GEMINI Use USB Platfrom Resource"
+	depends on USB
+	default n
+
 config USB_C67X00_HCD
 	tristate "Cypress C67x00 HCD support"
 	depends on HAS_IOMEM
@@ -151,6 +171,20 @@ config USB_EHCI_HCD_PMC_MSP
 	---help---
 		Enables support for the onchip USB controller on the PMC_MSP7100 Family SoC's.
 		If unsure, say N.
+
+config USB_EHCI_BIG_ENDIAN_MMIO
+	bool
+	depends on USB_EHCI_HCD && (PPC_CELLEB || PPC_PS3 || 440EPX || \
+				    ARCH_IXP4XX || XPS_USB_HCD_XILINX || \
+				    PPC_MPC512x || CPU_CAVIUM_OCTEON || \
+				    PMC_MSP || SPARC_LEON)
+	default y
+
+config USB_EHCI_BIG_ENDIAN_DESC
+	bool
+	depends on USB_EHCI_HCD && (440EPX || ARCH_IXP4XX || XPS_USB_HCD_XILINX || \
+				    PPC_MPC512x || PMC_MSP || SPARC_LEON)
+	default y
 
 config XPS_USB_HCD_XILINX
 	bool "Use Xilinx usb host EHCI controller core"
@@ -311,7 +345,7 @@ config USB_EHCI_ATH79
 	  on the Atheros AR7XXX/AR9XXX SoCs.
 
 config USB_EHCI_HCD_PLATFORM
-	tristate "Generic EHCI driver for a platform device"
+	bool "Generic EHCI driver for a platform device"
 	default n
 	---help---
 	  Adds an EHCI host driver for a generic platform device, which
@@ -579,7 +613,7 @@ config USB_CNS3XXX_OHCI
 	  It is needed for low-speed USB 1.0 device support.
 
 config USB_OHCI_HCD_PLATFORM
-	tristate "Generic OHCI driver for a platform device"
+	bool "Generic OHCI driver for a platform device"
 	default n
 	---help---
 	  Adds an OHCI host driver for a generic platform device, which

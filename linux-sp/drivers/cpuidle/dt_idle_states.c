@@ -206,6 +206,14 @@ int dt_init_idle_driver(struct cpuidle_driver *drv,
 			break;
 		}
 		of_node_put(state_node);
+		
+    //temp solution due to of_parse_phandle(cpu_node, "cpu-idle-states", i); will  point to NULL when i=1
+		//need review later 20190313
+		if (state_idx == 2) {
+			i++;
+			pr_warn("State index reached static CPU idle driver states array size\n");
+			break;
+		}
 	}
 
 	of_node_put(state_node);

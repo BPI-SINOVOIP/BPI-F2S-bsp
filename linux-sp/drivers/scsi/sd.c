@@ -1646,6 +1646,7 @@ static void sd_rescan(struct device *dev)
 {
 	struct scsi_disk *sdkp = dev_get_drvdata(dev);
 
+	sdkp->media_present = 1;
 	revalidate_disk(sdkp->disk);
 }
 

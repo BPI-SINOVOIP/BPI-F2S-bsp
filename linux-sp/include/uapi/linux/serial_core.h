@@ -271,4 +271,7 @@
 /* MPS2 UART */
 #define PORT_MPS2UART	116
 
+/* Sunplus */
+#define PORT_SP         199
+
 #endif /* _UAPILINUX_SERIAL_CORE_H */

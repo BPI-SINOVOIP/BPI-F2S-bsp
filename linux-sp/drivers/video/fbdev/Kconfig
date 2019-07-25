@@ -2435,6 +2435,8 @@ config FB_HYPERV
 	help
 	  This framebuffer driver supports Microsoft Hyper-V Synthetic Video.
 
+source "drivers/video/fbdev/fb_sp7021/Kconfig"
+
 config FB_SIMPLE
 	bool "Simple framebuffer support"
 	depends on (FB = y)

@@ -1313,6 +1313,11 @@ choice
 		  options; the platform specific options are deprecated
 		  and will be soon removed.
 
+	config DEBUG_SP_UART
+		bool "Kernel low-level debugging messages via Sunplus UART"
+		help
+		  Say Y here if you want kernel low-level debugging support
+		  on Sunplus based platforms on the UART.
 endchoice
 
 config DEBUG_AT91_UART
@@ -1503,6 +1508,7 @@ config DEBUG_UART_PHYS
 	default 0x80230000 if DEBUG_PICOXCELL_UART
 	default 0x808c0000 if DEBUG_EP93XX || ARCH_EP93XX
 	default 0x90020000 if DEBUG_NSPIRE_CLASSIC_UART || DEBUG_NSPIRE_CX_UART
+	default 0x9c000900 if DEBUG_SP_UART
 	default 0xb0060000 if DEBUG_SIRFPRIMA2_UART1
 	default 0xb0090000 if DEBUG_VEXPRESS_UART0_CRX
 	default 0xc0013000 if DEBUG_U300_UART
@@ -1559,6 +1565,7 @@ config DEBUG_UART_PHYS
 		DEBUG_S3C64XX_UART || \
 		DEBUG_BCM63XX_UART || DEBUG_ASM9260_UART || \
 		DEBUG_SIRFSOC_UART || DEBUG_DIGICOLOR_UA0 || \
+		DEBUG_SP_UART || \
 		DEBUG_AT91_UART
 
 config DEBUG_UART_VIRT
@@ -1595,6 +1602,7 @@ config DEBUG_UART_VIRT
 				DEBUG_S3C2410_UART2)
 	default 0xf7020000 if DEBUG_AT91_SAMA5D2_UART1
 	default 0xf7fc9000 if DEBUG_BERLIN_UART
+	default 0xf8000900 if DEBUG_SP_UART
 	default 0xf8007000 if DEBUG_HIP04_UART
 	default 0xf8009000 if DEBUG_VEXPRESS_UART0_CA9
 	default 0xf8090000 if DEBUG_VEXPRESS_UART0_RS1
@@ -1658,6 +1666,7 @@ config DEBUG_UART_VIRT
 		DEBUG_S3C64XX_UART || \
 		DEBUG_BCM63XX_UART || DEBUG_ASM9260_UART || \
 		DEBUG_SIRFSOC_UART || DEBUG_DIGICOLOR_UA0 || \
+		DEBUG_SP_UART || \
 		DEBUG_AT91_UART
 
 config DEBUG_UART_8250_SHIFT

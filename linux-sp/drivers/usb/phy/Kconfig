@@ -3,8 +3,19 @@
 #
 menu "USB Physical Layer drivers"
 
+config SUNPLUS_USB_PHY
+	tristate "Sunplus USB PHY"
+
 config USB_PHY
 	def_bool n
+
+config USB_SUNPLUS_OTG
+	bool "support sunplus otg driver"
+	depends on USB_GADGET_SUNPLUS && GEMINI_USB
+	select USB_OTG
+	select USB_OTG_UTILS
+	help
+		support sunplus otg driver.
 
 #
 # USB Transceiver Drivers

@@ -28,13 +28,24 @@
 #include <linux/mutex.h>
 #include <linux/random.h>
 #include <linux/pm_qos.h>
+#include <linux/kthread.h>
+#include <linux/freezer.h>
+
 
 #include <linux/uaccess.h>
 #include <asm/byteorder.h>
+#include <linux/platform_device.h>
+#include <linux/usb/sp_usb.h>
 
+#include "../phy/sunplus-otg.h"
 #include "hub.h"
 #include "otg_whitelist.h"
 
+#if defined SYSCONFIG_MIRROR_LINK && SYSCONFIG_MIRROR_LINK
+#define SUPPORT_MIRRORLINK	/*later maybe use kconfig, sjhuang */
+#endif
+
+#define POWER_RESET_TIME			500
 #define USB_VENDOR_GENESYS_LOGIC		0x05e3
 #define HUB_QUIRK_CHECK_PORT_AUTOSUSPEND	0x01
 
@@ -42,10 +53,13 @@
  * Note: Both are also protected by ->dev.sem, except that ->state can
  * change to USB_STATE_NOTATTACHED even when the semaphore isn't held. */
 static DEFINE_SPINLOCK(device_state_lock);
+static DEFINE_SPINLOCK(hub_event_lock);
+static LIST_HEAD(hub_event_list);	/* List of hubs needing servicing */
 
+static DECLARE_WAIT_QUEUE_HEAD(khubd_wait);
 /* workqueue to process hub events */
-static struct workqueue_struct *hub_wq;
-static void hub_event(struct work_struct *work);
+static struct task_struct *khubd_task;
+static void hub_events(void);
 
 /* synchronize hub-port add/remove and peering operations */
 DEFINE_MUTEX(usb_port_peer_mutex);
@@ -101,9 +115,422 @@ EXPORT_SYMBOL_GPL(ehci_cf_port_reset_rwsem);
 #define HUB_DEBOUNCE_STEP	  25
 #define HUB_DEBOUNCE_STABLE	 100
 
+#ifdef CONFIG_USB_HOST_ENUM_RETRY
+enum enum_retry_state {
+	HS_FIRST_START = 0,
+	HS_FIRST_ENUM,
+	/* did not reset vbus power when at above state */
+	HS_SECOND_START,
+	HS_SECOND_ENUM,
+	FS_FIRST_START,
+	FS_FIRST_ENUM
+};
+
+enum enum_retry_event {
+	ENUM_START = 0,
+	ENUM_START_RX_ACTIVE_HANDLE,
+	ENUM_SUCCESS_RUN_TOP_SPEED,
+	ENUM_SUCCESS_NOT_RUN_TOP_SPEED,
+	ENUM_FAIL_NOT_RX_ACTIVE,
+	ENUM_FAIL_RX_ACTIVE
+};
+
+enum retry_event_result {
+	HANDLE_FAIL = -1,
+	HANDLE_SUCCESS
+};
+
+#define STRING_NUM		10
+#define STRING_MAX_LENGTH	30
+static char enum_retry_status_string[STRING_NUM][STRING_MAX_LENGTH] = {
+	"hs_first_start",
+	"hs_first_enum",
+	"hs_second_start",
+	"hs_second_enum",
+	"fs_first_start",
+	"fs_first_enum"
+};
+
+static bool rx_active_not_run_ehci_flag[USB_PORT_NUM] = { false };
+
+static int enum_retry_status[USB_PORT_NUM] = { HS_FIRST_START };
+
+static bool handle_power_reset_retry_enum = true;
+module_param(handle_power_reset_retry_enum, bool, S_IRUGO | S_IWUSR);
+#endif
+
+static int enum_success_times[USB_PORT_NUM] = { 0 };
+
+#ifdef CONFIG_USB_LOGO_TEST
+unsigned short usb_idVendor = 0;
+unsigned short usb_idProduct = 0;
+unsigned int user_id = 0;
+module_param_named(id_enable, user_id, uint, S_IRUGO | S_IWUSR);
+MODULE_PARM_DESC(id_enable, "Use user id");
+module_param_named(idVendor, usb_idVendor, ushort, S_IRUGO | S_IWUSR);
+MODULE_PARM_DESC(idVendor, "User idVendor");
+module_param_named(idProduct, usb_idProduct, ushort, S_IRUGO | S_IWUSR);
+MODULE_PARM_DESC(idProduct, "User idProduct");
+#endif
+
 static void hub_release(struct kref *kref);
 static int usb_reset_and_verify_device(struct usb_device *udev);
 static int hub_port_disable(struct usb_hub *hub, int port1, int set_state);
+#ifdef CONFIG_USB_HOST_RESET_SP
+extern void reset_usb_powerx(struct usb_hcd *hcd, int delayms);
+#endif
+
+/* Note that hdev or one of its children must be locked! */
+static struct usb_hub *hdev_to_hub(struct usb_device *hdev)
+{
+	if (!hdev || !hdev->actconfig)
+		return NULL;
+	return usb_get_intfdata(hdev->actconfig->interface[0]);
+}
+
+#ifdef CONFIG_USB_SUNPLUS_OTG
+extern struct sp_otg *sp_otg_host;
+extern void detech_start(void);
+static int hnp_polling_watchdog(void *arg)
+{
+	struct usb_device *udev = (struct usb_device *)arg;
+	struct usb_phy *otg_phy;
+	bool host_req_flag = false;
+	u32 otg_status;
+	int ret;
+
+	while(1){
+		ret = usb_control_msg(udev, usb_rcvctrlpipe(udev, 0),
+							  0, 0x80, 0, 0xf000, &otg_status, 4, 5000);
+		if(ret < 0) {
+			printk("polling otg status fail,ret:%d\n",ret);
+			return -1;
+		} else {
+			host_req_flag = otg_status & 0x1;
+			if(host_req_flag) {
+				otg_phy = usb_get_transceiver_sp(udev->bus->busnum-1);
+				if(!otg_phy){
+					printk("Get otg control fail(busnum:%d)!\n", udev->bus->busnum);
+					return 1;
+				}
+				ret = usb_control_msg(udev,
+				usb_sndctrlpipe(udev, 0),
+				USB_REQ_SET_FEATURE, 0,
+				USB_DEVICE_B_HNP_ENABLE,
+				0, NULL, 0,
+				USB_CTRL_SET_TIMEOUT);
+				if (ret < 0) {
+					/*
+					 * OTG MESSAGE: report errors here,
+					 * customize to match your product.
+					 */
+					printk("can't set HNP mode: %d\n",ret);
+				}
+				otg_start_hnp(otg_phy->otg);
+				msleep(1);
+				detech_start();
+				return 0;
+			} else {
+			  msleep(1000);
+			}
+		}
+	}
+}
+#endif
+
+#ifdef CONFIG_USB_HOST_ENUM_RETRY
+static int get_enum_retry_status(int port_num)
+{
+	int string_id;
+
+	string_id = enum_retry_status[port_num];
+	printk(KERN_NOTICE "############# %s\n",
+	       enum_retry_status_string[string_id]);
+
+	return enum_retry_status[port_num];
+}
+
+static void set_enum_retry_status(int port_num, int new_enum_retry_status)
+{
+	int string_id;
+
+	enum_retry_status[port_num] = new_enum_retry_status;
+	string_id = enum_retry_status[port_num];
+
+	printk(KERN_NOTICE "************* %s\n",
+	       enum_retry_status_string[string_id]);
+}
+
+static int enum_start_rx_active_handle(struct usb_hub *hub)
+{
+	int port_num;
+	struct usb_device *hdev = hub->hdev;
+	struct usb_hcd *hcd = bus_to_hcd(hdev->bus);
+	struct platform_device *pdev;
+
+	pdev = to_platform_device(hcd->self.controller);
+	port_num = pdev->id - 1;
+
+	if (hcd->driver->relinquish_port
+	    && rx_active_not_run_ehci_flag[port_num]) {
+		rx_active_not_run_ehci_flag[port_num] = false;
+		if (hcd->enum_port_status & USB_PORT_STAT_ENABLE)
+			hub_port_disable(hub, hcd->hub_port_num, 1);
+
+		printk(KERN_NOTICE "rx-active,switch to fs,retry enum\n");
+		hcd->driver->relinquish_port(hcd, hcd->hub_port_num);
+
+		return -1;
+	}
+	rx_active_not_run_ehci_flag[port_num] = false;
+
+	return 0;
+}
+
+static void enum_start_retry_status_handle(struct usb_hub *hub)
+{
+	int port_num;
+	int retry_status;
+	struct usb_device *hdev = hub->hdev;
+	struct usb_hcd *hcd = bus_to_hcd(hdev->bus);
+	struct platform_device *pdev;
+
+	pdev = to_platform_device(hcd->self.controller);
+	port_num = pdev->id - 1;
+
+	retry_status = get_enum_retry_status(port_num);
+	switch (retry_status) {
+	case HS_FIRST_START:
+		set_enum_retry_status(port_num, HS_FIRST_ENUM);
+		break;
+	case HS_SECOND_START:
+		set_enum_retry_status(port_num, HS_SECOND_ENUM);
+		break;
+	case FS_FIRST_START:
+		set_enum_retry_status(port_num, FS_FIRST_ENUM);
+		break;
+	default:
+		printk(KERN_NOTICE
+		       "not expect enum retry status, port:%d, status:%x\n",
+		       port_num, retry_status);
+		break;
+	}
+
+	hcd->hub_thread = current;
+	hcd->enum_flag[port_num] = true;
+	enum_rx_active_flag[port_num] = false;
+}
+
+static void enum_success_run_top_speed_handle(struct usb_hub *hub)
+{
+	int port_num;
+	struct usb_device *hdev = hub->hdev;
+	struct usb_hcd *hcd = bus_to_hcd(hdev->bus);
+	struct platform_device *pdev;
+
+	pdev = to_platform_device(hcd->self.controller);
+	port_num = pdev->id - 1;
+
+	hcd->hub_thread = NULL;
+	hcd->hub_port_num = 0;
+	hcd->enum_flag[port_num] = false;
+	enum_rx_active_flag[port_num] = false;
+	set_enum_retry_status(port_num, HS_FIRST_START);
+}
+
+static void enum_success_not_run_top_speed_handle(struct usb_hub *hub)
+{
+	int port_num;
+	int retry_status;
+	struct usb_device *hdev = hub->hdev;
+	struct usb_hcd *hcd = bus_to_hcd(hdev->bus);
+	struct platform_device *pdev;
+
+	pdev = to_platform_device(hcd->self.controller);
+	port_num = pdev->id - 1;
+
+	retry_status = get_enum_retry_status(port_num);
+	if (handle_power_reset_retry_enum) {
+		if (test_bit(USB_EHCI_LOADED, &usb_hcds_loaded)) {
+			/* did not reset vbus power when at HS_FIRST_ENUM state */
+			if ((HS_FIRST_ENUM == retry_status) && (!tid_test_flag)){
+				printk(KERN_NOTICE
+				       "usb vbus power reset to retry enum\n");
+				set_enum_retry_status(port_num, HS_SECOND_START);
+				reset_usb_powerx(hcd, POWER_RESET_TIME);
+			} else {
+				set_enum_retry_status(port_num, HS_FIRST_START);
+			}
+		}
+	}
+
+	hcd->hub_port_num = 0;
+	hcd->hub_thread = NULL;
+	hcd->enum_flag[port_num] = false;
+	enum_rx_active_flag[port_num] = false;
+}
+
+static void enum_fail_not_rx_active_handle(struct usb_hub *hub)
+{
+	int port_num;
+	u32 port_status;
+	int retry_status;
+	bool has_switch_fs_flag = false;
+	struct usb_device *hdev = hub->hdev;
+	struct usb_hcd *hcd = bus_to_hcd(hdev->bus);
+	struct platform_device *pdev;
+
+	pdev = to_platform_device(hcd->self.controller);
+	port_num = pdev->id - 1;
+
+	if (hcd->driver->relinquish_port) {
+		if (hcd->driver->get_port_status_from_register) {
+			port_status =
+			    hcd->driver->get_port_status_from_register(hcd);
+			if (port_status & PORT_OWNERSHIP) {
+				has_switch_fs_flag = true;
+				printk(KERN_NOTICE
+				       "Warn, has switched to OHCI, ps:%x\n",
+				       port_status);
+			}
+		}
+	}
+
+	retry_status = get_enum_retry_status(port_num);
+	if (handle_power_reset_retry_enum) {
+		switch (retry_status) {
+		case HS_FIRST_ENUM:
+			if(!tid_test_flag) {
+				printk(KERN_NOTICE
+				       "USB vbus power reset to retry enum\n");
+				set_enum_retry_status(port_num, HS_SECOND_START);
+				reset_usb_powerx(hcd, POWER_RESET_TIME);
+			} else {
+				if (hcd->driver->relinquish_port) {
+					set_enum_retry_status(port_num,
+							      FS_FIRST_START);
+					printk(KERN_NOTICE
+					       "fall to fs, retry enum\n");
+					hcd->driver->relinquish_port(hcd,
+						             hcd->hub_port_num);
+				} else {
+					set_enum_retry_status(port_num,
+						              HS_FIRST_START);
+				}
+			}
+			break;
+		case HS_SECOND_ENUM:
+			if (hcd->driver->relinquish_port) {
+				set_enum_retry_status(port_num, FS_FIRST_START);
+				printk(KERN_NOTICE "fall to fs, retry enum\n");
+				hcd->driver->relinquish_port(hcd,
+						             hcd->hub_port_num);
+			} else {
+				set_enum_retry_status(port_num, HS_FIRST_START);
+			}
+			break;
+		case FS_FIRST_ENUM:
+			if (has_switch_fs_flag) {
+				set_enum_retry_status(port_num, FS_FIRST_START);
+			} else {
+				set_enum_retry_status(port_num, HS_FIRST_START);
+			}
+			break;
+		default:
+			printk(KERN_NOTICE
+			       "not expect enum retry status, port:%d, status:%x\n",
+			       port_num, retry_status);
+			break;
+		}
+	} else {
+		printk(KERN_NOTICE
+		       "kernel not handle power reset retry enum\n");
+		if (hcd->driver->relinquish_port) {
+			printk(KERN_NOTICE
+			       "Fall to fs, retry enumerate device\n");
+			hcd->driver->relinquish_port(hcd, hcd->hub_port_num);
+		}
+	}
+
+	hcd->hub_port_num = 0;
+	hcd->hub_thread = NULL;
+	hcd->enum_flag[port_num] = false;
+}
+
+static void enum_fail_rx_active_handle(struct usb_hub *hub)
+{
+	int port_num;
+	int retry_status;
+	struct usb_device *hdev = hub->hdev;
+	struct usb_hcd *hcd = bus_to_hcd(hdev->bus);
+	struct platform_device *pdev;
+
+	pdev = to_platform_device(hcd->self.controller);
+	port_num = pdev->id - 1;
+
+	if (enum_rx_active_flag[port_num]) {
+		rx_active_not_run_ehci_flag[port_num] = true;
+		printk(KERN_NOTICE
+		       "rx-active question, wait reset driver & hw finish\n");
+		down(&enum_rx_active_reset_sem[port_num]);
+		if (hcd->driver->relinquish_port) {
+			printk(KERN_NOTICE "rx-active, fall to fs, retry enum\n");
+			hcd->driver->relinquish_port(hcd, hcd->hub_port_num);
+		}
+
+		retry_status = get_enum_retry_status(port_num);
+		switch (retry_status) {
+		case HS_FIRST_ENUM:
+			/* for the case that run not top speed in next enum */
+			set_enum_retry_status(port_num, HS_FIRST_START);
+			break;
+		case HS_SECOND_ENUM:
+			set_enum_retry_status(port_num, FS_FIRST_START);
+			break;
+		default:
+			printk(KERN_NOTICE
+			       "not expect enum retry status, port:%d, status:%d\n",
+			       port_num, retry_status);
+			break;
+		}
+
+		hcd->hub_port_num = 0;
+		hcd->hub_thread = NULL;
+		hcd->enum_flag[port_num] = false;
+		enum_rx_active_flag[port_num] = false;
+	}
+}
+
+static int enum_event_handle(struct usb_hub *hub, int event)
+{
+	switch (event) {
+	case ENUM_START_RX_ACTIVE_HANDLE:
+		if (-1 == enum_start_rx_active_handle(hub))
+			return HANDLE_FAIL;
+		break;
+	case ENUM_START:
+		enum_start_retry_status_handle(hub);
+		break;
+	case ENUM_SUCCESS_RUN_TOP_SPEED:
+		enum_success_run_top_speed_handle(hub);
+		break;
+	case ENUM_SUCCESS_NOT_RUN_TOP_SPEED:
+		enum_success_not_run_top_speed_handle(hub);
+		break;
+	case ENUM_FAIL_NOT_RX_ACTIVE:
+		enum_fail_not_rx_active_handle(hub);
+		break;
+	case ENUM_FAIL_RX_ACTIVE:
+		enum_fail_rx_active_handle(hub);
+		break;
+	default:
+		printk(KERN_NOTICE "now, not support event %x\n", event);
+		break;
+	}
+
+	return HANDLE_SUCCESS;
+}
+#endif	/* USB_HOST_ENUM_RETRY */
 
 static inline char *portspeed(struct usb_hub *hub, int portstatus)
 {
@@ -118,6 +545,29 @@ static inline char *portspeed(struct usb_hub *hub, int portstatus)
 	else
 		return "12 Mb/s";
 }
+
+#ifdef	CONFIG_RETRY_TIMES
+static int is_usb_high_bus(struct usb_bus *bus)
+{
+	struct usb_hcd *hcd;
+	int high = 0;
+
+	hcd = bus_to_hcd(bus);
+
+	switch (hcd->irq) {
+	case SP_IRQ_EHCI_USB0:
+	case SP_IRQ_EHCI_USB1:
+	case SP_IRQ_EHCI_USB2:
+		high = 1;
+		break;
+	default:
+		high = 0;
+		break;
+	}
+
+	return high;
+}
+#endif
 
 /* Note that hdev or one of its children must be locked! */
 struct usb_hub *usb_hub_to_struct_hub(struct usb_device *hdev)
@@ -603,6 +1053,7 @@ static int hub_port_status(struct usb_hub *hub, int port1,
 				   status, change, NULL);
 }
 
+#if 0
 static void kick_hub_wq(struct usb_hub *hub)
 {
 	struct usb_interface *intf;
@@ -629,13 +1080,29 @@ static void kick_hub_wq(struct usb_hub *hub)
 	usb_autopm_put_interface_async(intf);
 	kref_put(&hub->kref, hub_release);
 }
+#endif
+static void kick_khubd(struct usb_hub *hub)
+{
+	unsigned long	flags;
+
+	spin_lock_irqsave(&hub_event_lock, flags);
+	if (!hub->disconnected && list_empty(&hub->event_list)) {
+		list_add_tail(&hub->event_list, &hub_event_list);
+
+		/* Suppress autosuspend until khubd runs */
+		usb_autopm_get_interface_no_resume(
+				to_usb_interface(hub->intfdev));
+		wake_up(&khubd_wait);
+	}
+	spin_unlock_irqrestore(&hub_event_lock, flags);
+}
 
 void usb_kick_hub_wq(struct usb_device *hdev)
 {
 	struct usb_hub *hub = usb_hub_to_struct_hub(hdev);
 
 	if (hub)
-		kick_hub_wq(hub);
+		kick_khubd(hub);
 }
 
 /*
@@ -657,7 +1124,7 @@ void usb_wakeup_notification(struct usb_device *hdev,
 	hub = usb_hub_to_struct_hub(hdev);
 	if (hub) {
 		set_bit(portnum, hub->wakeup_bits);
-		kick_hub_wq(hub);
+		kick_khubd(hub);
 	}
 }
 EXPORT_SYMBOL_GPL(usb_wakeup_notification);
@@ -697,7 +1164,7 @@ static void hub_irq(struct urb *urb)
 	hub->nerrors = 0;
 
 	/* Something happened, let hub_wq figure it out */
-	kick_hub_wq(hub);
+	kick_khubd(hub);
 
 resubmit:
 	if (hub->quiescing)
@@ -930,7 +1397,7 @@ static void hub_port_logical_disconnect(struct usb_hub *hub, int port1)
 	 */
 
 	set_bit(port1, hub->change_bits);
-	kick_hub_wq(hub);
+	kick_khubd(hub);
 }
 
 /**
@@ -1209,7 +1676,7 @@ static void hub_activate(struct usb_hub *hub, enum hub_activation_type type)
 				&hub->leds, LED_CYCLE_PERIOD);
 
 	/* Scan all ports that need attention */
-	kick_hub_wq(hub);
+	kick_khubd(hub);
  abort:
 	if (type == HUB_INIT2 || type == HUB_INIT3) {
 		/* Allow autosuspend if it was suppressed */
@@ -1628,7 +2095,14 @@ static void hub_disconnect(struct usb_interface *intf)
 	 * Stop adding new hub events. We do not want to block here and thus
 	 * will not try to remove any pending work item.
 	 */
+	/* Take the hub off the event list and don't let it be added again */
+	spin_lock_irq(&hub_event_lock);
+	if (!list_empty(&hub->event_list)) {
+		list_del_init(&hub->event_list);
+		usb_autopm_put_interface_no_suspend(intf);
+	}
 	hub->disconnected = 1;
+	spin_unlock_irq(&hub_event_lock);
 
 	/* Disconnect all children and quiesce the hub */
 	hub->error = 0;
@@ -1766,11 +2240,11 @@ descriptor_error:
 		return -ENOMEM;
 
 	kref_init(&hub->kref);
+	INIT_LIST_HEAD(&hub->event_list);
 	hub->intfdev = &intf->dev;
 	hub->hdev = hdev;
 	INIT_DELAYED_WORK(&hub->leds, led_work);
 	INIT_DELAYED_WORK(&hub->init_work, NULL);
-	INIT_WORK(&hub->events, hub_event);
 	usb_get_intf(intf);
 	usb_get_dev(hdev);
 
@@ -2040,6 +2514,28 @@ static void release_devnum(struct usb_device *udev)
 	if (udev->devnum > 0) {
 		clear_bit(udev->devnum, udev->bus->devmap.devicemap);
 		udev->devnum = -1;
+#ifdef CONFIG_USB_HOST_RESET_SP_
+		struct usb_hcd *hcd = bus_to_hcd(udev->bus);
+		u32 *ptr;
+
+		if ((hcd->self.root_hub->speed == USB_SPEED_HIGH)
+		    && (hcd->self.root_hub->speed != udev->speed))
+			return;
+
+		/* point to the */
+		ptr = (u32 *)((u8 *)hcd->hcd_priv
+			      + hcd->driver->hcd_priv_size
+			      - sizeof(wait_queue_head_t) - sizeof(u32));
+		if (!ptr)
+			return;
+
+		if (udev->bus->devmap.devicemap[0] < 2)
+			*(ptr + sizeof(wait_queue_head_t) / 4) &= ~1;
+		else {
+			*(ptr + sizeof(wait_queue_head_t) / 4) |= 1;
+			wake_up_interruptible((wait_queue_head_t *)ptr);
+		}
+#endif
 	}
 }
 
@@ -2070,6 +2566,32 @@ static void hub_disconnect_children(struct usb_device *udev)
 			usb_disconnect(&hub->ports[i]->child);
 	}
 }
+
+#ifdef CONFIG_USB_HOST_RESET_SP
+void reset_usb_wake_up(struct usb_device *udev)
+{
+	struct usb_hcd *hcd = bus_to_hcd(udev->bus);
+	u32 *ptr_flag;
+
+	/* low & full speed both use OHCI */
+	if ((hcd->self.root_hub->speed == USB_SPEED_HIGH)
+	    && (hcd->self.root_hub->speed != udev->speed))
+		return;
+
+	ptr_flag = hcd->ptr_flag;
+	if (!ptr_flag)
+		return;
+
+	/* printk("<<<###*###>> %ld\n",udev->bus->devmap.devicemap[0]); */
+
+	if (udev->bus->devmap.devicemap[0] < 2)
+		*(ptr_flag) &= ~1;
+	else {
+		*(ptr_flag) |= 1;
+		wake_up_interruptible(&hcd->reset_queue);
+	}
+}
+#endif
 
 /**
  * usb_disconnect - disconnect a device (usbcore-internal)
@@ -2150,6 +2672,16 @@ void usb_disconnect(struct usb_device **pdev)
 	 */
 	release_devnum(udev);
 
+#ifdef CONFIG_USB_HOST_RESET_SP
+	#ifdef CONFIG_RETRY_TIMES
+	if (udev->reset_count != 0 || !is_usb_high_bus(udev->bus)) {
+		reset_usb_wake_up(udev);
+	}
+	#else
+	reset_usb_wake_up(udev);
+	#endif
+#endif
+
 	/* Avoid races with recursively_mark_NOTATTACHED() */
 	spin_lock_irq(&device_state_lock);
 	*pdev = NULL;
@@ -2216,6 +2748,10 @@ static int usb_enumerate_device_otg(struct usb_device *udev)
 		unsigned			port1 = udev->portnum;
 
 		/* descriptor may appear anywhere in config */
+	#ifdef CONFIG_USB_SUNPLUS_OTG
+		udev->device_support_hnp_flag = true;
+	#endif
+
 		err = __usb_get_extra_descriptor(udev->rawdescriptors[0],
 				le16_to_cpu(udev->config[0].desc.wTotalLength),
 				USB_DT_OTG, (void **) &desc);
@@ -2245,6 +2781,7 @@ static int usb_enumerate_device_otg(struct usb_device *udev)
 			}
 		} else if (desc->bLength == sizeof
 				(struct usb_otg_descriptor)) {
+	#if 0
 			/* Set a_alt_hnp_support for legacy otg device */
 			err = usb_control_msg(udev,
 				usb_sndctrlpipe(udev, 0),
@@ -2256,11 +2793,101 @@ static int usb_enumerate_device_otg(struct usb_device *udev)
 				dev_err(&udev->dev,
 					"set a_alt_hnp_support failed: %d\n",
 					err);
+	#endif
 		}
 	}
 #endif
 	return err;
 }
+
+#ifdef SUPPORT_MIRRORLINK
+#define HOST_ID			0x4C05
+#define MIRROR_LINK_VER		0x0101
+#define MIRROR_LINK_DELAY_TIME_MS 1000
+
+enum mirror_link_cmd_state_e {
+	MIRRORLINK_CMD_IDLE = 0,
+	MIRRORLINK_CMD_SEND,
+	MIRRORLINK_CMD_WAIT,
+	MIRRORLINK_CMD_END,
+};
+
+enum mirror_link_cmd_state_e mirror_link_cmd_state;
+int usb_mirrorlink_configuration(struct usb_device *dev, int configuration)
+{
+	int i, ret;
+	struct usb_host_config *cp = NULL;
+	struct usb_interface_descriptor *intf_des;
+	int nintf;
+	int ncm_found = 0;
+
+	if (mirror_link_cmd_state != MIRRORLINK_CMD_IDLE)
+		return 0;
+
+	for (i = 0; i < dev->descriptor.bNumConfigurations; i++) {
+		cp = &dev->config[i];
+		if (!cp) {
+			printk("%s %d\n", __FUNCTION__, __LINE__);
+			return -EINVAL;
+		}
+		nintf = cp->desc.bNumInterfaces;
+		for (i = 0; i < nintf; ++i) {
+			if (NULL == cp->intf_cache[i]) {
+				break;
+			}
+			intf_des = &(cp->intf_cache[i]->altsetting[0].desc);
+
+			if (intf_des->bInterfaceClass == USB_CLASS_HUB) {	/* hub not send */
+				return 0;
+			} else if ((intf_des->bInterfaceClass == USB_CLASS_COMM)
+				   && (intf_des->bInterfaceSubClass == 0x0D)) {
+				ncm_found = 1;
+				break;
+			}
+		}
+	}
+
+	/*
+	 * ADATA udisk vid 0x125F pid 0x312B, will stall & reset.
+	 * Do not send MirrorLink cmd
+	 */
+	if ((dev->descriptor.idProduct == 0x312B)
+	    && (dev->descriptor.idVendor == 0x125F))
+		return 0;
+
+	ret = usb_control_msg(dev, usb_sndctrlpipe(dev, 0),
+			      0xF0, 0x40, cpu_to_be16(MIRROR_LINK_VER),
+			      cpu_to_be16(HOST_ID), NULL, 0, 1000);
+	printk("\tmirror_link cmd] ret =%d (0x%x)\n", ret, ret);
+	if ((!ncm_found) || (ret == -EPIPE)) {
+		printk("Try change to NCM mode ... reset port =%d\n",
+		       dev->portnum);
+		mirror_link_cmd_state = MIRRORLINK_CMD_WAIT;
+		return -1;
+	}
+
+	mirror_link_cmd_state = MIRRORLINK_CMD_SEND;
+	return 0;
+}
+
+static void wait_connect_change(struct usb_device *dev)
+{
+	u16 portstatus;
+	u16 portchange;
+	struct usb_hub *hub = hdev_to_hub(dev->parent);
+
+	if (mirror_link_cmd_state != MIRRORLINK_CMD_WAIT)
+		return;
+
+	printk("\twait +++++++++++\n");
+	msleep(MIRROR_LINK_DELAY_TIME_MS);
+	printk("\twait -----------\n");
+	hub_port_status(hub, dev->portnum, &portstatus, &portchange);
+	printk("\t%s portstatus=%x portchange=%x\n",
+	       __FUNCTION__, portstatus, portchange);
+	mirror_link_cmd_state = MIRRORLINK_CMD_END;
+}
+#endif	/* SUPPORT_MIRRORLINK */
 
 
 /**
@@ -2399,6 +3026,9 @@ static void set_usb_port_removable(struct usb_device *udev)
 int usb_new_device(struct usb_device *udev)
 {
 	int err;
+#ifdef SUPPORT_MIRRORLINK
+	int c;
+#endif
 
 	if (udev->parent) {
 		/* Initialize non-root-hub device wakeup to disabled;
@@ -2419,9 +3049,35 @@ int usb_new_device(struct usb_device *udev)
 	 */
 	usb_disable_autosuspend(udev);
 
+#ifdef CONFIG_USB_BAD_DEVICE_INFO
+	if (udev->descriptor.bDeviceClass != USB_CLASS_DEVICE_NOT_SUPPORT) {
+
+		err = usb_enumerate_device(udev);	/* Read descriptors */
+		if (err < 0)
+			goto fail;
+#ifdef SUPPORT_MIRRORLINK
+		if (mirror_link_cmd_state == MIRRORLINK_CMD_IDLE) {
+			c = usb_choose_configuration(udev);
+			err = usb_mirrorlink_configuration(udev, c);
+			if (err)
+				return err;
+		}
+#endif
+	}
+#else
+
 	err = usb_enumerate_device(udev);	/* Read descriptors */
 	if (err < 0)
 		goto fail;
+#ifdef SUPPORT_MIRRORLINK
+	if (mirror_link_cmd_state == MIRRORLINK_CMD_IDLE) {
+		c = usb_choose_configuration(udev);
+		err = usb_mirrorlink_configuration(udev, c);
+		if (err)
+			return err;
+	}
+#endif
+#endif	/* CONFIG_USB_BAD_DEVICE_INFO */
 	dev_dbg(&udev->dev, "udev %d, busnum %d, minor = %d\n",
 			udev->devnum, udev->bus->busnum,
 			(((udev->bus->busnum-1) * 128) + (udev->devnum-1)));
@@ -2703,16 +3359,20 @@ static int hub_port_wait_reset(struct usb_hub *hub, int port1,
 		return -ENOTCONN;
 
 	/* Device went away? */
-	if (!(portstatus & USB_PORT_STAT_CONNECTION))
+	if (!(portstatus & USB_PORT_STAT_CONNECTION)){
+		printk(KERN_NOTICE "Warn,dev disc during wait reset finish\n");
 		return -ENOTCONN;
+	}
 
 	/* bomb out completely if the connection bounced.  A USB 3.0
 	 * connection may bounce if multiple warm resets were issued,
 	 * but the device may have successfully re-connected. Ignore it.
 	 */
 	if (!hub_is_superspeed(hub->hdev) &&
-			(portchange & USB_PORT_STAT_C_CONNECTION))
+			(portchange & USB_PORT_STAT_C_CONNECTION)){
+		printk(KERN_NOTICE "Warning! Connection status change\n");
 		return -ENOTCONN;
+	}
 
 	if (!(portstatus & USB_PORT_STAT_ENABLE))
 		return -EBUSY;
@@ -2779,6 +3439,9 @@ static int hub_port_reset(struct usb_hub *hub, int port1,
 					"cannot %sreset (err = %d)\n",
 					warm ? "warm " : "", status);
 		} else {
+#ifdef SUPPORT_MIRRORLINK
+			wait_connect_change(udev);
+#endif
 			status = hub_port_wait_reset(hub, port1, udev, delay,
 								warm);
 			if (status && status != -ENOTCONN && status != -ENODEV)
@@ -4326,6 +4989,99 @@ static int hub_enable_device(struct usb_device *udev)
 	return hcd->driver->enable_device(hcd, udev);
 }
 
+#ifdef CONFIG_USB_LOGO_TEST
+u32 usb_logo_test_start = 0;	/* ns (0 for disable) */
+module_param(usb_logo_test_start, uint, 0644);
+EXPORT_SYMBOL_GPL(usb_logo_test_start);
+
+static int usb_logo_thread(void *arg)
+{
+	struct usb_device *udev = (struct usb_device *)arg;
+	struct usb_hcd *hcd = bus_to_hcd(udev->bus);
+	struct usb_hub *hub = hdev_to_hub(udev->parent);
+	struct usb_device_descriptor *buf = NULL;
+
+	int retval = 0;
+
+	u16 idVendor;
+	u16 idProduct;
+
+	idVendor  = udev->descriptor.idVendor;
+	idProduct = udev->descriptor.idProduct;
+
+	if (udev->speed == USB_SPEED_LOW) {
+#include <mach/io_map.h>
+		void __iomem *regs = (void __iomem *)B_SYSTEM_BASE;
+
+		writel(RF_MASK_V(0xffff, 0x0002), regs + UPHY0_CTL0_OFFSET);
+		writel(RF_MASK_V(0xffff, 0x8000), regs + UPHY0_CTL1_OFFSET);
+		writel(RF_MASK_V(0xffff, 0x0004), regs + UPHY1_CTL0_OFFSET);
+		writel(RF_MASK_V(0xffff, 0x8000), regs + UPHY1_CTL1_OFFSET);
+	}
+
+	while (usb_logo_test_start == 0) {
+		msleep(500);
+	}
+
+	if (hub) {
+		retval = hub_port_reset(hub, udev->portnum,
+					udev, HUB_SHORT_RESET_TIME, false);
+		if (retval < 0)
+			goto fail;
+	}
+
+	if (udev->speed != USB_SPEED_HIGH) {
+		retval = -1;
+		printk("usb test mode,not high speed device\n");
+		goto fail;
+	}
+	switch (idProduct) {
+	case 0x0107:
+		printk("Test_DESC_EHCI\n");
+
+		buf = kmalloc(64, GFP_KERNEL);
+		if (!buf) {
+			retval = -ENOMEM;
+			goto fail;
+		}
+
+		do {
+			msleep(15000);
+			retval = usb_control_msg(udev,
+						 usb_rcvaddr0pipe(),
+						 USB_REQ_GET_DESCRIPTOR,
+						 USB_DIR_IN,
+						 USB_DT_DEVICE << 8, 0,
+						 buf, 64,
+						 initial_descriptor_timeout);
+			if (retval < 0) {
+				printk(KERN_NOTICE
+				       "usb_control_msg fail[%d]\n",retval);
+				goto fail;
+			}
+		} while (!kthread_should_stop());
+		break;
+	case 0x0101:
+	case 0x0102:
+	case 0x0103:
+	case 0x0104:
+	case 0x0106:
+	case 0x0108:
+		hcd->driver->usb_logo_test(hcd, idProduct);
+		break;
+	}
+
+fail:
+#if 0
+	if (buf) {
+		kfree(buf);
+		buf = NULL;
+	}
+#endif
+	return retval;
+}
+#endif	/* CONFIG_USB_LOGO_TEST */
+
 /* Reset device, (re)assign address, get device descriptor.
  * Device connection must be stable, no more debouncing needed.
  * Returns device in USB_STATE_ADDRESS, except on error.
@@ -4340,6 +5096,7 @@ static int
 hub_port_init(struct usb_hub *hub, struct usb_device *udev, int port1,
 		int retry_counter)
 {
+	int			j;
 	struct usb_device	*hdev = hub->hdev;
 	struct usb_hcd		*hcd = bus_to_hcd(hdev->bus);
 	int			retries, operations, retval, i;
@@ -4414,6 +5171,7 @@ hub_port_init(struct usb_hub *hub, struct usb_device *udev, int port1,
 	else
 		speed = usb_speed_string(udev->speed);
 
+	printk(KERN_DEBUG "\n\n### ===\tusb start enum\t=\n");
 	if (udev->speed < USB_SPEED_SUPER)
 		dev_info(&udev->dev,
 				"%s %s USB device number %d using %s\n",
@@ -4474,13 +5232,29 @@ hub_port_init(struct usb_hub *hub, struct usb_device *udev, int port1,
 			 * 255 is for WUSB devices, we actually need to use
 			 * 512 (WUSB1.0[4.8.1]).
 			 */
+			printk(KERN_DEBUG "Start get dev descriptor\n");
 			for (operations = 0; operations < 3; ++operations) {
 				buf->bMaxPacketSize0 = 0;
+				hcd->enum_msg_flag = true;
 				r = usb_control_msg(udev, usb_rcvaddr0pipe(),
 					USB_REQ_GET_DESCRIPTOR, USB_DIR_IN,
 					USB_DT_DEVICE << 8, 0,
 					buf, GET_DESCRIPTOR_BUFSIZE,
 					initial_descriptor_timeout);
+				hcd->enum_msg_flag = false;
+				if (r < 0) {
+					printk(KERN_NOTICE
+					       "\n### Check your USB cable(ret=%d)... retry[%d]\n",
+					       r, operations);
+#ifdef CONFIG_USB_HOST_NOT_FINISH_QTD_WHEN_DISC_WORKAROUND
+					if (-ENOTCONN == r) {
+						printk(KERN_NOTICE
+						       "***Warn,dev disc during get dev descriptor***\n");
+						retval = -ENOTCONN;
+						goto fail;
+					}
+#endif
+				}
 				switch (buf->bMaxPacketSize0) {
 				case 8: case 16: case 32: case 64: case 255:
 					if (buf->bDescriptorType ==
@@ -4492,6 +5266,17 @@ hub_port_init(struct usb_hub *hub, struct usb_device *udev, int port1,
 				default:
 					if (r == 0)
 						r = -EPROTO;
+#ifdef CONFIG_RETRY_TIMES
+					if ((hdev->speed == USB_SPEED_HIGH)
+					    && (r < 0) && (j == 2)) {
+						printk(KERN_NOTICE
+						       "Waring: down to full speed\n");
+						retval = -ENOTCONN;
+						udev->reset_count = 0;
+						kfree(buf);
+						goto fail;
+					}
+#endif
 					break;
 				}
 				/*
@@ -4503,6 +5288,7 @@ hub_port_init(struct usb_hub *hub, struct usb_device *udev, int port1,
 				if (r == 0  || (r == -ETIMEDOUT && retries == 0))
 					break;
 			}
+			printk(KERN_DEBUG "End get dev descriptor\n");
 			udev->descriptor.bMaxPacketSize0 =
 					buf->bMaxPacketSize0;
 			kfree(buf);
@@ -4517,9 +5303,21 @@ hub_port_init(struct usb_hub *hub, struct usb_device *udev, int port1,
 				goto fail;
 			}
 			if (r) {
+#ifdef CONFIG_USB_BAD_DEVICE_INFO
+				u16 status, change;
+#endif
+
 				if (r != -ENODEV)
 					dev_err(&udev->dev, "device descriptor read/64, error %d\n",
 							r);
+#ifdef CONFIG_USB_BAD_DEVICE_INFO
+				hub_port_status(hub, port1, &status, &change);
+				if (status & USB_PORT_STAT_CONNECTION) {
+					udev->descriptor.bDeviceClass =
+					    USB_CLASS_DEVICE_NOT_SUPPORT;
+					udev->speed = USB_SPEED_HIGH;
+				}
+#endif
 				retval = -EMSGSIZE;
 				continue;
 			}
@@ -4533,7 +5331,12 @@ hub_port_init(struct usb_hub *hub, struct usb_device *udev, int port1,
 		 */
 		if (udev->wusb == 0) {
 			for (operations = 0; operations < SET_ADDRESS_TRIES; ++operations) {
+				printk(KERN_DEBUG
+				       "[usbENUM]%s [%d] %p address [%d]\n",
+				       __FUNCTION__, __LINE__, udev, j);
+				hcd->enum_msg_flag = true;
 				retval = hub_set_address(udev, devnum);
+				hcd->enum_msg_flag = false;
 				if (retval >= 0)
 					break;
 				msleep(200);
@@ -4618,7 +5421,9 @@ hub_port_init(struct usb_hub *hub, struct usb_device *udev, int port1,
 		usb_ep0_reinit(udev);
 	}
 
+	hcd->enum_msg_flag = true;
 	retval = usb_get_device_descriptor(udev, USB_DT_DEVICE_SIZE);
+	hcd->enum_msg_flag = false;
 	if (retval < (signed)sizeof(udev->descriptor)) {
 		if (retval != -ENODEV)
 			dev_err(&udev->dev, "device descriptor read/all, error %d\n",
@@ -4638,16 +5443,20 @@ hub_port_init(struct usb_hub *hub, struct usb_device *udev, int port1,
 		}
 	}
 
+	printk(KERN_DEBUG "[usbENUM][%d] init end\n", __LINE__);
 	retval = 0;
 	/* notify HCD that we have a device connected and addressed */
 	if (hcd->driver->update_device)
 		hcd->driver->update_device(hcd, udev);
 	hub_set_initial_usb2_lpm_policy(udev);
 fail:
+	printk(KERN_DEBUG "[usbENUM]%s [%d] ret:%d\n",
+	       __FUNCTION__, __LINE__, retval);
 	if (retval) {
 		hub_port_disable(hub, port1, 0);
 		update_devnum(udev, devnum);	/* for disconnect processing */
 	}
+	printk(KERN_DEBUG "[usbENUM]%s [%d] --\n", __FUNCTION__, __LINE__);
 	mutex_unlock(hcd->address0_mutex);
 	return retval;
 }
@@ -4676,6 +5485,11 @@ check_highspeed(struct usb_hub *hub, struct usb_device *udev, int port1)
 			queue_delayed_work(system_power_efficient_wq,
 					&hub->leds, 0);
 		}
+#ifdef CONFIG_USB_HOST_ENUM_RETRY
+		if (!hub->hdev->parent) {
+			enum_event_handle(hub, ENUM_SUCCESS_NOT_RUN_TOP_SPEED);
+		}
+#endif
 	}
 	kfree(qual);
 }
@@ -4732,18 +5546,48 @@ static void hub_port_connect(struct usb_hub *hub, int port1, u16 portstatus,
 {
 	int status = -ENODEV;
 	int i;
+	int port_num = 0;
 	unsigned unit_load;
+	struct platform_device *pdev;
 	struct usb_device *hdev = hub->hdev;
 	struct usb_hcd *hcd = bus_to_hcd(hdev->bus);
 	struct usb_port *port_dev = hub->ports[port1 - 1];
 	struct usb_device *udev = port_dev->child;
 	static int unreliable_port = -1;
+#ifdef CONFIG_USB_LOGO_TEST
+	u16 idVendor;
+	u16 idProduct;
+#endif
+
+	printk(KERN_DEBUG "%s start\n",__FUNCTION__);
+	if (!hub->hdev->parent) {
+		if (hcd->driver->relinquish_port) {
+			printk(KERN_NOTICE "Run in EHCI\n");
+		} else {
+			printk(KERN_NOTICE "Run in OHCI\n");
+		}
+		pdev = to_platform_device(hcd->self.controller);
+		if (pdev) {
+			port_num = pdev->id - 1;
+			printk(KERN_NOTICE "port num is %d\n", port_num);
+		}
+	}
 
 	/* Disconnect any existing devices under this port */
 	if (udev) {
+#ifdef CONFIG_RETRY_TIMES
+		int count = udev->reset_count;
+#endif
 		if (hcd->usb_phy && !hdev->parent)
 			usb_phy_notify_disconnect(hcd->usb_phy, udev->speed);
 		usb_disconnect(&port_dev->child);
+#ifdef CONFIG_RETRY_TIMES
+		if (count == 0) {
+			printk("%s %d %d\n", __func__, __LINE__, count);
+			clear_bit(port1, hub->change_bits);
+			goto done;
+		}
+#endif
 	}
 
 	/* We can forget about a "removed" device when there's a physical
@@ -4755,6 +5599,7 @@ static void hub_port_connect(struct usb_hub *hub, int port1, u16 portstatus,
 
 	if (portchange & (USB_PORT_STAT_C_CONNECTION |
 				USB_PORT_STAT_C_ENABLE)) {
+		printk(KERN_NOTICE "Warn, dev disc after debounce\n");
 		status = hub_port_debounce_be_stable(hub, port1);
 		if (status < 0) {
 			if (status != -ENODEV &&
@@ -4793,6 +5638,20 @@ static void hub_port_connect(struct usb_hub *hub, int port1, u16 portstatus,
 		unit_load = 100;
 
 	status = 0;
+#ifdef SUPPORT_MIRRORLINK
+	mirror_link_cmd_state = MIRRORLINK_CMD_IDLE;
+#endif
+#ifdef CONFIG_USB_HOST_ENUM_RETRY
+	if (!hub->hdev->parent) {
+		hcd->hub_port_num = port1;
+		hcd->enum_port_status = portstatus;
+		if (HANDLE_FAIL == enum_event_handle(hub,
+						     ENUM_START_RX_ACTIVE_HANDLE))
+			return;
+
+		enum_event_handle(hub, ENUM_START);
+	}
+#endif
 	for (i = 0; i < SET_CONFIG_TRIES; i++) {
 
 		/* reallocate for each attempt, since references
@@ -4823,12 +5682,29 @@ static void hub_port_connect(struct usb_hub *hub, int port1, u16 portstatus,
 		}
 
 		/* reset (non-USB 3.0 devices) and get descriptor */
+		printk(KERN_DEBUG
+		       "[usbENUM]%s [%d]hub_port_init++\n",
+		       __FUNCTION__, __LINE__);
 		usb_lock_port(port_dev);
 		status = hub_port_init(hub, udev, port1, i);
 		usb_unlock_port(port_dev);
+		printk(KERN_DEBUG "[usbENUM]%s [%d]hub_port_init-- %d(%x)\n",
+				       __FUNCTION__, __LINE__, status, status);
+#ifdef CONFIG_USB_BAD_DEVICE_INFO
+		if (tid_test_flag) {
+			if (status < 0) {
+				if (udev->descriptor.bDeviceClass !=
+				    USB_CLASS_DEVICE_NOT_SUPPORT)
+					goto loop;
+			}
+		} else {
+			if (status < 0)
+				goto loop;
+		}
+#else
 		if (status < 0)
 			goto loop;
-
+#endif
 		if (udev->quirks & USB_QUIRK_DELAY_INIT)
 			msleep(1000);
 
@@ -4864,12 +5740,13 @@ static void hub_port_connect(struct usb_hub *hub, int port1, u16 portstatus,
 			}
 		}
 
+#if 0
 		/* check for devices running slower than they could */
 		if (le16_to_cpu(udev->descriptor.bcdUSB) >= 0x0200
 				&& udev->speed == USB_SPEED_FULL
 				&& highspeed_hubs != 0)
 			check_highspeed(hub, udev, port1);
-
+#endif
 		/* Store the parent's children[] pointer.  At this point
 		 * udev becomes globally accessible, although presumably
 		 * no one will look at it until hdev is unlocked.
@@ -4892,7 +5769,17 @@ static void hub_port_connect(struct usb_hub *hub, int port1, u16 portstatus,
 
 		/* Run it through the hoops (find a driver, etc) */
 		if (!status) {
+			printk(KERN_DEBUG "[usbENUM][%d] new\n", __LINE__);
 			status = usb_new_device(udev);
+#ifdef SUPPORT_MIRRORLINK
+			if (status == -1) {
+				i--;
+				spin_lock_irq(&device_state_lock);
+				hdev->children[port1 - 1] = NULL;
+				spin_unlock_irq(&device_state_lock);
+				goto loop;
+			}
+#endif
 			if (status) {
 				mutex_lock(&usb_port_peer_mutex);
 				spin_lock_irq(&device_state_lock);
@@ -4913,6 +5800,69 @@ static void hub_port_connect(struct usb_hub *hub, int port1, u16 portstatus,
 		if (status)
 			dev_dbg(hub->intfdev, "%dmA power budget left\n", status);
 
+#ifdef CONFIG_USB_LOGO_TEST
+		if (user_id == 0) {
+			idVendor  = udev->descriptor.idVendor;
+			idProduct = udev->descriptor.idProduct;
+		} else {
+			idVendor  = 0x1A0A;
+			idProduct = usb_idProduct;
+
+			udev->descriptor.idVendor = 0x1A0A;
+			udev->descriptor.idProduct = usb_idProduct;
+
+			user_id = 0;
+			/* udev->descriptor.bDeviceClass = 0x1F; */
+		}
+
+		if ((idVendor == 0x1A0A)
+		    && (idProduct == 0x0101
+			|| idProduct == 0x0102
+			|| idProduct == 0x0103
+			|| idProduct == 0x0104
+			|| idProduct == 0x0106
+			|| idProduct == 0x0107
+			|| idProduct == 0x0108)) {
+			hub->usb_logo_thread = kthread_create(usb_logo_thread,
+							      udev,
+							      "usb_logo_test");
+			wake_up_process(hub->usb_logo_thread);
+			printk(KERN_NOTICE "@@@idVendor = 0x%x idProduct= 0x%x\n",
+			       udev->descriptor.idVendor, udev->descriptor.idProduct);
+		}
+#endif
+
+		/* check for devices running slower than they could */
+		if (le16_to_cpu(udev->descriptor.bcdUSB) >= 0x0200
+				&& udev->speed == USB_SPEED_FULL
+				&& highspeed_hubs != 0)
+			check_highspeed (hub, udev, port1);
+
+#ifdef CONFIG_USB_HOST_ENUM_RETRY
+		else if (!hub->hdev->parent) {
+			if (!enum_rx_active_flag[port_num]) {
+				enum_event_handle(hub,
+						  ENUM_SUCCESS_RUN_TOP_SPEED);
+			} else {
+				break;
+			}
+		}
+#endif
+		if (!hub->hdev->parent) {
+#ifdef CONFIG_USB_SUNPLUS_OTG
+			if((udev->device_support_hnp_flag) && (sp_otg_host->fsm.id == 0)){
+				udev->hnp_polling_timer = kthread_create(hnp_polling_watchdog,udev,"hnp_polling");
+				wake_up_process(udev->hnp_polling_timer);
+			}
+#endif
+
+			enum_success_times[port_num]++;
+			printk(KERN_DEBUG "port_num:%d,enum success times:%d\n",
+			       port_num, enum_success_times[port_num]);
+		}
+		printk(KERN_DEBUG "########################\n");
+		printk(KERN_DEBUG "Enumerate Device Success\n");
+		printk(KERN_DEBUG "########################\n");
 		return;
 
 loop_disable:
@@ -4934,11 +5884,18 @@ loop:
 	}
 
 done:
+	printk(KERN_DEBUG "[usbENUM]%s [%d] status:%d----\n",
+	       __FUNCTION__, __LINE__, status);
 	hub_port_disable(hub, port1, 1);
-	if (hcd->driver->relinquish_port && !hub->hdev->parent) {
-		if (status != -ENOTCONN && status != -ENODEV)
-			hcd->driver->relinquish_port(hcd, port1);
+#ifdef CONFIG_USB_HOST_ENUM_RETRY
+	if (!hub->hdev->parent && !enum_rx_active_flag[port_num]) {
+		enum_event_handle(hub, ENUM_FAIL_NOT_RX_ACTIVE);
 	}
+#else
+	if (hcd->driver->relinquish_port && !hub->hdev->parent)
+		hcd->driver->relinquish_port(hcd, port1);
+#endif
+	printk(KERN_DEBUG "%s end\n",__FUNCTION__);
 }
 
 /* Handle physical or logical connection change events.
@@ -4957,6 +5914,7 @@ static void hub_port_connect_change(struct usb_hub *hub, int port1,
 	struct usb_device *udev = port_dev->child;
 	int status = -ENODEV;
 
+	printk(KERN_NOTICE "%s in\n", __FUNCTION__);
 	dev_dbg(&port_dev->dev, "status %04x, change %04x, %s\n", portstatus,
 			portchange, portspeed(hub, portstatus));
 
@@ -5000,6 +5958,7 @@ static void hub_port_connect_change(struct usb_hub *hub, int port1,
 	usb_unlock_port(port_dev);
 	hub_port_connect(hub, port1, portstatus, portchange);
 	usb_lock_port(port_dev);
+	printk(KERN_NOTICE "%s out\n", __FUNCTION__);
 }
 
 static void port_event(struct usb_hub *hub, int port1)
@@ -5011,6 +5970,7 @@ static void port_event(struct usb_hub *hub, int port1)
 	struct usb_device *hdev = hub->hdev;
 	u16 portstatus, portchange;
 
+	printk(KERN_NOTICE "%s in\n",__FUNCTION__);
 	connect_change = test_bit(port1, hub->change_bits);
 	clear_bit(port1, hub->event_bits);
 	clear_bit(port1, hub->wakeup_bits);
@@ -5107,8 +6067,9 @@ static void port_event(struct usb_hub *hub, int port1)
 		hub_port_connect_change(hub, port1, portstatus, portchange);
 }
 
-static void hub_event(struct work_struct *work)
+static void hub_events(void)
 {
+	struct list_head *tmp;
 	struct usb_device *hdev;
 	struct usb_interface *intf;
 	struct usb_hub *hub;
@@ -5117,117 +6078,149 @@ static void hub_event(struct work_struct *work)
 	u16 hubchange;
 	int i, ret;
 
-	hub = container_of(work, struct usb_hub, events);
-	hdev = hub->hdev;
-	hub_dev = hub->intfdev;
-	intf = to_usb_interface(hub_dev);
+	while (1) {
+		/* Grab the first entry at the beginning of the list */
+		spin_lock_irq(&hub_event_lock);
+		if (list_empty(&hub_event_list)) {
+			spin_unlock_irq(&hub_event_lock);
+			break;
+		}
+		tmp = hub_event_list.next;
+		list_del_init(tmp);
 
-	dev_dbg(hub_dev, "state %d ports %d chg %04x evt %04x\n",
-			hdev->state, hdev->maxchild,
-			/* NOTE: expects max 15 ports... */
-			(u16) hub->change_bits[0],
-			(u16) hub->event_bits[0]);
+		hub = list_entry(tmp, struct usb_hub, event_list);
+		kref_get(&hub->kref);
+		hdev = hub->hdev;
+		usb_get_dev(hdev);
+		spin_unlock_irq(&hub_event_lock);
 
-	/* Lock the device, then check to see if we were
-	 * disconnected while waiting for the lock to succeed. */
-	usb_lock_device(hdev);
-	if (unlikely(hub->disconnected))
-		goto out_hdev_lock;
+		hub_dev = hub->intfdev;
+		intf = to_usb_interface(hub_dev);
+		dev_dbg(hub_dev, "state %d ports %d chg %04x evt %04x\n",
+				hdev->state, hdev->maxchild,
+				/* NOTE: expects max 15 ports... */
+				(u16) hub->change_bits[0],
+				(u16) hub->event_bits[0]);
 
-	/* If the hub has died, clean up after it */
-	if (hdev->state == USB_STATE_NOTATTACHED) {
-		hub->error = -ENODEV;
-		hub_quiesce(hub, HUB_DISCONNECT);
-		goto out_hdev_lock;
-	}
+		/* Lock the device, then check to see if we were
+		 * disconnected while waiting for the lock to succeed. */
+		usb_lock_device(hdev);
+		if (unlikely(hub->disconnected))
+			goto out_hdev_lock;
 
-	/* Autoresume */
-	ret = usb_autopm_get_interface(intf);
-	if (ret) {
-		dev_dbg(hub_dev, "Can't autoresume: %d\n", ret);
-		goto out_hdev_lock;
-	}
+		/* If the hub has died, clean up after it */
+		if (hdev->state == USB_STATE_NOTATTACHED) {
+			hub->error = -ENODEV;
+			hub_quiesce(hub, HUB_DISCONNECT);
+			goto out_hdev_lock;
+		}
 
-	/* If this is an inactive hub, do nothing */
-	if (hub->quiescing)
-		goto out_autopm;
+		/* If the hub has died, clean up after it */
+		if (hdev->state == USB_STATE_NOTATTACHED) {
+			hub->error = -ENODEV;
+			hub_quiesce(hub, HUB_DISCONNECT);
+			goto loop;
+		}
 
-	if (hub->error) {
-		dev_dbg(hub_dev, "resetting for error %d\n", hub->error);
-
-		ret = usb_reset_device(hdev);
+		/* Autoresume */
+		ret = usb_autopm_get_interface(intf);
 		if (ret) {
-			dev_dbg(hub_dev, "error resetting hub: %d\n", ret);
+			dev_dbg(hub_dev, "Can't autoresume: %d\n", ret);
+			goto out_hdev_lock;
+		}
+
+		/* If this is an inactive hub, do nothing */
+		if (hub->quiescing)
 			goto out_autopm;
+
+		if (hub->error) {
+			dev_dbg(hub_dev, "resetting for error %d\n", hub->error);
+
+			ret = usb_reset_device(hdev);
+			if (ret) {
+				dev_dbg(hub_dev, "error resetting hub: %d\n", ret);
+				goto out_autopm;
+			}
+
+			hub->nerrors = 0;
+			hub->error = 0;
 		}
 
-		hub->nerrors = 0;
-		hub->error = 0;
+		/* deal with port status changes */
+		printk(KERN_NOTICE "%s,hub:%p\n",__FUNCTION__,hub);
+		for (i = 1; i <= hdev->maxchild; i++) {
+			struct usb_port *port_dev = hub->ports[i - 1];
+
+			if (test_bit(i, hub->event_bits)
+					|| test_bit(i, hub->change_bits)
+					|| test_bit(i, hub->wakeup_bits)) {
+				/*
+				 * The get_noresume and barrier ensure that if
+				 * the port was in the process of resuming, we
+				 * flush that work and keep the port active for
+				 * the duration of the port_event().  However,
+				 * if the port is runtime pm suspended
+				 * (powered-off), we leave it in that state, run
+				 * an abbreviated port_event(), and move on.
+				 */
+				pm_runtime_get_noresume(&port_dev->dev);
+				pm_runtime_barrier(&port_dev->dev);
+				usb_lock_port(port_dev);
+				port_event(hub, i);
+				usb_unlock_port(port_dev);
+				pm_runtime_put_sync(&port_dev->dev);
+			}
+		}
+
+		/* deal with hub status changes */
+		if (test_and_clear_bit(0, hub->event_bits) == 0)
+			;	/* do nothing */
+		else if (hub_hub_status(hub, &hubstatus, &hubchange) < 0)
+			dev_err(hub_dev, "get_hub_status failed\n");
+		else {
+			if (hubchange & HUB_CHANGE_LOCAL_POWER) {
+				dev_dbg(hub_dev, "power change\n");
+				clear_hub_feature(hdev, C_HUB_LOCAL_POWER);
+				if (hubstatus & HUB_STATUS_LOCAL_POWER)
+					/* FIXME: Is this always true? */
+					hub->limited_power = 1;
+				else
+					hub->limited_power = 0;
+			}
+			if (hubchange & HUB_CHANGE_OVERCURRENT) {
+				u16 status = 0;
+				u16 unused;
+
+				dev_dbg(hub_dev, "over-current change\n");
+				clear_hub_feature(hdev, C_HUB_OVER_CURRENT);
+				msleep(500);	/* Cool down */
+				hub_power_on(hub, true);
+				hub_hub_status(hub, &status, &unused);
+				if (status & HUB_STATUS_OVERCURRENT)
+					dev_err(hub_dev, "over-current condition\n");
+			}
+		}
+
+	out_autopm:
+		/* Balance the usb_autopm_get_interface() above */
+		usb_autopm_put_interface_no_suspend(intf);
+	loop:
+		/* Balance the usb_autopm_get_interface_no_resume() in
+		 * kick_khubd() and allow autosuspend.
+		 */
+		usb_autopm_put_interface(intf);
+	out_hdev_lock:
+		usb_unlock_device(hdev);
+
+		/* Balance the stuff in kick_hub_wq() and allow autosuspend */
+		usb_autopm_put_interface(intf);
+		kref_put(&hub->kref, hub_release);
+#ifdef CONFIG_USB_HOST_ENUM_RETRY
+			if (!hub->hdev->parent) {
+				enum_event_handle(hub, ENUM_FAIL_RX_ACTIVE);
+			}
+#endif
 	}
-
-	/* deal with port status changes */
-	for (i = 1; i <= hdev->maxchild; i++) {
-		struct usb_port *port_dev = hub->ports[i - 1];
-
-		if (test_bit(i, hub->event_bits)
-				|| test_bit(i, hub->change_bits)
-				|| test_bit(i, hub->wakeup_bits)) {
-			/*
-			 * The get_noresume and barrier ensure that if
-			 * the port was in the process of resuming, we
-			 * flush that work and keep the port active for
-			 * the duration of the port_event().  However,
-			 * if the port is runtime pm suspended
-			 * (powered-off), we leave it in that state, run
-			 * an abbreviated port_event(), and move on.
-			 */
-			pm_runtime_get_noresume(&port_dev->dev);
-			pm_runtime_barrier(&port_dev->dev);
-			usb_lock_port(port_dev);
-			port_event(hub, i);
-			usb_unlock_port(port_dev);
-			pm_runtime_put_sync(&port_dev->dev);
-		}
-	}
-
-	/* deal with hub status changes */
-	if (test_and_clear_bit(0, hub->event_bits) == 0)
-		;	/* do nothing */
-	else if (hub_hub_status(hub, &hubstatus, &hubchange) < 0)
-		dev_err(hub_dev, "get_hub_status failed\n");
-	else {
-		if (hubchange & HUB_CHANGE_LOCAL_POWER) {
-			dev_dbg(hub_dev, "power change\n");
-			clear_hub_feature(hdev, C_HUB_LOCAL_POWER);
-			if (hubstatus & HUB_STATUS_LOCAL_POWER)
-				/* FIXME: Is this always true? */
-				hub->limited_power = 1;
-			else
-				hub->limited_power = 0;
-		}
-		if (hubchange & HUB_CHANGE_OVERCURRENT) {
-			u16 status = 0;
-			u16 unused;
-
-			dev_dbg(hub_dev, "over-current change\n");
-			clear_hub_feature(hdev, C_HUB_OVER_CURRENT);
-			msleep(500);	/* Cool down */
-			hub_power_on(hub, true);
-			hub_hub_status(hub, &status, &unused);
-			if (status & HUB_STATUS_OVERCURRENT)
-				dev_err(hub_dev, "over-current condition\n");
-		}
-	}
-
-out_autopm:
-	/* Balance the usb_autopm_get_interface() above */
-	usb_autopm_put_interface_no_suspend(intf);
-out_hdev_lock:
-	usb_unlock_device(hdev);
-
-	/* Balance the stuff in kick_hub_wq() and allow autosuspend */
-	usb_autopm_put_interface(intf);
-	kref_put(&hub->kref, hub_release);
 }
 
 static const struct usb_device_id hub_id_table[] = {
@@ -5259,6 +6252,26 @@ static struct usb_driver hub_driver = {
 	.supports_autosuspend =	1,
 };
 
+static int hub_thread(void *__unused)
+{
+	/* khubd needs to be freezable to avoid interfering with USB-PERSIST
+	 * port handover.  Otherwise it might see that a full-speed device
+	 * was gone before the EHCI controller had handed its port over to
+	 * the companion full-speed controller.
+	 */
+	set_freezable();
+
+	do {
+		hub_events();
+		wait_event_freezable(khubd_wait,
+				!list_empty(&hub_event_list) ||
+				kthread_should_stop());
+	} while (!kthread_should_stop() || !list_empty(&hub_event_list));
+
+	pr_debug("%s: khubd exiting\n", usbcore_name);
+	return 0;
+}
+
 int usb_hub_init(void)
 {
 	if (usb_register(&hub_driver) < 0) {
@@ -5267,26 +6280,20 @@ int usb_hub_init(void)
 		return -1;
 	}
 
-	/*
-	 * The workqueue needs to be freezable to avoid interfering with
-	 * USB-PERSIST port handover. Otherwise it might see that a full-speed
-	 * device was gone before the EHCI controller had handed its port
-	 * over to the companion full-speed controller.
-	 */
-	hub_wq = alloc_workqueue("usb_hub_wq", WQ_FREEZABLE, 0);
-	if (hub_wq)
+	khubd_task = kthread_run(hub_thread, NULL, "khubd");
+	if (!IS_ERR(khubd_task))
 		return 0;
 
 	/* Fall through if kernel_thread failed */
 	usb_deregister(&hub_driver);
-	pr_err("%s: can't allocate workqueue for usb hub\n", usbcore_name);
+	printk(KERN_ERR "%s: can't start khubd\n", usbcore_name);
 
 	return -1;
 }
 
 void usb_hub_cleanup(void)
 {
-	destroy_workqueue(hub_wq);
+	kthread_stop(khubd_task);
 
 	/*
 	 * Hub resources are freed for us by usb_deregister. It calls
@@ -5437,6 +6444,11 @@ static int usb_reset_and_verify_device(struct usb_device *udev)
 		return -EISDIR;
 
 	parent_hub = usb_hub_to_struct_hub(parent_hdev);
+#ifdef	CONFIG_RETRY_TIMES
+	if (udev->reset_count == 0) {
+		goto re_enumerate;
+	}
+#endif
 
 	/* Disable USB2 hardware LPM.
 	 * It will be re-enabled by the enumeration process.
@@ -5560,6 +6572,9 @@ done:
 	return 0;
 
 re_enumerate:
+#ifdef CONFIG_RETRY_TIMES
+	udev->reset_count = 0;
+#endif
 	usb_release_bos_descriptor(udev);
 	udev->bos = bos;
 re_enumerate_no_bos:
@@ -5567,6 +6582,14 @@ re_enumerate_no_bos:
 	hub_port_logical_disconnect(parent_hub, port1);
 	return -ENODEV;
 }
+
+#ifdef CONFIG_RETRY_TIMES
+static long usb_time_delay = 0;
+module_param(usb_time_delay, long, 0644);
+
+static u32 usb_retry_times = 5;
+module_param(usb_retry_times, uint, 0644);
+#endif
 
 /**
  * usb_reset_device - warn interface drivers and perform a USB port reset
@@ -5597,6 +6620,9 @@ int usb_reset_device(struct usb_device *udev)
 	struct usb_port *port_dev;
 	struct usb_host_config *config = udev->actconfig;
 	struct usb_hub *hub = usb_hub_to_struct_hub(udev->parent);
+#ifdef CONFIG_RETRY_TIMES
+	struct timespec now, d;
+#endif
 
 	if (udev->state == USB_STATE_NOTATTACHED ||
 			udev->state == USB_STATE_SUSPENDED) {
@@ -5646,9 +6672,26 @@ int usb_reset_device(struct usb_device *udev)
 		}
 	}
 
+#ifdef	CONFIG_RETRY_TIMES
+	getnstimeofday(&now);
+
+	if (is_usb_high_bus(udev->bus)) {
+		d = timespec_sub(now, udev->t_prev);
+		if (d.tv_sec <= usb_time_delay) {
+			if (udev->reset_count > 0) {
+				udev->reset_count--;
+			}
+		} else {
+			udev->reset_count = usb_retry_times;
+		}
+	}
+#endif
 	usb_lock_port(port_dev);
 	ret = usb_reset_and_verify_device(udev);
 	usb_unlock_port(port_dev);
+#ifdef	CONFIG_RETRY_TIMES
+	getnstimeofday(&udev->t_prev);
+#endif
 
 	if (config) {
 		for (i = config->desc.bNumInterfaces - 1; i >= 0; --i) {

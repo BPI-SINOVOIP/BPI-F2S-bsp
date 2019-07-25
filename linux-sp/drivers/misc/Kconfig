@@ -4,6 +4,27 @@
 
 menu "Misc devices"
 
+config SP_ICM
+	tristate "Sunplus Input Capture (ICM) driver"
+	depends on ARCH_PENTAGRAM
+	default n
+
+config SP_ICM_TEST
+	bool "Sunplus Input Capture (ICM) test"
+	depends on SP_ICM
+	help
+	  echo h > /sys/module/sp_icm/parameters/test
+
+config SP_DMA0
+	tristate "Sunplus DMA0 driver"
+	depends on ARCH_PENTAGRAM
+
+config SP_DMA0_TEST
+	bool "Sunplus DMA0 test"
+	depends on SP_DMA0
+	help
+	  echo h > /sys/module/sp_dma0/parameters/test
+
 config SENSORS_LIS3LV02D
 	tristate
 	depends on INPUT
@@ -510,4 +531,5 @@ source "drivers/misc/mic/Kconfig"
 source "drivers/misc/genwqe/Kconfig"
 source "drivers/misc/echo/Kconfig"
 source "drivers/misc/cxl/Kconfig"
+source "drivers/misc/iop/Kconfig"
 endmenu

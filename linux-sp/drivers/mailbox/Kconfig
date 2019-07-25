@@ -162,4 +162,16 @@ config BCM_FLEXRM_MBOX
 	  Mailbox implementation of the Broadcom FlexRM ring manager,
 	  which provides access to various offload engines on Broadcom
 	  SoCs. Say Y here if you want to use the Broadcom FlexRM.
+	  
+config SP_IPC
+	tristate "Sunplus Mailbox (IPC) driver"
+	depends on ARCH_PENTAGRAM
+	default n
+
+config SP_IPC_TEST
+	bool "Sunplus Mailbox (IPC) test"
+	depends on SP_IPC
+	help
+	  echo 0 > /sys/module/sp_ipc/parameters/test
+	  
 endif

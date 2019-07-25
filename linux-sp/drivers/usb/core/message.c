@@ -19,8 +19,10 @@
 #include <linux/usb/quirks.h>
 #include <linux/usb/hcd.h>	/* for usbcore internals */
 #include <asm/byteorder.h>
+#include <linux/usb/sp_usb.h>
 
 #include "usb.h"
+
 
 static void cancel_async_set_config(struct usb_device *udev);
 
@@ -49,6 +51,13 @@ static int usb_start_wait_urb(struct urb *urb, int timeout, int *actual_length)
 	struct api_context ctx;
 	unsigned long expire;
 	int retval;
+	struct usb_device *dev;
+#ifdef CONFIG_USB_HOST_NOT_FINISH_QTD_WHEN_DISC_WORKAROUND
+	struct usb_hcd *hcd = bus_to_hcd(urb->dev->bus);
+#endif
+
+	dev = urb->dev;
+	dev->current_urb = urb;
 
 	init_completion(&ctx.done);
 	urb->context = &ctx;
@@ -56,6 +65,41 @@ static int usb_start_wait_urb(struct urb *urb, int timeout, int *actual_length)
 	retval = usb_submit_urb(urb, GFP_NOIO);
 	if (unlikely(retval))
 		goto out;
+#ifdef CONFIG_USB_HOST_NOT_FINISH_QTD_WHEN_DISC_WORKAROUND
+	do {
+		if (hcd->enum_msg_flag && hcd->hub_thread == current) {
+			int port_status;
+
+			hcd->current_active_urb = urb;
+			if (hcd->driver->get_port_status_from_register) {
+				port_status = hcd->driver->get_port_status_from_register(hcd);
+				if (hcd->driver->relinquish_port) {
+					if ((!(port_status & CURRENT_CONNECT_STATUS))
+					    || (port_status & EHCI_CONNECT_STATUS_CHANGE)) {
+						printk(KERN_NOTICE
+						       "\ndev disc after submit urb, ps:%x\n",
+						       port_status);
+						hcd->current_active_urb = NULL;
+						retval = -ENOTCONN;
+						usb_kill_urb(urb);
+						goto out;
+					}
+				} else {
+					if ((!(port_status & CURRENT_CONNECT_STATUS))
+					    || (port_status & OHCI_CONNECT_STATUS_CHANGE)) {
+						printk(KERN_NOTICE
+						       "\ndev disc after submit urb,ps:%x\n",
+						       port_status);
+						hcd->current_active_urb = NULL;
+						retval = -ENOTCONN;
+						usb_kill_urb(urb);
+						goto out;
+					}
+				}
+			}
+		}
+	} while (0);
+#endif
 
 	expire = timeout ? msecs_to_jiffies(timeout) : MAX_SCHEDULE_TIMEOUT;
 	if (!wait_for_completion_timeout(&ctx.done, expire)) {
@@ -69,9 +113,24 @@ static int usb_start_wait_urb(struct urb *urb, int timeout, int *actual_length)
 			usb_urb_dir_in(urb) ? "in" : "out",
 			urb->actual_length,
 			urb->transfer_buffer_length);
-	} else
+	} else {
 		retval = ctx.status;
+#ifdef CONFIG_USB_HOST_NOT_FINISH_QTD_WHEN_DISC_WORKAROUND
+		if (-ENOTCONN_IRQ == retval) {
+			printk(KERN_NOTICE "\n***Warn, stop urb wait***\n");
+			retval = -ENOTCONN;
+			usb_kill_urb(urb);
+		}
+#endif
+	}
+
+#ifdef CONFIG_USB_HOST_NOT_FINISH_QTD_WHEN_DISC_WORKAROUND
+	if (hcd->enum_msg_flag && hcd->hub_thread == current)
+		hcd->current_active_urb = NULL;
+#endif
+
 out:
+	dev->current_urb = NULL;
 	if (actual_length)
 		*actual_length = urb->actual_length;
 

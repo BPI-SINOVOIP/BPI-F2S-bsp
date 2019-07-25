@@ -473,4 +473,12 @@ config ZX2967_THERMAL
 	  the primitive temperature sensor embedded in zx2967 SoCs.
 	  This sensor generates the real time die temperature.
 
+
+config SP7021_THERMAL
+	tristate "Sunplus thermal controller"
+	depends on ARCH_PENTAGRAM
+	select THERMAL_OF
+	help
+	  Enable the Sunplus spi master controller driver.	  
+
 endif

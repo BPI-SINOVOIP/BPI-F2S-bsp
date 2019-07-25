@@ -659,13 +659,35 @@ EXPORT_SYMBOL_GPL(usb_unlink_urb);
  */
 void usb_kill_urb(struct urb *urb)
 {
+	int t;
+	struct usb_device *dev;
+#ifdef CONFIG_USB_HOST_RESET_SP
+	extern void Reset_usb_host_ctrler(struct usb_device *udev);
+#endif
 	might_sleep();
 	if (!(urb && urb->dev && urb->ep))
 		return;
+
+	dev = urb->dev;
 	atomic_inc(&urb->reject);
 
 	usb_hcd_unlink_urb(urb, -ENOENT);
-	wait_event(usb_kill_urb_queue, atomic_read(&urb->use_count) == 0);
+	t = wait_event_timeout(usb_kill_urb_queue, atomic_read(&urb->use_count) == 0, 1 * HZ);
+	if (!t) {
+		printk(KERN_NOTICE "### Wait urb kill timeout: %p\n",urb);
+#ifdef CONFIG_USB_HOST_RESET_SP
+		if (urb->uphy_stuck_flag) {
+			urb->uphy_stuck_flag = 0;
+			printk(KERN_NOTICE "### Uphy stuck,USB need finish urb..\n");
+		} else {
+			printk(KERN_NOTICE "\n##@@ ==========\n");
+			Reset_usb_host_ctrler(dev);
+		}
+#else
+		printk(KERN_NOTICE "### USB need finish urb..\n");
+#endif
+		dump_stack();
+	}
 
 	atomic_dec(&urb->reject);
 }

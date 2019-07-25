@@ -303,7 +303,7 @@ struct usb_gadget_ops {
 	void	(*get_config_params)(struct usb_dcd_config_params *);
 	int	(*udc_start)(struct usb_gadget *,
 			struct usb_gadget_driver *);
-	int	(*udc_stop)(struct usb_gadget *);
+	int	(*udc_stop)(struct usb_gadget_driver *);
 	struct usb_ep *(*match_ep)(struct usb_gadget *,
 			struct usb_endpoint_descriptor *,
 			struct usb_ss_ep_comp_descriptor *);
@@ -494,7 +494,14 @@ static inline int gadget_avoids_skb_reserve(struct usb_gadget *g)
  */
 static inline int gadget_is_dualspeed(struct usb_gadget *g)
 {
-	return g->max_speed >= USB_SPEED_HIGH;
+#ifdef CONFIG_USB_GADGET_DUALSPEED
+	/* runtime test would check "g->max_speed" ... that might be
+	 * useful to work around hardware bugs, but is mostly pointless
+	 */
+	return true;
+#else
+	return false;
+#endif
 }
 
 /**
@@ -503,7 +510,11 @@ static inline int gadget_is_dualspeed(struct usb_gadget *g)
  */
 static inline int gadget_is_superspeed(struct usb_gadget *g)
 {
+#if 1
+	return 1;
+#else
 	return g->max_speed >= USB_SPEED_SUPER;
+#endif
 }
 
 /**
@@ -525,10 +536,14 @@ static inline int gadget_is_superspeed_plus(struct usb_gadget *g)
  */
 static inline int gadget_is_otg(struct usb_gadget *g)
 {
+#if 1
+	return 1;
+#else
 #ifdef CONFIG_USB_OTG
 	return g->is_otg;
 #else
 	return 0;
+#endif
 #endif
 }
 

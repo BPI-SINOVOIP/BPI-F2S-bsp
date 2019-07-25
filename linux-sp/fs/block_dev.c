@@ -1323,6 +1323,10 @@ void check_disk_size_change(struct gendisk *disk, struct block_device *bdev)
 		       disk->disk_name, bdev_size, disk_size);
 		i_size_write(bdev->bd_inode, disk_size);
 		flush_disk(bdev, false);
+		if(disk_size == 0)
+			kobject_uevent(&disk_to_dev(disk)->kobj, KOBJ_OFFLINE);
+		else
+			kobject_uevent(&disk_to_dev(disk)->kobj, KOBJ_ONLINE);
 	}
 }
 EXPORT_SYMBOL(check_disk_size_change);

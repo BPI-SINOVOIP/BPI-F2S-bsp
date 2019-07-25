@@ -13,6 +13,8 @@ endif
 
 CFLAGS_REMOVE_return_address.o = -pg
 
+CFLAGS_devtree.o := -DDEBUG
+
 # Object file lists.
 
 obj-y		:= elf.o entry-common.o irq.o opcodes.o \

@@ -1247,6 +1247,25 @@ config SCx200_ACB
 	  This support is also available as a module.  If so, the module
 	  will be called scx200_acb.
 
+config SP_I2C
+	tristate "SP I2C support"
+	help
+	  This driver supports the I2C device on the Sunplus processor chip.
+
+config SDDC_I2C
+	tristate "SDDC I2C support"
+	depends on SP_I2C
+	default n
+	help
+	  This driver supports the SDDC I2C device.
+
+config TI_SERDES_I2C
+	tristate "TI SERDES I2C support"
+	depends on SP_I2C
+	default n
+	help
+	  This driver supports the TI SERDES I2C device.
+
 config I2C_OPAL
 	tristate "IBM OPAL I2C driver"
 	depends on PPC_POWERNV

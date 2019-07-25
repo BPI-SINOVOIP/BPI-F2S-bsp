@@ -1688,6 +1688,9 @@ config SERIAL_MVEBU_CONSOLE
 	  and warnings and which allows logins in single user mode)
 	  Otherwise, say 'N'.
 
+config SERIAL_SP_UART
+	bool "Sunplus UART serial port support"
+
 endmenu
 
 config SERIAL_MCTRL_GPIO

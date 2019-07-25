@@ -44,9 +44,15 @@ static ssize_t field##_show(struct device *dev,				\
 	usb_actconfig_show(field, format_string)		\
 	static DEVICE_ATTR_RO(field)
 
+#ifndef CONFIG_USB_LOGO_TEST
 usb_actconfig_attr(bNumInterfaces, "%2d\n");
+#else
+usb_actconfig_attr(bNumInterfaces, "%d\n");
+#endif
+
 usb_actconfig_attr(bmAttributes, "%2x\n");
 
+#ifndef CONFIG_USB_LOGO_TEST
 static ssize_t bMaxPower_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
@@ -65,6 +71,31 @@ static ssize_t bMaxPower_show(struct device *dev,
 	return rc;
 }
 static DEVICE_ATTR_RO(bMaxPower);
+#else
+static ssize_t show_bMaxPower(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct usb_device *udev;
+	struct usb_host_config *actconfig;
+
+	udev = to_usb_device(dev);
+	actconfig = udev->actconfig;
+	if (actconfig)
+		return sprintf(buf, "%3dmA\n", actconfig->desc.bMaxPower * 2);
+	else {
+		__u8 maxp = 0;
+		int i;
+
+		for (i = 0; i < udev->descriptor.bNumConfigurations; i++)
+			maxp = maxp > udev->config[i].desc.bMaxPower
+			       ? maxp
+			       : udev->config[i].desc.bMaxPower;
+
+		return sprintf(buf, "%3dmA\n", maxp * 2);
+	}
+}
+
+static DEVICE_ATTR(bMaxPower, S_IRUGO, show_bMaxPower, NULL);
+#endif
 
 static ssize_t configuration_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
@@ -770,6 +801,25 @@ static ssize_t remove_store(struct device *dev, struct device_attribute *attr,
 }
 static DEVICE_ATTR_IGNORE_LOCKDEP(remove, S_IWUSR, NULL, remove_store);
 
+#ifdef CONFIG_USB_BAD_DEVICE_INFO
+/* Get a device status */
+static ssize_t show_usb_device_status(struct device *dev,
+				      struct device_attribute *attr, char *buf)
+{
+	struct usb_device *udev;
+	u16 devstat;
+	int status;
+
+	udev = to_usb_device(dev);
+
+	status = usb_get_status(udev, USB_RECIP_DEVICE, 0, &devstat);
+	if (status < 0)
+		return 0;
+
+	return sprintf(buf, "%d\n", devstat);
+}
+static DEVICE_ATTR(device_status, S_IRUGO, show_usb_device_status, NULL);
+#endif
 
 static struct attribute *dev_attrs[] = {
 	/* current configuration's attributes */
@@ -802,6 +852,9 @@ static struct attribute *dev_attrs[] = {
 	&dev_attr_ltm_capable.attr,
 #ifdef CONFIG_OF
 	&dev_attr_devspec.attr,
+#endif
+#ifdef CONFIG_USB_BAD_DEVICE_INFO
+	&dev_attr_device_status.attr,
 #endif
 	NULL,
 };

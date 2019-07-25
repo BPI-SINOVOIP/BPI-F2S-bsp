@@ -1,0 +1,15 @@
+menuconfig SND_SOC_SUNPLUS
+	tristate "ASoC support for Sunplus"
+	#depends on ARCH_SUNPLUS
+	select SND_SOC_SPDIF
+	default y
+	help
+	  Say Y or M if you want to add support for codecs attached to
+	  the Sunplus SoCs' Audio interfaces. You will also need to
+	  select the audio interfaces to support below.
+
+config SND_SOC_AUD628
+	tristate "support Q628 codec"
+	depends on SND_SOC_SUNPLUS
+	default y
+

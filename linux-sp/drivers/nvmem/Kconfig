@@ -144,4 +144,13 @@ config MESON_EFUSE
 	  This driver can also be built as a module. If so, the module
 	  will be called nvmem_meson_efuse.
 
+config NVMEM_SUNPLUS_OCOTP
+  tristate "Sunplus SoC OTP support"
+  depends on ARCH_PENTAGRAM || COMPILE_TEST
+	depends on HAS_IOMEM
+	help
+	  This is a driver for the On-chip OTP controller (OCOTP) available on
+	  SC7021 A+B SoCs, providing access to 1024 bits of one-time programmable
+	  eFuses.
+	  
 endif

@@ -792,6 +792,7 @@ int usb_get_configuration(struct usb_device *dev)
 	unsigned int cfgno, length;
 	unsigned char *bigbuffer;
 	struct usb_config_descriptor *desc;
+	struct usb_hcd *hcd = bus_to_hcd(dev->bus);
 
 	cfgno = 0;
 	result = -ENOMEM;
@@ -824,9 +825,18 @@ int usb_get_configuration(struct usb_device *dev)
 	for (; cfgno < ncfg; cfgno++) {
 		/* We grab just the first descriptor so we know how long
 		 * the whole configuration is */
+		hcd->enum_msg_flag = true;
 		result = usb_get_descriptor(dev, USB_DT_CONFIG, cfgno,
 		    desc, USB_DT_CONFIG_SIZE);
+		hcd->enum_msg_flag = false;
 		if (result < 0) {
+#ifdef WORKAROUND_HW_NOT_FINISH_QTD_WHEN_DISC
+			if (result == -ENOTCONN) {
+				printk(KERN_NOTICE
+				       "warn,dev disc when get configuration\n");
+				goto err;
+			}
+#endif
 			dev_err(ddev, "unable to read config index %d "
 			    "descriptor/%s: %d\n", cfgno, "start", result);
 			if (result != -EPIPE)
@@ -854,8 +864,10 @@ int usb_get_configuration(struct usb_device *dev)
 		if (dev->quirks & USB_QUIRK_DELAY_INIT)
 			msleep(100);
 
+		hcd->enum_msg_flag = true;
 		result = usb_get_descriptor(dev, USB_DT_CONFIG, cfgno,
 		    bigbuffer, length);
+		hcd->enum_msg_flag = false;
 		if (result < 0) {
 			dev_err(ddev, "unable to read config index %d "
 			    "descriptor/%s\n", cfgno, "all");

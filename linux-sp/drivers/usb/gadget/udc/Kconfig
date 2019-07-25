@@ -29,6 +29,10 @@ menu "USB Peripheral Controller"
 # Integrated controllers
 #
 
+config USB_GADGET_SUNPLUS
+	tristate "Sunplus Gemini USB Device Controller"
+	select USB_GADGET_DUALSPEED
+
 config USB_AT91
 	tristate "Atmel AT91 USB Device Port"
 	depends on ARCH_AT91

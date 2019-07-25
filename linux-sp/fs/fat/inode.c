@@ -1762,11 +1762,15 @@ int fat_fill_super(struct super_block *sb, void *data, int silent, int isvfat,
 	/* check that FAT table does not overflow */
 	fat_clusters = calc_fat_clusters(sb);
 	total_clusters = min(total_clusters, fat_clusters - FAT_START_ENT);
+	/* to support that disks of fat16 , but total size is bigger than 2GB. */
 	if (total_clusters > MAX_FAT(sb)) {
 		if (!silent)
 			fat_msg(sb, KERN_ERR, "count of clusters too big (%u)",
 			       total_clusters);
-		goto out_invalid;
+		if(sbi->fat_bits != 16) {
+			brelse(bh);
+			goto out_invalid;
+		}
 	}
 
 	sbi->max_cluster = total_clusters + FAT_START_ENT;

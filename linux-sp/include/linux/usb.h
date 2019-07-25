@@ -22,6 +22,10 @@
 #include <linux/mutex.h>	/* for struct mutex */
 #include <linux/pm_runtime.h>	/* for runtime PM */
 
+
+/*#define CONFIG_RETRY_TIMES*/
+
+
 struct usb_device;
 struct usb_driver;
 struct wusb_dev;
@@ -432,7 +436,8 @@ struct usb_bus {
 					 * Does the host controller use PIO
 					 * for control transfers?
 					 */
-	u8 otg_port;			/* 0, or number of OTG/HNP port */
+	u8 otg_port:1; 	  		/* 0, or number of OTG/HNP port */
+
 	unsigned is_b_host:1;		/* true during some HNP roleswitches */
 	unsigned b_hnp_enable:1;	/* OTG: did A-Host enable HNP? */
 	unsigned no_stop_on_short:1;    /*
@@ -688,6 +693,15 @@ struct usb_device {
 	struct usb3_lpm_parameters u1_params;
 	struct usb3_lpm_parameters u2_params;
 	unsigned lpm_disable_count;
+#ifdef	CONFIG_RETRY_TIMES
+	int reset_count;
+	struct timespec t_prev;
+#endif
+	struct urb* current_urb;
+#ifdef CONFIG_USB_SUNPLUS_OTG
+	bool device_support_hnp_flag;
+	struct task_struct	  	*hnp_polling_timer;
+#endif
 };
 #define	to_usb_device(d) container_of(d, struct usb_device, dev)
 
@@ -1559,6 +1573,7 @@ struct urb {
 	usb_complete_t complete;	/* (in) completion routine */
 	struct usb_iso_packet_descriptor iso_frame_desc[0];
 					/* (in) ISO ONLY */
+	u8 uphy_stuck_flag;
 };
 
 /* ----------------------------------------------------------------------- */

@@ -265,8 +265,18 @@ static struct attribute *rtc_attrs[] = {
  */
 static bool rtc_does_wakealarm(struct rtc_device *rtc)
 {
+#ifdef CONFIG_ARCH_PENTAGRAM
+	/*
+	 * Ignore to check if its parent can wakeup system.
+	 * Low-power mode doesn't go through suspend/resume flow.
+	 * Just uses /sys/clock/rtc/rtc0/wakealarm to set up RTC wakeup time.
+	 * Procedure:
+	 * Set up RTC wakeup time -> Low-power mode -> RTC wakes up PMU -> IOP -> power-on chip.
+	 */
+#else
 	if (!device_can_wakeup(rtc->dev.parent))
 		return false;
+#endif
 
 	return rtc->ops->set_alarm != NULL;
 }

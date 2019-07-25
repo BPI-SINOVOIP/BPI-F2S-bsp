@@ -119,4 +119,6 @@
 
 #define EHWPOISON	133	/* Memory page has hardware error */
 
+#define ENOTCONN_IRQ    134
+
 #endif

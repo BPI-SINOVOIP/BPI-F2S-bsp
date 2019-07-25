@@ -1,0 +1,5 @@
+config VIDEO_SP_DISP
+	tristate "SUNPLUS DISPLAY Driver"
+	---help---
+		Support for the SUNPLUS SP7021 display test.
+

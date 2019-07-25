@@ -5,7 +5,7 @@
 menuconfig V4L_PLATFORM_DRIVERS
 	bool "V4L platform devices"
 	depends on MEDIA_CAMERA_SUPPORT
-	default n
+	default y
 	---help---
 	  Say Y here to enable support for platform-specific V4L drivers.
 
@@ -133,6 +133,9 @@ config VIDEO_TI_CAL
 	  found on DRA72X SoC.
 	  In TI Technical Reference Manual this module is referred as
 	  Camera Interface Subsystem (CAMSS).
+
+source "drivers/media/platform/sp-display/display/Kconfig"
+source "drivers/media/platform/sp-display/hdmitx/Kconfig"
 
 endif # V4L_PLATFORM_DRIVERS
 

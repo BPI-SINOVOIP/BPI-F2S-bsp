@@ -1,0 +1,133 @@
+/dts-v1/;
+
+#include "pentagram-sp7021-achip.dtsi"
+
+#include <dt-bindings/interrupt-controller/arm-gic.h>
+
+/ {
+	model = "Sunplus SC7021 EMU (CA7) PinCtrl test";
+	compatible = "sunplus,sc7021-achip";
+
+	chosen {
+		bootargs = "console=ttyS0,115200 root=/dev/ram rw loglevel=8 earlyprintk";
+	};
+
+	memory {
+		reg = <0x00000000 0x20000000>; /* 512MB */
+	};
+};
+
+&sp_spinor0 {  status = "disabled";  };
+
+&sdio {
+ pinctrl-names = "default";
+ pinctrl-0 = <&pins_sdio>;
+};
+
+&l2sw {
+ pinctrl-names = "default";
+ pinctrl-0 = <&ethA_pins &eth0_pins>;
+};
+
+&sp_uphy0 {
+  pinctrl-names = "default";
+  pinctrl-0 = <&pins_vbus_usb0>;
+  vbus-gpio = <&pctl 90 GPIO_ACTIVE_HIGH>;
+};
+
+&sp_uphy1 {
+  pinctrl-names = "default";
+  pinctrl-0 = <&pins_vbus_usb1>;
+  vbus-gpio = <&pctl 91 GPIO_ACTIVE_HIGH>;
+};
+
+&pctl {
+ /*** non-device binded ***/
+ /* pinctrl-names = "default"; */
+ /* pinctrl-0 = <&ethA_pins &eth0_pins &eth1_pins>; */
+
+ /* for all eth */
+ ethA_pins: pinmux_ethA_pins {
+  sppctl,pins = <
+       SP7021_IOPAD(50,SP7021_PCTL_G_PMUX,MUXF_L2SW_CLK_OUT,0)
+       SP7021_IOPAD(44,SP7021_PCTL_G_PMUX,MUXF_L2SW_MAC_SMI_MDC,0)
+       SP7021_IOPAD(43,SP7021_PCTL_G_PMUX,MUXF_L2SW_MAC_SMI_MDIO,0)
+  >;
+ };
+ eth0_pins: pinmux_eth0_pins {
+  sppctl,pins = <
+       SP7021_IOPAD(54,SP7021_PCTL_G_PMUX,MUXF_L2SW_LED_FLASH0,0)
+       SP7021_IOPAD(45,SP7021_PCTL_G_PMUX,MUXF_L2SW_LED_ON0,0)
+
+       SP7021_IOPAD(53,SP7021_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_TXEN,0)
+       SP7021_IOPAD(51,SP7021_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_TXD0,0)
+       SP7021_IOPAD(52,SP7021_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_TXD1,0)
+       SP7021_IOPAD(47,SP7021_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_CRSDV,0)
+       SP7021_IOPAD(48,SP7021_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_RXD0,0)
+       SP7021_IOPAD(49,SP7021_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_RXD1,0)
+       SP7021_IOPAD(46,SP7021_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_RXER,0)
+  >;
+ };
+
+ pins_sdio: pins_sdio {
+  sppctl,pins = <
+       SP7021_IOPAD(65,SP7021_PCTL_G_PMUX,MUXF_SDIO_D1,0)
+       SP7021_IOPAD(66,SP7021_PCTL_G_PMUX,MUXF_SDIO_D0,0)
+       SP7021_IOPAD(67,SP7021_PCTL_G_PMUX,MUXF_SDIO_CLK,0)
+       SP7021_IOPAD(68,SP7021_PCTL_G_PMUX,MUXF_SDIO_CMD,0)
+       SP7021_IOPAD(69,SP7021_PCTL_G_PMUX,MUXF_SDIO_D3,0)
+       SP7021_IOPAD(70,SP7021_PCTL_G_PMUX,MUXF_SDIO_D2,0)
+  >;
+ };
+
+ pins_vbus_usb0: pins_vbus_usb0 {
+	sppctl,pins = <
+	  SP7021_IOPAD(90,SP7021_PCTL_G_GPIO,0,SP7021_PCTL_L_OUT)
+	>;
+ };
+ pins_vbus_usb1: pins_vbus_usb1 {
+    sppctl,pins = <
+	  SP7021_IOPAD(91,SP7021_PCTL_G_GPIO,0,SP7021_PCTL_L_OUT)
+	>;
+ };
+
+ leds_s0_def: user_leds_s0_def {
+    sppctl,pins = <
+      SP7021_IOPAD(8,SP7021_PCTL_G_GPIO,MUXF_GPIO,SP7021_PCTL_L_INV)
+      SP7021_IOPAD(9,SP7021_PCTL_G_GPIO,0,SP7021_PCTL_L_INV)
+    >;
+ };
+ leds_s0_slp: user_leds_s0_slp {
+    sppctl,pins = <
+      SP7021_IOPAD(8,SP7021_PCTL_G_GPIO,0,0)
+      SP7021_IOPAD(9,SP7021_PCTL_G_GPIO,0,0)
+    >;
+ };
+};
+
+/* ----
+ next one requires:
+
+ CONFIG_NEW_LEDS=y
+ CONFIG_LEDS_CLASS=y
+ CONFIG_LEDS_GPIO=y
+ CONFIG_LEDS_TRIGGERS=y
+ CONFIG_LEDS_TRIGGER_HEARTBEAT=y
+*/
+
+/ {
+	soc@B {
+		leds {
+		    pinctrl-names = "default", "sleep";
+		    pinctrl-0 = <&leds_s0_def>;
+		    pinctrl-1 = <&leds_s0_slp>;
+		    compatible = "gpio-leds";
+		    led@2 {
+			label = "SG";
+			gpios = <&pctl 8 GPIO_ACTIVE_HIGH>;
+			linux,default-trigger = "heartbeat";
+			default-state = "off";
+		    };
+		};
+	};
+};

@@ -68,6 +68,10 @@ struct crypto_gcm_req_priv_ctx {
 	u8 iv[16];
 	u8 auth_tag[16];
 	u8 iauth_tag[16];
+#ifdef CONFIG_MACH_PENTAGRAM_SC7021_ACHIP
+	/* avoid auth_tag & src @ same cacheline */
+	u8 dummy[L1_CACHE_BYTES - 48];
+#endif
 	struct scatterlist src[3];
 	struct scatterlist dst[3];
 	struct scatterlist sg;
@@ -129,7 +133,12 @@ static int crypto_gcm_setkey(struct crypto_aead *aead, const u8 *key,
 	crypto_skcipher_clear_flags(ctr, CRYPTO_TFM_REQ_MASK);
 	crypto_skcipher_set_flags(ctr, crypto_aead_get_flags(aead) &
 				       CRYPTO_TFM_REQ_MASK);
+#ifdef CONFIG_CRYPTO_DEV_SP // TODO: dirty hack code, fix me
+	err = crypto_skcipher_setkey(ctr, key,
+		keylen | !strcmp(ctr->base.__crt_alg->cra_driver_name, "sp-aes-ctr"));
+#else
 	err = crypto_skcipher_setkey(ctr, key, keylen);
+#endif
 	crypto_aead_set_flags(aead, crypto_skcipher_get_flags(ctr) &
 				    CRYPTO_TFM_RES_MASK);
 	if (err)
@@ -162,7 +171,12 @@ static int crypto_gcm_setkey(struct crypto_aead *aead, const u8 *key,
 	crypto_ahash_clear_flags(ghash, CRYPTO_TFM_REQ_MASK);
 	crypto_ahash_set_flags(ghash, crypto_aead_get_flags(aead) &
 			       CRYPTO_TFM_REQ_MASK);
+#ifdef CONFIG_CRYPTO_DEV_SP // TODO: dirty hack code, fix me
+	err = crypto_ahash_setkey(ghash, (u8 *)&data->hash,
+		sizeof(be128) | !strcmp(ghash->base.__crt_alg->cra_driver_name, "sp-ghash"));
+#else
 	err = crypto_ahash_setkey(ghash, (u8 *)&data->hash, sizeof(be128));
+#endif
 	crypto_aead_set_flags(aead, crypto_ahash_get_flags(ghash) &
 			      CRYPTO_TFM_RES_MASK);
 

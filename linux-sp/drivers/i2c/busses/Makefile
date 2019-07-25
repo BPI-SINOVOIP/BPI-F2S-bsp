@@ -125,5 +125,8 @@ obj-$(CONFIG_I2C_PCA_ISA)	+= i2c-pca-isa.o
 obj-$(CONFIG_I2C_SIBYTE)	+= i2c-sibyte.o
 obj-$(CONFIG_I2C_XGENE_SLIMPRO) += i2c-xgene-slimpro.o
 obj-$(CONFIG_SCx200_ACB)	+= scx200_acb.o
+obj-$(CONFIG_SP_I2C)		+= sp_i2c/
+obj-$(CONFIG_SDDC_I2C)		+= sddc_i2c/
+obj-$(CONFIG_TI_SERDES_I2C)		+= ti_serdes_i2c/
 
 ccflags-$(CONFIG_I2C_DEBUG_BUS) := -DDEBUG

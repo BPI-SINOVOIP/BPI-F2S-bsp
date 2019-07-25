@@ -67,6 +67,15 @@ static void clk_gate_endisable(struct clk_hw *hw, int enable)
 	}
 
 	clk_writel(reg, gate->reg);
+	//printk(KERN_INFO "reg : 0x%x \n",reg);
+	//printk(KERN_INFO "gate->reg : 0x%x \n",gate->reg);
+	//force disable gate clock function when clken
+  if (enable == 1) {  
+			reg &= ~BIT(gate->bit_idx);
+	   clk_writel(reg, (gate->reg)+0x28);
+	//   printk(KERN_INFO "reg : 0x%x \n",reg);
+	//   printk(KERN_INFO "gate->reg : 0x%x \n",(gate->reg)+0x28);
+  }
 
 	if (gate->lock)
 		spin_unlock_irqrestore(gate->lock, flags);

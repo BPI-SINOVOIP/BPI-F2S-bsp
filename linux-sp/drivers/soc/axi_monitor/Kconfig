@@ -1,0 +1,13 @@
+#
+# AXI Monitor subsystem configuration
+#
+
+menu "AXI Monitor"
+
+config SUNPLUS_AXI_MONITOR
+	tristate "AXI Monitor support"
+	default y
+	help
+		Breakpoint analysis of BackBone-Dram problem.
+#source "drivers/soc/iop/qtest/Kconfig"
+endmenu

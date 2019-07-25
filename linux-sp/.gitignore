@@ -39,6 +39,7 @@ Module.symvers
 *.dwo
 *.su
 *.c.[012]*.*
+*.bak
 
 #
 # Top-level generic files
@@ -52,6 +53,7 @@ Module.symvers
 /vmlinuz
 /System.map
 /Module.markers
+/dtb
 
 #
 # Debian directory (make deb-pkg)

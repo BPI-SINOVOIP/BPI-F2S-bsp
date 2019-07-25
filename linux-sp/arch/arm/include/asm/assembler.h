@@ -193,12 +193,24 @@
 	.irp	c,,eq,ne,cs,cc,mi,pl,vs,vc,hi,ls,ge,lt,gt,le,hs,lo
 	.macro	badr\c, rd, sym
 #ifdef CONFIG_THUMB2_KERNEL
+#define SUPPORT_NEW_GCC_ADR
+#ifdef SUPPORT_NEW_GCC_ADR
+	__badr \c, \rd, \sym
+#else	/* old gcc (eg. gcc 5.4) */
 	adr\c	\rd, \sym + 1
+#endif
 #else
 	adr\c	\rd, \sym
 #endif
 	.endm
 	.endr
+
+#ifdef SUPPORT_NEW_GCC_ADR
+	.macro	__badr, c, rd, sym
+	.eqv	.Lsym\@, \sym + 1
+	adr\c	\rd, .Lsym\@
+	.endm
+#endif
 
 /*
  * Get current thread_info.

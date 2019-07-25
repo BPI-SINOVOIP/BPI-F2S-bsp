@@ -217,6 +217,12 @@ config COMMON_CLK_VC5
 	  This driver supports the IDT VersaClock5 programmable clock
 	  generator.
 
+config COMMON_CLK_SC7021
+    bool "Clock driver for the Sunplus SC7021 SoC"
+    depends on OF
+    ---help---
+      Support for the Sunplus SC7021 SoC clocks.
+
 source "drivers/clk/bcm/Kconfig"
 source "drivers/clk/hisilicon/Kconfig"
 source "drivers/clk/mediatek/Kconfig"

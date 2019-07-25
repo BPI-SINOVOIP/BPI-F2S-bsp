@@ -1778,6 +1778,12 @@ composite_setup(struct usb_gadget *gadget, const struct usb_ctrlrequest *ctrl)
 	case USB_REQ_SET_FEATURE:
 		if (!gadget_is_superspeed(gadget))
 			goto unknown;
+#ifdef CONFIG_USB_SUNPLUS_OTG
+		if((0 == ctrl->bRequestType) && (3 == ctrl->wValue) && (0 == ctrl->wIndex) && (0 == ctrl->wLength)){
+			value = 0;
+			break;
+		}
+#endif
 		if (ctrl->bRequestType != (USB_DIR_OUT | USB_RECIP_INTERFACE))
 			goto unknown;
 		switch (w_value) {
@@ -1994,16 +2000,21 @@ void composite_disconnect(struct usb_gadget *gadget)
 	/* REVISIT:  should we have config and device level
 	 * disconnect callbacks?
 	 */
-	spin_lock_irqsave(&cdev->lock, flags);
-	if (cdev->config)
-		reset_config(cdev);
-	if (cdev->driver->disconnect)
-		cdev->driver->disconnect(cdev);
-	spin_unlock_irqrestore(&cdev->lock, flags);
+	if(cdev){
+		spin_lock_irqsave(&cdev->lock, flags);
+		if (cdev->config){
+			reset_config(cdev);
+		}
+
+		if (cdev->driver->disconnect){
+			cdev->driver->disconnect(cdev);
+		}
+		spin_unlock_irqrestore(&cdev->lock, flags);
+	}
 }
 
 /*-------------------------------------------------------------------------*/
-
+#if 0
 static ssize_t suspended_show(struct device *dev, struct device_attribute *attr,
 			      char *buf)
 {
@@ -2013,32 +2024,34 @@ static ssize_t suspended_show(struct device *dev, struct device_attribute *attr,
 	return sprintf(buf, "%d\n", cdev->suspended);
 }
 static DEVICE_ATTR_RO(suspended);
-
+#endif
 static void __composite_unbind(struct usb_gadget *gadget, bool unbind_driver)
 {
 	struct usb_composite_dev	*cdev = get_gadget_data(gadget);
 
-	/* composite_disconnect() must already have been called
-	 * by the underlying peripheral controller driver!
-	 * so there's no i/o concurrency that could affect the
-	 * state protected by cdev->lock.
-	 */
-	WARN_ON(cdev->config);
+	if(cdev){
+		/* composite_disconnect() must already have been called
+		 * by the underlying peripheral controller driver!
+		 * so there's no i/o concurrency that could affect the
+		 * state protected by cdev->lock.
+		 */
+		WARN_ON(cdev->config);
 
-	while (!list_empty(&cdev->configs)) {
-		struct usb_configuration	*c;
-		c = list_first_entry(&cdev->configs,
-				struct usb_configuration, list);
-		remove_config(cdev, c);
+		while (!list_empty(&cdev->configs)) {
+			struct usb_configuration	*c;
+			c = list_first_entry(&cdev->configs,
+					struct usb_configuration, list);
+			remove_config(cdev, c);
+		}
+		if (cdev->driver->unbind && unbind_driver)
+			cdev->driver->unbind(cdev);
+
+		composite_dev_cleanup(cdev);
+
+		kfree(cdev->def_manufacturer);
+		kfree(cdev);
+		set_gadget_data(gadget, NULL);
 	}
-	if (cdev->driver->unbind && unbind_driver)
-		cdev->driver->unbind(cdev);
-
-	composite_dev_cleanup(cdev);
-
-	kfree(cdev->def_manufacturer);
-	kfree(cdev);
-	set_gadget_data(gadget, NULL);
 }
 
 static void composite_unbind(struct usb_gadget *gadget)
@@ -2098,11 +2111,11 @@ int composite_dev_prepare(struct usb_composite_driver *composite,
 	cdev->req->buf = kmalloc(USB_COMP_EP0_BUFSIZ, GFP_KERNEL);
 	if (!cdev->req->buf)
 		goto fail;
-
+#if 0
 	ret = device_create_file(&gadget->dev, &dev_attr_suspended);
 	if (ret)
 		goto fail_dev;
-
+#endif
 	cdev->req->complete = composite_setup_complete;
 	cdev->req->context = cdev;
 	gadget->ep0->driver_data = cdev;
@@ -2123,7 +2136,7 @@ int composite_dev_prepare(struct usb_composite_driver *composite,
 	 */
 	usb_ep_autoconfig_reset(gadget);
 	return 0;
-fail_dev:
+
 	kfree(cdev->req->buf);
 fail:
 	usb_ep_free_request(gadget->ep0, cdev->req);
@@ -2178,7 +2191,7 @@ void composite_dev_cleanup(struct usb_composite_dev *cdev)
 		usb_ep_free_request(cdev->gadget->ep0, cdev->req);
 	}
 	cdev->next_string_id = 0;
-	device_remove_file(&cdev->gadget->dev, &dev_attr_suspended);
+	//device_remove_file(&cdev->gadget->dev, &dev_attr_suspended);
 }
 
 static int composite_bind(struct usb_gadget *gadget,

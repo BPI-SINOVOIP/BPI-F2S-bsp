@@ -39,11 +39,15 @@
 #include <linux/dmapool.h>
 #include <linux/workqueue.h>
 #include <linux/debugfs.h>
+#include <linux/platform_device.h>
+
 
 #include <asm/io.h>
 #include <asm/irq.h>
 #include <asm/unaligned.h>
 #include <asm/byteorder.h>
+#include <linux/usb/sp_usb.h>
+
 
 
 #define DRIVER_AUTHOR "Roman Weissgaerber, David Brownell"
@@ -70,6 +74,12 @@
 /*-------------------------------------------------------------------------*/
 
 static const char	hcd_name [] = "ohci_hcd";
+#ifdef CONFIG_USB_OHCI_SPHE8700_TD_FIX
+u32 td_fix_flag = 0;
+#define set_td_fix_flag() (td_fix_flag |=  1)
+#define clr_td_fix_flag() (td_fix_flag &= ~1)
+#define get_td_fix_flag() (td_fix_flag & 0x1)
+#endif
 
 #define	STATECHANGE_DELAY	msecs_to_jiffies(300)
 #define	IO_WATCHDOG_DELAY	msecs_to_jiffies(275)
@@ -78,6 +88,7 @@ static const char	hcd_name [] = "ohci_hcd";
 #include "pci-quirks.h"
 
 static void ohci_dump(struct ohci_hcd *ohci);
+static int ohci_init(struct ohci_hcd *ohci);
 static void ohci_stop(struct usb_hcd *hcd);
 static void io_watchdog_func(unsigned long _ohci);
 
@@ -855,6 +866,7 @@ static irqreturn_t ohci_irq (struct usb_hcd *hcd)
 	struct ohci_hcd		*ohci = hcd_to_ohci (hcd);
 	struct ohci_regs __iomem *regs = ohci->regs;
 	int			ints;
+	int port_status;
 
 	/* Read interrupt status (and flush pending writes).  We ignore the
 	 * optimization of checking the LSB of hcca->done_head; it doesn't
@@ -959,7 +971,51 @@ static irqreturn_t ohci_irq (struct usb_hcd *hcd)
 	}
 	spin_unlock(&ohci->lock);
 
+#ifdef CONFIG_USB_HOST_NOT_FINISH_QTD_WHEN_DISC_WORKAROUND
+	port_status = ohci_readl(ohci, &ohci->regs->roothub.portstatus[0]);
+	if ((!(port_status & RH_PS_CCS)) || (port_status & RH_PS_CSC)) {
+		tasklet_schedule(&hcd->host_irq_tasklet);
+	}
+#endif
+
 	return IRQ_HANDLED;
+}
+
+#ifdef CONFIG_USB_HOST_NOT_FINISH_QTD_WHEN_DISC_WORKAROUND
+struct api_context {
+	struct completion done;
+	int status;
+};
+static void ohci_irq_tasklet(unsigned long data)
+{
+	int port_status;
+	struct api_context *ctx;
+	struct platform_device *pdev;
+	struct usb_hcd *hcd = (void *)data;
+	struct ohci_hcd *ohci = hcd_to_ohci(hcd);
+
+	pdev = to_platform_device(hcd->self.controller);
+	port_status = ohci_readl(ohci, &ohci->regs->roothub.portstatus[0]);
+	printk(KERN_NOTICE "ohci_irq,id:%d,ps:%x\n",pdev->id - 1,port_status);
+	if (hcd->current_active_urb && hcd->enum_msg_flag) {
+		printk(KERN_NOTICE "ohci_irq,dev disc,ps:%x\n",port_status);
+		ctx = hcd->current_active_urb->context;
+		hcd->enum_msg_flag = false;
+		hcd->current_active_urb = NULL;
+		ctx->status = -ENOTCONN_IRQ;
+		complete(&ctx->done);
+	}
+}
+#endif
+
+int ohci_get_port_status_from_register(struct usb_hcd *hcd)
+{
+	struct ohci_hcd *ohci = hcd_to_ohci(hcd);
+	int port_status = ohci_readl(ohci, &ohci->regs->roothub.portstatus[0]);
+
+	printk(KERN_DEBUG "o_ps:%x\n", port_status);
+
+	return port_status;
 }
 
 /*-------------------------------------------------------------------------*/
@@ -1245,6 +1301,11 @@ MODULE_LICENSE ("GPL");
 #define PLATFORM_DRIVER		ohci_hcd_tilegx_driver
 #endif
 
+#ifdef CONFIG_USB_OHCI_HCD_PLATFORM
+#include "ohci-platform.c"
+#endif
+
+#if 0
 static int __init ohci_hcd_mod_init(void)
 {
 	int retval = 0;
@@ -1333,7 +1394,7 @@ static int __init ohci_hcd_mod_init(void)
 	clear_bit(USB_OHCI_LOADED, &usb_hcds_loaded);
 	return retval;
 }
-module_init(ohci_hcd_mod_init);
+/*module_init(ohci_hcd_mod_init);*/
 
 static void __exit ohci_hcd_mod_exit(void)
 {
@@ -1358,5 +1419,5 @@ static void __exit ohci_hcd_mod_exit(void)
 	debugfs_remove(ohci_debug_root);
 	clear_bit(USB_OHCI_LOADED, &usb_hcds_loaded);
 }
-module_exit(ohci_hcd_mod_exit);
-
+/*module_exit(ohci_hcd_mod_exit);*/
+#endif

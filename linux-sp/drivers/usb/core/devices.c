@@ -58,6 +58,7 @@
 #include <linux/usb/hcd.h>
 #include <linux/mutex.h>
 #include <linux/uaccess.h>
+#include <linux/usb/sp_usb.h>
 
 #include "usb.h"
 
@@ -496,7 +497,7 @@ static ssize_t usb_device_dump(char __user **buffer, size_t *nbytes,
 	if (*nbytes <= 0)
 		return 0;
 
-	if (level > MAX_TOPO_LEVEL)
+	if (level > max_topo_level)
 		return 0;
 	/* allocate 2^1 pages = 8K (on i386);
 	 * should be more than enough for one device */

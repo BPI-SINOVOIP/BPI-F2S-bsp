@@ -1041,7 +1041,7 @@ static int nand_wait(struct mtd_info *mtd, struct nand_chip *chip)
 
 	status = (int)chip->read_byte(mtd);
 	/* This can happen if in case of timeout or buggy dev_ready */
-	WARN_ON(!(status & NAND_STATUS_READY));
+	//WARN_ON(!(status & NAND_STATUS_READY));
 	return status;
 }
 
@@ -3951,6 +3951,7 @@ static bool find_full_id_nand(struct nand_chip *chip,
 		chip->ecc_step_ds = NAND_ECC_STEP(type);
 		chip->onfi_timing_mode_default =
 					type->onfi_timing_mode_default;
+		chip->drv_options = type->drv_options;
 
 		if (!mtd->name)
 			mtd->name = type->name;

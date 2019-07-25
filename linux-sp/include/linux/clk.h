@@ -278,6 +278,8 @@ struct clk *devm_get_clk_from_child(struct device *dev,
  */
 int clk_enable(struct clk *clk);
 
+bool __clk_is_enabled(struct clk *clk);
+
 /**
  * clk_disable - inform the system when the clock source is no longer required.
  * @clk: clock source

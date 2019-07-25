@@ -301,3 +301,6 @@ config QCOM_IRQ_COMBINER
 	help
 	  Say yes here to add support for the IRQ combiner devices embedded
 	  in Qualcomm Technologies chips.
+
+config SP_INTC
+	bool "Sunplus interrupt controller"

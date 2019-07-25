@@ -1,0 +1,60 @@
+
+#
+# Sunplus Ethernet device configuration
+#
+
+config NET_VENDOR_SUNPLUS
+	tristate "Sunplus devices"
+	depends on ETHERNET
+	---help---
+	  If you have a network (Ethernet) device belonging to this class, say Y.
+
+	  Note that the answer to this question doesn't directly affect
+	  the kernel: saying N will just cause the configurator to skip all
+	  the questions about Sunplus device. If you say Y, you will be asked
+	  for your specific device in the following questions.
+
+config DYNAMIC_MODE_SWITCHING_BY_SYSFS
+	bool "Support Dynamic Mode-switching by sysfs"
+	depends on NET_VENDOR_SUNPLUS
+	default y
+	---help---
+	  This mode supports dynamic switching between two modes (by sysfs):
+	      a. An NIC with daisy-chain mode
+	      b. Dual NIC mode
+
+choice
+	prompt "Selected Mode"
+	depends on NET_VENDOR_SUNPLUS
+	---help---
+	  Press Enter to select mode if this is not you want.
+
+config AN_NIC_WITH_DAISY_CHAIN
+	bool "An NIC with Daisy-chain Mode"
+	select PHYLIB
+	select PINCTRL_SPPCTL
+	select SUNPLUS_SP7021_RESET
+	select NVMEM_SUNPLUS_OCOTP
+	---help---
+	  This mode supports an NIC with daisy-chain support on the other port.
+
+config DUAL_NIC
+	bool "Dual NIC Mode"
+	select PHYLIB
+	select PINCTRL_SPPCTL
+	select SUNPLUS_SP7021_RESET
+	select NVMEM_SUNPLUS_OCOTP
+	---help---
+	  This mode supports dual NIC.
+
+config AN_NIC_WITH_DAISY_CHAIN2
+	bool "An NIC with Daisy-chain Mode 2"
+	select PHYLIB
+	select PINCTRL_SPPCTL
+	select SUNPLUS_SP7021_RESET
+	select NVMEM_SUNPLUS_OCOTP
+	---help---
+	  This mode supports an NIC with daisy-chain support on the other port.
+	  SA learning function is turned off in this mode.
+
+endchoice

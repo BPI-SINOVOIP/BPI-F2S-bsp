@@ -1,0 +1,48 @@
+menuconfig SUNPLUS_VIDEO_SENSOR_SUPPORT
+	bool "Sunplus Video Sensor Support"
+	help
+	  Enable video sensor support.
+	  If you have such devices, say Y.
+
+if SUNPLUS_VIDEO_SENSOR_SUPPORT
+
+config VIDEO_SENSOR_OV9281
+	tristate "Video Sensor (OV9281) Driver"
+	default n
+	---help---
+	  Supports video sensor OV9281.
+
+config VIDEO_SENSOR_OV9281_ISP
+	tristate "Video Sensor (OV9281_ISP) Driver"
+	default n
+	---help---
+	  Supports SunplusIT 3D Eye-tracker (video sensor OV9281 + ISP) board.
+	  This driver does not support auto sensor detection.
+	  It will be loaded in unconditionally when it is enabled.
+	  Please disable other video sensor drivers.
+
+config VIDEO_SENSOR_GC0310
+	tristate "Video Sensor (GC0310) Driver"
+	default n
+	---help---
+	  Supports video sensor GC0310.
+
+choice
+	prompt "Selected Mode"
+	depends on VIDEO_SENSOR_GC0310
+	---help---
+	  Press Enter to select mode if this is not you want.
+
+config GC0310_RAW8
+	bool "Bayer RAW8"
+	---help---
+	  In this mode, GC0310 outputs Bayer RAW8 video stream.
+
+config GC0310_YUY2
+	bool "YUY2/YUYV"
+	---help---
+	  In this mode, GC0310 outputs YUY2/YUYV (YUV422/8bit) video stream.
+
+endchoice
+
+endif
