@@ -415,6 +415,10 @@ static int reserve_uboot(void)
 	gd->relocaddr &= ~(65536 - 1);
 #endif
 
+#if CONFIG_SYS_ZMEM_SKIP_RELOC
+	/* header is included in CONFIG_SP_ZMEM_RELOC_ADDR so skip 0x40 */
+	gd->relocaddr = (CONFIG_SP_ZMEM_RELOC_ADDR + 0x40);
+#endif
 	debug("Reserving %ldk for U-Boot at: %08lx\n", gd->mon_len >> 10,
 	      gd->relocaddr);
 

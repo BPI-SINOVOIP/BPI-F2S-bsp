@@ -5,3 +5,4 @@
 #
 
 obj-$(CONFIG_ARCH_KEYSTONE)	+= keystone/
+obj-$(CONFIG_OTP_SUNPLUS)	+= sunplus/

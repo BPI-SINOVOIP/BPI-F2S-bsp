@@ -1,0 +1,10 @@
+menu "Soc"
+
+config OTP_SUNPLUS
+	bool "Enable OTP driver support for Sunplus"
+	help
+	  This OTP driver adds support for sp7021 platform.
+
+source "drivers/soc/sunplus/Kconfig"
+
+endmenu

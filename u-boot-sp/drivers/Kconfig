@@ -78,6 +78,8 @@ source "drivers/scsi/Kconfig"
 
 source "drivers/serial/Kconfig"
 
+source "drivers/soc/Kconfig"
+
 source "drivers/sound/Kconfig"
 
 source "drivers/spi/Kconfig"

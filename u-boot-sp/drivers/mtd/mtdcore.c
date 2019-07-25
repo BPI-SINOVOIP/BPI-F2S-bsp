@@ -939,6 +939,9 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 	 * any one ecc region (if applicable; zero otherwise).
 	 */
 	ret_code = mtd->_read(mtd, from, len, retlen, buf);
+#ifdef CONFIG_ARCH_PENTAGRAM
+	env_set_hex("isp_addr_next", *retlen + from);
+#endif
 	if (unlikely(ret_code < 0))
 		return ret_code;
 	if (mtd->ecc_strength == 0)
@@ -950,6 +953,9 @@ EXPORT_SYMBOL_GPL(mtd_read);
 int mtd_write(struct mtd_info *mtd, loff_t to, size_t len, size_t *retlen,
 	      const u_char *buf)
 {
+#ifdef CONFIG_ARCH_PENTAGRAM
+	int ret;
+#endif
 	*retlen = 0;
 	if (to < 0 || to > mtd->size || len > mtd->size - to)
 		return -EINVAL;
@@ -957,7 +963,12 @@ int mtd_write(struct mtd_info *mtd, loff_t to, size_t len, size_t *retlen,
 		return -EROFS;
 	if (!len)
 		return 0;
+#ifndef CONFIG_ARCH_PENTAGRAM
 	return mtd->_write(mtd, to, len, retlen, buf);
+#else
+	ret = mtd->_write(mtd, to, len, retlen, buf);
+	return (ret | env_set_hex("isp_addr_next", *retlen + to));
+#endif
 }
 EXPORT_SYMBOL_GPL(mtd_write);
 

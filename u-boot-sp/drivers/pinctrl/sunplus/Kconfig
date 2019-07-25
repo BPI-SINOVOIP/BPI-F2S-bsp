@@ -1,0 +1,8 @@
+
+config PINCTRL_SUNPLUS
+	depends on DM
+	default y
+	bool "Sunplus sp7021 pin control driver"
+	help
+	   Support pin multiplexing and pin configuration control on
+	   Sunplus's SP7021 SoC.

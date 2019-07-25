@@ -683,6 +683,7 @@ struct nand_buffers {
  *			additional error status checks (determine if errors are
  *			correctable).
  * @write_page:		[REPLACEABLE] High-level page write function
+ * @drv_options:	[OPTIONAL]stores driver private bit options for the chip.
  */
 
 struct nand_chip {
@@ -765,6 +766,8 @@ struct nand_chip {
 	struct nand_bbt_descr *badblock_pattern;
 
 	void *priv;
+
+	unsigned int drv_options;
 };
 
 static inline struct nand_chip *mtd_to_nand(struct mtd_info *mtd)
@@ -863,6 +866,7 @@ static inline void nand_set_controller_data(struct nand_chip *chip, void *priv)
  * @onfi_timing_mode_default: the default ONFI timing mode entered after a NAND
  *			      reset. Should be deduced from timings described
  *			      in the datasheet.
+ * @drv_options: stores driver private bit options for the chip.
  *
  */
 struct nand_flash_dev {
@@ -885,6 +889,7 @@ struct nand_flash_dev {
 		uint16_t step_ds;
 	} ecc;
 	int onfi_timing_mode_default;
+	unsigned int drv_options;
 };
 
 /**

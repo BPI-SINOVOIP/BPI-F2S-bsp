@@ -15,6 +15,7 @@
 #include <linux/compiler.h>
 #include <part.h>
 
+// #define CONFIG_MMC_TRACE
 /* SD/MMC version bits; 8 flags, 8 major, 8 minor, 8 change */
 #define SD_VERSION_SD	(1U << 31)
 #define MMC_VERSION_MMC	(1U << 30)
@@ -591,7 +592,7 @@ int mmc_get_env_dev(void);
 
 /* Set block count limit because of 16 bit register limit on some hardware*/
 #ifndef CONFIG_SYS_MMC_MAX_BLK_COUNT
-#define CONFIG_SYS_MMC_MAX_BLK_COUNT 65535
+#define CONFIG_SYS_MMC_MAX_BLK_COUNT 128
 #endif
 
 /**

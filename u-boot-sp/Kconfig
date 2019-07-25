@@ -413,3 +413,9 @@ source "fs/Kconfig"
 source "lib/Kconfig"
 
 source "test/Kconfig"
+config BOOTARGS_WITH_MEM
+	bool "bootargs with memory get from OTP"
+	default n
+	help
+	  Ramsize in kernel is get from uboot by bootargs,memory config is 
+	  set in OTP 247:240

@@ -365,4 +365,12 @@ config FEC2_PHY_NORXERR
 	  The PHY does not have a RXERR line (RMII only).
 	  (so program the FEC to ignore it).
 
+config SUNPLUS_L2SW
+	bool "Sunplus L2SW Ethernet MAC support"
+	depends on DM_ETH
+	select PHYLIB
+	select PHY_GIGE
+	help
+	  This driver supports the Sunplus L2SW Ethernet MAC.
+
 endif # NETDEVICES

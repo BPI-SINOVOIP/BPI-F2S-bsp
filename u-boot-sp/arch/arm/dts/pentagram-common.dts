@@ -1,0 +1,22 @@
+/*
+ * Sunplus Pentagram board DTS
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
+ */
+/dts-v1/;
+#include "pentagram-sc70xx.dtsi"
+
+/ {
+	model = "Sunplus Pentagram common board";
+	compatible = "sunplus,pentagram-common", "sunplus,pentagram";
+
+	aliases {
+		serial0 = &sp_uart0;
+		spi0 = &sp_spinor0;
+	};
+
+	chosen {
+		bootargs = "";
+		stdout-path = "serial0:115200n8";
+	};
+};

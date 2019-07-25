@@ -171,6 +171,7 @@
 /*
  * USB Registers
  */
+#if 0
 struct usb_ehci {
 	u32	id;		/* 0x000 - Identification register */
 	u32	hwgeneral;	/* 0x004 - General hardware parameters */
@@ -245,7 +246,33 @@ struct usb_ehci {
 	u32	control;	/* 0x500 - Control */
 	u8	res14[0xafc];
 };
-
+#else
+struct usb_ehci {
+	unsigned int ehci_len_rev;
+	unsigned int ehci_sparams;
+	unsigned int ehci_cparams;
+	unsigned int ehci_portroute;
+	unsigned int g143_reserved_0[4];
+	unsigned int ehci_usbcmd;
+	unsigned int ehci_usbsts;
+	unsigned int ehci_usbintr;
+	unsigned int ehci_frameidx;
+	unsigned int ehci_ctrl_ds_segment;
+	unsigned int ehci_prd_listbase;
+	unsigned int ehci_async_listaddr;
+	unsigned int g143_reserved_1[9];
+	unsigned int ehci_config;
+	unsigned int ehci_portsc;
+	/*
+	unsigned int g143_reserved_2[1];
+	unsigned int ehci_version_ctrl;
+	unsigned int ehci_general_ctrl;
+	unsigned int ehci_usb_debug;
+	unsigned int ehci_sys_debug;
+	unsigned int ehci_sleep_cnt;
+	*/
+};
+#endif
 /*
  * For MXC SOCs
  */

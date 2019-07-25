@@ -246,7 +246,7 @@ int eth_init(void)
 	struct udevice *current = NULL;
 	struct udevice *old_current;
 	int ret = -ENODEV;
-
+	printf("eth_init uclass.\n");
 	/*
 	 * When 'ethrotate' variable is set to 'no' and 'ethact' variable
 	 * is already set to an ethernet device, we should stick to 'ethact'.

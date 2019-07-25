@@ -512,7 +512,7 @@ enum command_ret_t cmd_process(int flag, int argc, char * const argv[],
 	/* Look up command in command table */
 	cmdtp = find_cmd(argv[0]);
 	if (cmdtp == NULL) {
-		printf("Unknown command '%s' - try 'help'\n", argv[0]);
+		printf("Unknown test command '%s' - try 'help'\n", argv[0]);
 		return 1;
 	}
 

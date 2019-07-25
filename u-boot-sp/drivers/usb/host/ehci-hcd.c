@@ -981,6 +981,7 @@ void *ehci_get_controller_priv(int index)
 }
 #endif
 
+#define RETRY_WRITE_USBRUNCMD_MAX_TIMES  50
 static int ehci_common_init(struct ehci_ctrl *ctrl, uint tweaks)
 {
 	struct QH *qh_list;
@@ -988,6 +989,7 @@ static int ehci_common_init(struct ehci_ctrl *ctrl, uint tweaks)
 	uint32_t reg;
 	uint32_t cmd;
 	int i;
+	int retry_max_count = RETRY_WRITE_USBRUNCMD_MAX_TIMES;
 
 	/* Set the high address word (aka segment) for 64-bit controller */
 	if (ehci_readl(&ctrl->hccr->cr_hccparams) & 1)
@@ -1073,6 +1075,21 @@ static int ehci_common_init(struct ehci_ctrl *ctrl, uint tweaks)
 	cmd &= ~(CMD_LRESET|CMD_IAAD|CMD_PSE|CMD_ASE|CMD_RESET);
 	cmd |= CMD_RUN;
 	ehci_writel(&ctrl->hcor->or_usbcmd, cmd);
+
+#if 1
+	i = 0;
+	while((!(ehci_readl(&ctrl->hcor->or_usbcmd) & 0x1)) && (retry_max_count > 0)){
+		cmd |= CMD_RUN;
+		ehci_writel(&ctrl->hcor->or_usbcmd, cmd);
+		i++;
+		retry_max_count--;
+	}
+	if(!(ehci_readl(&ctrl->hcor->or_usbcmd) & 0x1)){
+		printf("warn,retry write usbruncmd timeout,usbcmd:%x,retry_times:%d\n",ehci_readl(&ctrl->hcor->or_usbcmd),i);
+	} else {
+		printf("after write usbruncmd,usbcmd:%x,retry_times:%d\n",ehci_readl(&ctrl->hcor->or_usbcmd),i);
+	}
+#endif
 
 	if (!(tweaks & EHCI_TWEAK_NO_INIT_CF)) {
 		/* take control over the ports */

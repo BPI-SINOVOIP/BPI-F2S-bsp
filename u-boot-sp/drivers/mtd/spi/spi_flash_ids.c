@@ -170,6 +170,40 @@ const struct spi_flash_info spi_flash_ids[] = {
 	{"w25q64dw",	   INFO(0xef6017, 0x0,	64 * 1024,   128, RD_FULL | WR_QPP | SECT_4K) },
 	{"w25q128fw",	   INFO(0xef6018, 0x0,	64 * 1024,   256, RD_FULL | WR_QPP | SECT_4K) },
 #endif
+#ifdef CONFIG_SPI_FLASH_SUNPLUS
+	/* MACRONIX */
+	{"MX25V512F",		INFO(0xc22310, 0x0,	64 * 1024,    1,	0)},
+	{"MX25V1035F",		INFO(0xc22311, 0x0,	64 * 1024,    2,	0)},
+	{"MX25L3205D",		INFO(0xc22016, 0x0,	64 * 1024,    64,	0)},
+	/* GIGADEVICE */
+	{"GD25D05BT",		INFO(0xc84010, 0x0,	64 * 1024,    1,	0)},
+	{"GD25D10BT",		INFO(0xc84011, 0x0,	64 * 1024,    2,	0)},
+	/* WINBOND */
+	{"W25X05CL",		INFO(0xef3010, 0x0,	64 * 1024,    1,	0)},
+	{"W25X10CL",		INFO(0xef3011, 0x0,	64 * 1024,    2,	0)},
+	{"W25Q32BV",		INFO(0xef4016, 0x0,	64 * 1024,   64,  RD_FULL | WR_QPP | SECT_4K) },
+	{"W25Q128BV",		INFO(0xef4018, 0x0,	64 * 1024,   256, RD_FULL | WR_QPP | SECT_4K) },
+	/* EON */
+	{"EN25F05A",		INFO(0x1c3110, 0x0,	64 * 1024,    1,	0)},
+	{"EN25F10A",		INFO(0x1c3111, 0x0,	64 * 1024,    2,	0)},
+	{"EN25F20A",		INFO(0x1c3112, 0x0,	64 * 1024,    4,	0)},
+	{"EN25T80",			INFO(0x1c5114, 0x0,	64 * 1024,    16,	0)},
+	{"EN25T16",			INFO(0x1c5115, 0x0,	64 * 1024,    32,	0)},
+	{"EN25QH16",		INFO(0x1c7015, 0x0,	64 * 1024,    32,	0)},
+	{"EN25Q32A|B",		INFO(0x1c3016, 0x0,	64 * 1024,    64,	0)},
+	{"EN25QH32B",		INFO(0x1c7016, 0x0,	64 * 1024,    64,	0)},
+	{"EN25F32",			INFO(0x1c3116, 0x0,	64 * 1024,    64,	0)},
+	{"EN25Q64",			INFO(0x1c3017, 0x0,	64 * 1024,   128,	SECT_4K)},
+	{"EN25QH64A",		INFO(0x1c7017, 0x0,	64 * 1024,   128,	0)},
+	/* ESMT */
+	{"F25L08QA(2S)",	INFO(0x8c4014, 0x0,	64 * 1024,    16,	0)},
+	{"F25L08PA(2G)",	INFO(0x8c3014, 0x0,	64 * 1024,    16,	0)},
+	{"F25L16PA(2S)",	INFO(0x8c2115, 0x0,	64 * 1024,    32,	0)},
+	{"F25L32PA",		INFO(0x8c2016, 0x0,	64 * 1024,    64,	0)},
+	{"F25L32QA",		INFO(0x8c4016, 0x0,	64 * 1024,    64,	0)},
+	{"F25L64PA",		INFO(0x8c2117, 0x0,	64 * 1024,    128,	0)},
+	{"F25L64QA",	 	INFO(0x8c4117, 0x0,	64 * 1024,    128,	0)},
+#endif
 	{},	/* Empty entry to terminate the list */
 	/*
 	 * Note:

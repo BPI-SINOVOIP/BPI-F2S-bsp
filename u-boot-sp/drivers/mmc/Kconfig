@@ -392,6 +392,30 @@ config STM32_SDMMC2
 	  If you have a board based on such a SoC and with a SD/MMC slot,
 	  say Y or M here.
 
+config MMC_SP_EMMC
+	bool "Sunplus eMMC Host Controller Interface support"
+	depends on DM_MMC && BLK
+	help
+	  This selects the Sunplus eMMC Host Controller Interface.
+	  If you have a controller with this interface, say Y here.
+	  If unsure, say N.
+
+config MMC_SP_SD
+	bool "Sunplus SD Host Controller Interface support"
+	depends on DM_MMC && BLK
+	help
+	  This selects the Sunplus SD Host Controller Interface.
+	  If you have a controller with this interface, say Y here.
+	  If unsure, say N.
+
+config MMC_SP_8388
+	bool "Sunplus 8388 SD/emmc Host Controller Interface support"
+	depends on DM_MMC && BLK
+	help
+	  This selects the Sunplus SD/emmc Host Controller Interface.
+	  If you have a controller with this interface, say Y here.
+	  If unsure, say N.
+
 endif
 
 config TEGRA124_MMC_DISABLE_EXT_LOOPBACK

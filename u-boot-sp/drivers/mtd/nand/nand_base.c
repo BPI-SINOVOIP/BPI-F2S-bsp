@@ -520,22 +520,23 @@ static int nand_block_isreserved(struct mtd_info *mtd, loff_t ofs)
  * Check, if the block is bad. Either by reading the bad block table or
  * calling of the scan function.
  */
-static int nand_block_checkbad(struct mtd_info *mtd, loff_t ofs, int allowbbt)
-{
-	struct nand_chip *chip = mtd_to_nand(mtd);
-
-	if (!(chip->options & NAND_SKIP_BBTSCAN) &&
-	    !(chip->options & NAND_BBT_SCANNED)) {
-		chip->options |= NAND_BBT_SCANNED;
-		chip->scan_bbt(mtd);
+	static int nand_block_checkbad(struct mtd_info *mtd, loff_t ofs, int allowbbt)
+	{
+		struct nand_chip *chip = mtd_to_nand(mtd);
+	
+		if (!(chip->options & NAND_SKIP_BBTSCAN) &&
+			!(chip->options & NAND_BBT_SCANNED)) {
+			chip->options |= NAND_BBT_SCANNED;
+			chip->scan_bbt(mtd);
+		}
+	
+		if (!chip->bbt)
+			return chip->block_bad(mtd, ofs);
+	
+		/* Return info from the table */
+		return nand_isbad_bbt(mtd, ofs, allowbbt);
 	}
 
-	if (!chip->bbt)
-		return chip->block_bad(mtd, ofs);
-
-	/* Return info from the table */
-	return nand_isbad_bbt(mtd, ofs, allowbbt);
-}
 
 /**
  * nand_wait_ready - [GENERIC] Wait for the ready pin after commands.
@@ -897,7 +898,9 @@ static int nand_wait(struct mtd_info *mtd, struct nand_chip *chip)
 
 	status = (int)chip->read_byte(mtd);
 	/* This can happen if in case of timeout or buggy dev_ready */
+#if 0 //sunplus modify
 	WARN_ON(!(status & NAND_STATUS_READY));
+#endif
 	return status;
 }
 
@@ -3584,6 +3587,7 @@ static bool find_full_id_nand(struct mtd_info *mtd, struct nand_chip *chip,
 		chip->ecc_step_ds = NAND_ECC_STEP(type);
 		chip->onfi_timing_mode_default =
 					type->onfi_timing_mode_default;
+		chip->drv_options = type->drv_options;
 
 		*busw = type->options & NAND_BUSWIDTH_16;
 
@@ -4217,6 +4221,9 @@ int nand_scan_tail(struct mtd_info *mtd)
 	 */
 	if (!mtd->bitflip_threshold)
 		mtd->bitflip_threshold = DIV_ROUND_UP(mtd->ecc_strength * 3, 4);
+
+	chip->scan_bbt(mtd);
+	chip->options |= NAND_BBT_SCANNED;
 
 	return 0;
 }

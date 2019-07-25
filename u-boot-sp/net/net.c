@@ -455,6 +455,7 @@ restart:
 #endif
 #if defined(CONFIG_CMD_DHCP)
 		case DHCP:
+			printf("do dhcp ...\n");
 			bootp_reset();
 			net_ip.s_addr = 0;
 			dhcp_request();		/* Basically same as BOOTP */
@@ -476,6 +477,7 @@ restart:
 #endif
 #if defined(CONFIG_CMD_PING)
 		case PING:
+			printf("do ping_start ...\n");
 			ping_start();
 			break;
 #endif

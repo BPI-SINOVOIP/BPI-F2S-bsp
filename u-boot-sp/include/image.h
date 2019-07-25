@@ -266,10 +266,11 @@ enum {
 	IH_TYPE_ZYNQIMAGE,		/* Xilinx Zynq Boot Image */
 	IH_TYPE_ZYNQMPIMAGE,		/* Xilinx ZynqMP Boot Image */
 	IH_TYPE_FPGA,			/* FPGA Image */
-	IH_TYPE_VYBRIDIMAGE,	/* VYBRID .vyb Image */
-	IH_TYPE_TEE,            /* Trusted Execution Environment OS Image */
+	IH_TYPE_VYBRIDIMAGE,		/* VYBRID .vyb Image */
+	IH_TYPE_TEE,			/* Trusted Execution Environment OS Image */
 	IH_TYPE_FIRMWARE_IVT,		/* Firmware Image with HABv4 IVT */
-	IH_TYPE_PMMC,            /* TI Power Management Micro-Controller Firmware */
+	IH_TYPE_PMMC,			/* TI Power Management Micro-Controller Firmware */
+	IH_TYPE_QUICKBOOT,		/* Sunplus Quick Boot Image */
 
 	IH_TYPE_COUNT,			/* Number of image types */
 };

@@ -130,3 +130,5 @@ obj-$(CONFIG_CMD_DFU) += dfu.o
 obj-y += command.o
 obj-y += s_record.o
 obj-y += xyzModem.o
+obj-y += secure/ed25519/
+obj-y += secure/verify/

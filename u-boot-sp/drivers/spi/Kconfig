@@ -188,6 +188,12 @@ config ZYNQ_QSPI
 	  Zynq QSPI IP core. This IP is used to connect the flash in
 	  4-bit qspi, 8-bit dual stacked and shared 4-bit dual parallel.
 
+config SUNPLUS_SPI_NOR
+	bool "Sunplus spi nor controller driver"
+	help
+	 Enable the Sunplus spi nor controller driver. This driver
+	 can be used to access the SPI NOR flash on platforms.
+
 endif # if DM_SPI
 
 config SOFT_SPI

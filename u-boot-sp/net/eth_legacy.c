@@ -341,9 +341,9 @@ u32 ether_crc(size_t len, unsigned char const *p)
 int eth_init(void)
 {
 	struct eth_device *old_current;
-
+	printf("eth_init legacy.\n");
 	if (!eth_current) {
-		puts("No ethernet found.\n");
+		printf("No ethernet found.\n");
 		return -ENODEV;
 	}
 
@@ -353,14 +353,14 @@ int eth_init(void)
 
 		if (eth_current->init(eth_current, gd->bd) >= 0) {
 			eth_current->state = ETH_STATE_ACTIVE;
-
+			printf("eth_init legacy 1.\n");
 			return 0;
 		}
 		debug("FAIL\n");
 
 		eth_try_another(0);
 	} while (old_current != eth_current);
-
+	printf("eth_init legacy 2.\n");
 	return -ETIMEDOUT;
 }
 
