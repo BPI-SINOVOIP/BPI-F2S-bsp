@@ -1,0 +1,10 @@
+
+mmc dev 1
+mmcinfo
+fatinfo mmc 1
+
+setenv bootargs console=ttyS0,115200 earlyprintk root=/dev/mmcblk1p2 rw user_debug=255 rootwait;
+fatload mmc 1:1 0x307FC0 /uImage
+fatload mmc 1:1 0x2FFFC0 /dtb
+bootm 0x307FC0 - 0x2FFFC0
+bootm ${addr_dst_kernel} - ${addr_dst_dtb}

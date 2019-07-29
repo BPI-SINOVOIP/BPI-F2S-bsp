@@ -1,0 +1,55 @@
+#
+## uEnv.txt
+#
+bpi=bananapi
+board=bpi-f2s
+chip=SP7021
+service=linux
+#
+##
+#
+kernel=uImage
+dtb=bpi-f2s.dtb
+#
+##
+#
+rootfs_loadaddr=0x02200000
+#
+## ${bpi}/${board}/${service}/${kernel}
+#
+#
+#root=/dev/ram
+# SD / eMMC
+root=/dev/mmcblk0p2 rw rootfstype=ext4 rootwait 
+#root=/dev/mmcblk1p2 rw rootfstype=ext4 rootwait 
+#root=/dev/mmcblk2p2 rw rootfstype=ext4 rootwait 
+# USB / SATA
+#root=/dev/sda2 rw rootfstype=ext4 rootwait 
+#
+console=earlyprintk console=tty1 fbcon=map:0 console=ttyS0,115200 
+bootopts=loglevel=8 debug=8 initcall_debug=0 user_debug=255
+#
+##
+#
+abootargs=setenv bootargs board=${board} console=${console} root=${root} service=${service} ${bootopts} 
+#
+##
+#
+ahello=echo Banana Pi ${board} chip: $chip Service: $service
+#
+##
+#
+#aboot=if fatload $device $partition $rootfs_loadaddr ${bpi}/berryboot.img; gosd;
+aboot=bootm ${addr_dst_kernel} - ${addr_dst_dtb}
+#
+aload_dtb=fatload $device $partition ${addr_dst_dtb} ${bpi}/${board}/${service}/${dtb}
+aload_kernel=fatload $device $partition ${addr_dst_kernel} ${bpi}/${board}/${service}/${kernel}
+#
+##
+#
+#uenvcmd=run ahello abootargs aboot
+uenvcmd=run ahello abootargs aload_dtb aload_kernel aboot
+usercmd=run ahello abootargs
+#
+## END
+#
