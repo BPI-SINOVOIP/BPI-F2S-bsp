@@ -41,6 +41,24 @@
 #define CONFIG_SYS_MONITOR_LEN		(512 << 10)
 #endif /* CONFIG_SYS_TEXT_BASE */
 
+#undef CONFIG_SYS_PROMPT
+#define CONFIG_SYS_PROMPT       		"BPI-IoT> "
+/* BPI */
+#ifdef BPI
+/* off */
+#define CONFIG_EFI_PARTITION
+#define CONFIG_CMD_RUN
+#define CONFIG_CMD_IMPORTENV
+#define CONFIG_CMD_EXPORTENV
+#define CONFIG_DOS_PARTITION
+#define CONFIG_CMD_FAT
+#define CONFIG_CMD_ECHO
+#else
+#define CONFIG_FS_EXT4
+#define CONFIG_CMD_EXT4
+#define CONFIG_FAT_WRITE
+#endif
+
 #ifdef CONFIG_SPL_BUILD
 #ifndef CONFIG_SYS_UBOOT_START		/* default entry point */
 #define CONFIG_SYS_UBOOT_START		CONFIG_SYS_TEXT_BASE
@@ -218,6 +236,22 @@
 #define TMPADDR_HEADER		0x800000
 
 #define CONFIG_EXTRA_ENV_SETTINGS \
+   "bpiver=1\0" \
+   "bpi=bananapi\0" \
+   "board=bpi-f2s\0" \
+   "chip=SP7201\0" \
+   "service=linux\0" \
+   "scriptaddr=0x1000000\0" \
+   "device=mmc\0" \
+   "partition=1:1\0" \
+   "kernel=uImage\0" \
+   "root=/dev/mmcblk0p2\0" \
+   "debug=7\0" \
+   "bootenv=uEnv.txt\0" \
+   "checksd=fatinfo ${device} 1:1\0" \
+   "loadbootenv=fatload ${device} ${partition} ${scriptaddr} ${bpi}/${board}/${service}/${bootenv} || fatload ${device} ${partition} ${scriptaddr} ${bootenv}\0" \
+   "boot_normal=if run checksd; then echo Boot from ${device} ; setenv partition 1:1; else echo Boot from USB ; usb start ; setenv device usb ; setenv partition 0:1 ; fi; if run loadbootenv; then echo Loaded environment from ${bootenv}; env import -t ${scriptaddr} ${filesize}; fi; run uenvcmd; fatload mmc 1:1 ${loadaddr} ${bpi}/${board}/${service}/${kernel}; bootr\0" \
+   "boot_user=echo Boot from USB ; usb start ; setenv device usb ; setenv partition 0:1 ; fi; if run loadbootenv; then echo Loaded environment from ${bootenv}; env import -t ${scriptaddr} ${filesize}; fi; run usercmd; fatload mmc 1:1 ${loadaddr} ${bpi}/${board}/${service}/${kernel}; bootr\0" \
 "bootinfo_base="		__stringify(SP_BOOTINFO_BASE) "\0" \
 "addr_src_kernel="		__stringify(CONFIG_SRCADDR_KERNEL) "\0" \
 "addr_src_dtb="			__stringify(CONFIG_SRCADDR_DTB) "\0" \
@@ -342,7 +376,7 @@
 "isp_sdcard=setenv isp_if mmc && setenv isp_dev 1; " \
 	"setenv bootargs console=ttyS0,115200 earlyprintk root=/dev/mmcblk1p2 rw user_debug=255 rootwait;"\
 	"mmc list; " \
-	"run isp_common; " \
+	"run boot_normal; run isp_common; " \
 	"\0" \
 "isp_common=setenv isp_ram_addr 0x1000000; " \
 	"fatls $isp_if $isp_dev / ; " \
