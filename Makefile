@@ -16,6 +16,7 @@ RTKDIR=$(TOPDIR)/phoenix/system/src/drivers
 
 U_O_PATH=u-boot-sp
 K_O_PATH=linux-sp
+U_CONFIG_H=$(U_O_PATH)/include/config.h
 K_DOT_CONFIG=$(K_O_PATH)/.config
 
 ROOTFS=$(CURDIR)/rootfs/linux/default_linux_rootfs.tar.gz
