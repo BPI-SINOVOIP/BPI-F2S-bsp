@@ -632,8 +632,8 @@
 			compatible = "sunplus,sp7021-display";
 			reg = <0x9c005c80 0x1980>,
 				<0x9c105000 0x80>;
-			ui_width = <720>;
-			ui_height = <480>;
+			ui_width = <1280>;
+			ui_height = <720>;
 			ui_format = <0xe>;
 				/* 0x2 = 8bpp (ARGB)
 				 * 0x4 = YUY2
@@ -700,22 +700,6 @@
 			};
 		};
 
-		mmc0: mmc@emmc {
-			compatible = "sunplus,sp7021-emmc";
-			reg = <0x9c003b00 0x180>;
-			interrupts = <20 IRQ_TYPE_LEVEL_HIGH>;
-			clocks = <&clkc CARD_CTL0>;
-			resets = <&rstc RST_CARD_CTL0>;
-			bus-width = <8>;
-			max-frequency = <52000000>;
-			non-removable;
-			disable-wp;
-			cap-mmc-highspeed;
-			mmc-ddr-3_3v;
-			no-sdio;
-			no-sd;
-		};
-
 		mmc1: mmc@sdcard {
 			compatible = "sunplus,sp7021-card1";
 			reg = <0x9c003e80 0x280>;
@@ -734,6 +718,22 @@
 			no-mmc;
 		};
 
+		mmc0: mmc@emmc {
+			compatible = "sunplus,sp7021-emmc";
+			reg = <0x9c003b00 0x180>;
+			interrupts = <20 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&clkc CARD_CTL0>;
+			resets = <&rstc RST_CARD_CTL0>;
+			bus-width = <8>;
+			max-frequency = <52000000>;
+			non-removable;
+			disable-wp;
+			cap-mmc-highspeed;
+			mmc-ddr-3_3v;
+			no-sdio;
+			no-sd;
+		};
+
 		sdio: sdio@sdcard {
 			compatible = "sunplus,sp7021-sdio";
 			reg = <0x9c008400 0x280>;
@@ -750,6 +750,7 @@
 			cap-sdio-irq;
 			no-sd;
 			no-mmc;
+			status = "disabled";
 		};
 
 		spi_master0: spi@sp_spi_master0 {
