@@ -250,7 +250,7 @@
    "bootenv=uEnv.txt\0" \
    "checksd=fatinfo ${device} 1:1\0" \
    "loadbootenv=fatload ${device} ${partition} ${scriptaddr} ${bpi}/${board}/${service}/${bootenv} || fatload ${device} ${partition} ${scriptaddr} ${bootenv}\0" \
-   "boot_normal=if run checksd; then echo Boot from ${device} ; setenv partition 1:1; else echo Boot from USB ; usb start ; setenv device usb ; setenv partition 0:1 ; fi; if run loadbootenv; then echo Loaded environment from ${bootenv}; env import -t ${scriptaddr} ${filesize}; fi; run uenvcmd; fatload mmc 1:1 ${loadaddr} ${bpi}/${board}/${service}/${kernel}; bootr\0" \
+   "boot_normal=if run checksd; then echo Boot from ${device} ; setenv partition 1:1; else echo Boot from eMMC ; setenv partition 0:1 ; fi; if run loadbootenv; then echo Loaded environment from ${bootenv}; env import -t ${scriptaddr} ${filesize}; fi; run uenvcmd; fatload mmc 1:1 ${loadaddr} ${bpi}/${board}/${service}/${kernel}; bootr\0" \
    "boot_user=echo Boot from USB ; usb start ; setenv device usb ; setenv partition 0:1 ; fi; if run loadbootenv; then echo Loaded environment from ${bootenv}; env import -t ${scriptaddr} ${filesize}; fi; run usercmd; fatload mmc 1:1 ${loadaddr} ${bpi}/${board}/${service}/${kernel}; bootr\0" \
 "bootinfo_base="		__stringify(SP_BOOTINFO_BASE) "\0" \
 "addr_src_kernel="		__stringify(CONFIG_SRCADDR_KERNEL) "\0" \
@@ -310,7 +310,7 @@
 	"cp.l ${addr_src_kernel} ${addr_dst_kernel} ${sz_kernel}; " \
 	dbg_scr("echo sp_go ${addr_dst_kernel} ${addr_dst_dtb}; ") \
 	"sp_go ${addr_dst_kernel} ${addr_dst_dtb}\0" \
-"emmc_boot=mmc read ${addr_tmp_header} ${addr_src_dtb} 0x1; " \
+"emmc_boot=run boot_normal; mmc read ${addr_tmp_header} ${addr_src_dtb} 0x1; " \
 	"setenv tmpval 0; setexpr tmpaddr ${addr_tmp_header} + 0x4; run be2le; " \
 	"setexpr sz_dtb ${tmpval} + 0x28; " \
 	"setexpr sz_dtb ${sz_dtb} + 0x200; setexpr sz_dtb ${sz_dtb} / 0x200; " \
