@@ -634,7 +634,7 @@
 				<0x9c105000 0x80>;
 			ui_width = <1280>;
 			ui_height = <720>;
-			ui_format = <0xe>;
+			ui_format = <0x8>;
 				/* 0x2 = 8bpp (ARGB)
 				 * 0x4 = YUY2
 				 * 0x8 = RGB565
