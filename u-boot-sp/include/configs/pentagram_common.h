@@ -310,7 +310,7 @@
 	"cp.l ${addr_src_kernel} ${addr_dst_kernel} ${sz_kernel}; " \
 	dbg_scr("echo sp_go ${addr_dst_kernel} ${addr_dst_dtb}; ") \
 	"sp_go ${addr_dst_kernel} ${addr_dst_dtb}\0" \
-"emmc_boot=run boot_normal; mmc read ${addr_tmp_header} ${addr_src_dtb} 0x1; " \
+"emmc_boot=setenv sdmmc_on 0; run boot_normal; mmc read ${addr_tmp_header} ${addr_src_dtb} 0x1; " \
 	"setenv tmpval 0; setexpr tmpaddr ${addr_tmp_header} + 0x4; run be2le; " \
 	"setexpr sz_dtb ${tmpval} + 0x28; " \
 	"setexpr sz_dtb ${sz_dtb} + 0x200; setexpr sz_dtb ${sz_dtb} / 0x200; " \
@@ -376,6 +376,7 @@
 "isp_sdcard=setenv isp_if mmc && setenv isp_dev 1; " \
 	"setenv bootargs console=ttyS0,115200 earlyprintk root=/dev/mmcblk1p2 rw user_debug=255 rootwait;"\
 	"mmc list; " \
+	"setenv sdmmc_on 1; " \
 	"run boot_normal; run isp_common; " \
 	"\0" \
 "isp_common=setenv isp_ram_addr 0x1000000; " \

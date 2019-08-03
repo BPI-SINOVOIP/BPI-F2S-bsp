@@ -37,6 +37,57 @@ static int loglevel = SPSDC_LOG_WARNING;
 #define spsdc_pr(level, fmt, ...)	\
 	if (unlikely(SPSDC_LOG_##level <= loglevel)) printk("SPSDC [" #level "] " fmt, ##__VA_ARGS__)
 
+#ifdef BPI
+#else
+static int sdmmc_on = 1;
+module_param(sdmmc_on, int, 0444);
+MODULE_PARM_DESC(sdmmc_on, "1:on; 0:off;");
+
+void sp_sdmmc_chk_param(u32 *pparam, u32 len, u8 *ptr)
+{
+	u32 value,i;
+	*pparam = 0;
+	for(i=0;i<len;i++){
+		value = ptr[i] - '0';
+
+		if((value >= 0) && (value <=9))
+		{
+			*pparam+=value<<(4*(len-1-i));
+			continue;
+		}
+		value = ptr[i] - 'a';
+
+		if((value >= 0) && (value <=5))
+		{
+			value+=10;
+			*pparam+=value<<(4*(len-1-i));
+			continue;
+		}
+		value = ptr[i] - 'A';
+
+		if((value >= 0) && (value <=5))
+		{
+			value+=10;
+			*pparam+=value<<(4*(len-1-i));
+			continue;
+		}
+	}
+}
+
+static int sp_sdmmc_onoff(char * buf){
+	/*
+        example:
+        sdmmc_on=0
+        sdmmc_on=1
+	*/
+	sp_sdmmc_chk_param(&sdmmc_on,1,buf+1);
+	printk("BPI: %s: sdmmc_on(%d)\n", "spsdv2",sdmmc_on);
+	return 0;
+}
+__setup("sdmmc_on",sp_sdmmc_onoff);
+#endif
+
+
 /* Produces a mask of set bits covering a range of a 32-bit value */
 static inline u32 bitfield_mask(u32 shift, u32 width)
 {
@@ -1039,6 +1090,17 @@ static int spsdc_drv_probe(struct platform_device *pdev)
 	struct resource *resource;
 	struct spsdc_host *host;
 	unsigned int mode;
+
+#ifdef BPI
+#else
+	if(!sdmmc_on) {
+		printk("BPI: %s: sdmmc_on(%d) force disable spsdv2 driver \n",__FUNCTION__, sdmmc_on);
+		return -ENXIO;
+	}
+	else {
+		printk("BPI: %s: sdmmc_on(%d) enable spsdv2 driver \n",__FUNCTION__, sdmmc_on);
+	}
+#endif
 
 	if ((ret = spsdc_device_create_sysfs(pdev))) {
 		return ret;
