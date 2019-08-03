@@ -20,7 +20,8 @@ O=$1
 
 UBOOT=$TOPDIR/u-boot-sp/u-boot.img
 
-echo "Banana Pi BPI-F2S support FAT32 bootfile /ISPBOOOT.BIN & /u-boot.img"
+echo "Banana Pi BPI-F2S support FAT32 bootfile /ISPBOOOT.BIN (xboot) & u-boot.img for SD/USB boot"
+echo "Banana Pi BPI-F2S emmc boot with mmcblk1boot0 (xboot) & GPT or emmc load uboot@blk=0x00000022"
 
-#sudo dd if=$UBOOT 	of=$O bs=1k seek=40
+sudo dd if=$UBOOT 	of=$O bs=512 seek=34
 

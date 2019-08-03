@@ -34,7 +34,8 @@ R="${SD}/BPI-ROOT"
 	#
 	## copy files to 100MB
 	#
-	#cp -a /tmp/${board}/*.img.gz $U
+	cp -a $T/${BPIPACK}/${BPISOC}/bin/*.img.gz $U
+	cp -a /tmp/${board}/*.img.gz $U
 	#
 	## copy files to BPI-BOOT
 	#
@@ -51,7 +52,7 @@ R="${SD}/BPI-ROOT"
 	## copy files to BPI-ROOT
 	#
 	mkdir -p $R/usr/lib/u-boot/bananapi/${board}
-	#cp -a $U/*.gz $R/usr/lib/u-boot/bananapi/${board}/
+	cp -a $U/*.gz $R/usr/lib/u-boot/bananapi/${board}/
 	rm -rf $R/lib/modules
 	mkdir -p $R/lib/modules
 	cp -a $T/${BPILINUX}/output/lib/modules/${kernel} $R/lib/modules
