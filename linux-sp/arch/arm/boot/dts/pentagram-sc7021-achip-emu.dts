@@ -20,11 +20,27 @@
 &i2cm0{
  pinctrl-names = "default";
  pinctrl-0 = <&i2cm0_pins>;
+ status = "okay";
+	/* clock-frequency = <100000>; */
+	clock-frequency = <400000>;
+	st33htbpi: st33htbpi@0{
+		compatible = "st,st33htpm-i2c";
+		reg = <0x2E>;
+		status = "okay";
+	};
 };
 
 &i2cm1{
  pinctrl-names = "default";
  pinctrl-0 = <&i2cm1_pins>;
+ status = "okay";
+	/* clock-frequency = <100000>; */
+	clock-frequency = <400000>;
+	st33htpi: st33htpi@0{
+		compatible = "st,st33htpm-i2c";
+		reg = <0x2E>;
+		status = "okay";
+	};
 };
 
 &pctl {
