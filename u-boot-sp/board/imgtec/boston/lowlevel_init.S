@@ -1,7 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * Copyright (C) 2016 Imagination Technologies
- *
- * SPDX-License-Identifier:	GPL-2.0
  */
 
 #include <config.h>
@@ -34,7 +33,6 @@ LEAF(lowlevel_init)
 	PTR_LA	a0, msg_ddr_ok
 	bal	lowlevel_display
 
-	move	v0, zero
 	jr	s0
 	END(lowlevel_init)
 
@@ -52,5 +50,5 @@ LEAF(lowlevel_display)
 	sw	k1, 4(AT)
 #endif
 	.set	pop
-1:	jr	ra
+	jr	ra
 	END(lowlevel_display)

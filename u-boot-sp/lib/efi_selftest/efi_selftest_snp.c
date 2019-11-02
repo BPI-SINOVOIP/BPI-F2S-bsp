@@ -1,9 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * efi_selftest_snp
  *
  * Copyright (c) 2017 Heinrich Schuchardt <xypron.glpk@gmx.de>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  *
  * This unit test covers the Simple Network Protocol as well as
  * the CopyMem and SetMem boottime services.
@@ -104,7 +103,7 @@ static efi_status_t send_dhcp_discover(void)
 	struct dhcp p = {};
 
 	/*
-	 * Fill ethernet header
+	 * Fill Ethernet header
 	 */
 	boottime->copy_mem(p.eth_hdr.et_dest, (void *)BROADCAST_MAC, ARP_HLEN);
 	boottime->copy_mem(p.eth_hdr.et_src, &net->mode->current_address,
@@ -230,19 +229,19 @@ static int setup(const efi_handle_t handle,
 		return EFI_ST_FAILURE;
 	}
 	/*
+	 * Start network adapter.
+	 */
+	ret = net->start(net);
+	if (ret != EFI_SUCCESS && ret != EFI_ALREADY_STARTED) {
+		efi_st_error("Failed to start network adapter\n");
+		return EFI_ST_FAILURE;
+	}
+	/*
 	 * Initialize network adapter.
 	 */
 	ret = net->initialize(net, 0, 0);
 	if (ret != EFI_SUCCESS) {
 		efi_st_error("Failed to initialize network adapter\n");
-		return EFI_ST_FAILURE;
-	}
-	/*
-	 * Start network adapter.
-	 */
-	ret = net->start(net);
-	if (ret != EFI_SUCCESS) {
-		efi_st_error("Failed to start network adapter\n");
 		return EFI_ST_FAILURE;
 	}
 	return EFI_ST_SUCCESS;
@@ -260,7 +259,7 @@ static int execute(void)
 {
 	efi_status_t ret;
 	struct efi_event *events[2];
-	size_t index;
+	efi_uintn_t index;
 	union {
 		struct dhcp p;
 		u8 b[PKTSIZE];
@@ -428,4 +427,12 @@ EFI_UNIT_TEST(snp) = {
 	.setup = setup,
 	.execute = execute,
 	.teardown = teardown,
+#ifdef CONFIG_SANDBOX
+	/*
+	 * Running this test on the sandbox requires setting environment
+	 * variable ethact to a network interface connected to a DHCP server and
+	 * ethrotate to 'no'.
+	 */
+	.on_request = true,
+#endif
 };

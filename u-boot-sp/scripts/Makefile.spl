@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0+
 #
 # (C) Copyright 2000-2011
 # Wolfgang Denk, DENX Software Engineering, wd@denx.de.
@@ -8,9 +9,6 @@
 # (C) Copyright 2011
 # Texas Instruments Incorporated - http://www.ti.com/
 # Aneesh V <aneesh@ti.com>
-#
-# SPDX-License-Identifier:	GPL-2.0+
-#
 # Based on top-level Makefile.
 #
 
@@ -47,8 +45,17 @@ SPL_ :=
 SPL_TPL_ :=
 endif
 
+ifeq ($(obj)$(CONFIG_SUPPORT_SPL),spl)
+$(error You cannot build SPL without enabling CONFIG_SUPPORT_SPL)
+endif
+ifeq ($(obj)$(CONFIG_SUPPORT_TPL),tpl)
+$(error You cannot build TPL without enabling CONFIG_SUPPORT_TPL)
+endif
+
 include $(srctree)/config.mk
 include $(srctree)/arch/$(ARCH)/Makefile
+
+include $(srctree)/scripts/Makefile.lib
 
 # Enable garbage collection of un-used sections for SPL
 KBUILD_CFLAGS += -ffunction-sections -fdata-sections
@@ -74,11 +81,13 @@ libs-$(CONFIG_TPL_LIBGENERIC_SUPPORT) += lib/
 else
 libs-$(CONFIG_SPL_LIBCOMMON_SUPPORT) += common/ cmd/ env/
 libs-$(CONFIG_SPL_LIBGENERIC_SUPPORT) += lib/
+ifdef CONFIG_SPL_FRAMEWORK
+libs-$(CONFIG_PARTITIONS) += disk/
+endif
 endif
 
-libs-$(CONFIG_SPL_LIBDISK_SUPPORT) += disk/
 libs-y += drivers/
-libs-$(CONFIG_SPL_USB_GADGET_SUPPORT) += drivers/usb/dwc3/
+libs-$(CONFIG_SPL_USB_GADGET) += drivers/usb/dwc3/
 libs-y += dts/
 libs-y += fs/
 libs-$(CONFIG_SPL_POST_MEM_SUPPORT) += post/drivers/
@@ -138,11 +147,24 @@ LDPPFLAGS += \
 	$(shell $(LD) --version | \
 	  sed -ne 's/GNU ld version \([0-9][0-9]*\)\.\([0-9][0-9]*\).*/-DLD_MAJOR=\1 -DLD_MINOR=\2/p')
 
+# Turn various CONFIG symbols into IMAGE symbols for easy reuse of
+# the scripts between SPL and TPL.
+ifneq ($(CONFIG_$(SPL_TPL_)MAX_SIZE),)
+LDPPFLAGS += -DIMAGE_MAX_SIZE=$(CONFIG_$(SPL_TPL_)MAX_SIZE)
+endif
+ifneq ($(CONFIG_$(SPL_TPL_)TEXT_BASE),)
+LDPPFLAGS += -DIMAGE_TEXT_BASE=$(CONFIG_$(SPL_TPL_)TEXT_BASE)
+endif
+
 MKIMAGEOUTPUT ?= /dev/null
 
 quiet_cmd_mkimage = MKIMAGE $@
 cmd_mkimage = $(objtree)/tools/mkimage $(MKIMAGEFLAGS_$(@F)) -d $< $@ \
-	$(if $(KBUILD_VERBOSE:1=), >$(MKIMAGEOUTPUT))
+	>$(MKIMAGEOUTPUT) $(if $(KBUILD_VERBOSE:0=), && cat $(MKIMAGEOUTPUT))
+
+quiet_cmd_mkfitimage = MKIMAGE $@
+cmd_mkfitimage = $(objtree)/tools/mkimage $(MKIMAGEFLAGS_$(@F)) -f $(SPL_ITS) -E $@ \
+	$(if $(KBUILD_VERBOSE:1=), MKIMAGEOUTPUT)
 
 MKIMAGEFLAGS_MLO = -T omapimage -a $(CONFIG_SPL_TEXT_BASE)
 
@@ -167,10 +189,20 @@ ifdef CONFIG_ARCH_ZYNQ
 MKIMAGEFLAGS_boot.bin = -T zynqimage -R $(srctree)/$(CONFIG_BOOT_INIT_FILE)
 endif
 ifdef CONFIG_ARCH_ZYNQMP
-MKIMAGEFLAGS_boot.bin = -T zynqmpimage -R $(srctree)/$(CONFIG_BOOT_INIT_FILE)
+ifneq ($(CONFIG_PMUFW_INIT_FILE),"")
+spl/boot.bin: zynqmp-check-pmufw
+zynqmp-check-pmufw: FORCE
+	( cd $(srctree) && test -r $(CONFIG_PMUFW_INIT_FILE) ) \
+		|| ( echo "Cannot read $(CONFIG_PMUFW_INIT_FILE)" && false )
+endif
+MKIMAGEFLAGS_boot.bin = -T zynqmpimage -R $(srctree)/$(CONFIG_BOOT_INIT_FILE) \
+	-n "$(shell cd $(srctree); readlink -f $(CONFIG_PMUFW_INIT_FILE))"
 endif
 
-spl/boot.bin: $(obj)/u-boot-spl.bin FORCE
+$(obj)/$(SPL_BIN)-align.bin: $(obj)/$(SPL_BIN).bin
+	@dd if=$< of=$@ conv=block,sync bs=4 2>/dev/null;
+
+spl/boot.bin: $(obj)/$(SPL_BIN)-align.bin FORCE
 	$(call if_changed,mkimage)
 endif
 
@@ -180,7 +212,7 @@ ifdef CONFIG_SAMSUNG
 ALL-y	+= $(obj)/$(BOARD)-spl.bin
 endif
 
-ifdef CONFIG_ARCH_SOCFPGA
+ifneq ($(CONFIG_TARGET_SOCFPGA_GEN5)$(CONFIG_TARGET_SOCFPGA_ARRIA10),)
 ALL-y	+= $(obj)/$(SPL_BIN).sfp
 endif
 
@@ -200,6 +232,8 @@ ALL-$(CONFIG_SPL_X86_16BIT_INIT) += $(obj)/u-boot-x86-16bit-spl.bin
 
 ALL-$(CONFIG_ARCH_ZYNQ)		+= $(obj)/boot.bin
 ALL-$(CONFIG_ARCH_ZYNQMP)	+= $(obj)/boot.bin
+
+ALL-$(CONFIG_ARCH_MEDIATEK)	+= $(obj)/u-boot-spl-mtk.bin
 
 all:	$(ALL-y)
 
@@ -238,26 +272,10 @@ $(obj)/$(SPL_BIN)-pad.bin: $(obj)/$(SPL_BIN)
 	@bss_size_str=$(shell $(NM) $< | awk 'BEGIN {size = 0} /__bss_size/ {size = $$1} END {print "ibase=16; " toupper(size)}' | bc); \
 	dd if=/dev/zero of=$@ bs=1 count=$${bss_size_str} 2>/dev/null;
 
-# Pass the original device tree file through fdtgrep twice. The first pass
-# removes any unwanted nodes (i.e. those which don't have the
-# 'u-boot,dm-pre-reloc' property and thus are not needed by SPL. The second
-# pass removes various unused properties from the remaining nodes.
-# The output is typically a much smaller device tree file.
-ifeq ($(CONFIG_TPL_BUILD),y)
-fdtgrep_props := -b u-boot,dm-pre-reloc -b u-boot,dm-tpl
-else
-fdtgrep_props := -b u-boot,dm-pre-reloc -b u-boot,dm-spl
-endif
-quiet_cmd_fdtgrep = FDTGREP $@
-      cmd_fdtgrep = $(objtree)/tools/fdtgrep $(fdtgrep_props) -RT $< \
-		-n /chosen -n /config -O dtb | \
-	$(objtree)/tools/fdtgrep -r -O dtb - -o $@ \
-		$(addprefix -P ,$(subst $\",,$(CONFIG_OF_SPL_REMOVE_PROPS)))
+$(obj)/$(SPL_BIN).dtb: dts/dt-spl.dtb FORCE
+	$(call if_changed,copy)
 
-$(obj)/$(SPL_BIN).dtb: dts/dt.dtb $(objtree)/tools/fdtgrep FORCE
-	$(call if_changed,fdtgrep)
-
-pythonpath = PYTHONPATH=tools
+pythonpath = PYTHONPATH=scripts/dtc/pylibfdt
 
 quiet_cmd_dtocc = DTOC C  $@
 cmd_dtocc = $(pythonpath) $(srctree)/tools/dtoc/dtoc -d $(obj)/$(SPL_BIN).dtb -o $@ platdata
@@ -276,10 +294,10 @@ PHONY += dts_dir
 dts_dir:
 	$(shell [ -d $(obj)/dts ] || mkdir -p $(obj)/dts)
 
-include/generated/dt-structs-gen.h: $(obj)/$(SPL_BIN).dtb dts_dir checkdtoc
+include/generated/dt-structs-gen.h: $(obj)/$(SPL_BIN).dtb dts_dir FORCE
 	$(call if_changed,dtoch)
 
-$(obj)/dts/dt-platdata.c: $(obj)/$(SPL_BIN).dtb dts_dir checkdtoc
+$(obj)/dts/dt-platdata.c: $(obj)/$(SPL_BIN).dtb dts_dir FORCE
 	$(call if_changed,dtocc)
 
 ifdef CONFIG_SAMSUNG
@@ -312,17 +330,16 @@ LDFLAGS_$(SPL_BIN) += -T u-boot-spl.lds $(LDFLAGS_FINAL)
 # Avoid 'Not enough room for program headers' error on binutils 2.28 onwards.
 LDFLAGS_$(SPL_BIN) += $(call ld-option, --no-dynamic-linker)
 
-# First try the best-match (i.e. SPL_TEXT_BASE for SPL, TPL_TEXT_BASE for TPL)
+# Pick the best-match (i.e. SPL_TEXT_BASE for SPL, TPL_TEXT_BASE for TPL)
 ifneq ($(CONFIG_$(SPL_TPL_)TEXT_BASE),)
 LDFLAGS_$(SPL_BIN) += -Ttext $(CONFIG_$(SPL_TPL_)TEXT_BASE)
-else
-# And then fall back to just testing for SPL_TEXT_BASE, even if in TPL mode
-ifneq ($(CONFIG_SPL_TEXT_BASE),)
-LDFLAGS_$(SPL_BIN) += -Ttext $(CONFIG_SPL_TEXT_BASE)
-endif
 endif
 
+ifdef CONFIG_TARGET_SOCFPGA_ARRIA10
+MKIMAGEFLAGS_$(SPL_BIN).sfp = -T socfpgaimage_v1
+else
 MKIMAGEFLAGS_$(SPL_BIN).sfp = -T socfpgaimage
+endif
 $(obj)/$(SPL_BIN).sfp: $(obj)/$(SPL_BIN).bin FORCE
 	$(call if_changed,mkimage)
 
@@ -342,6 +359,15 @@ cmd_sunxi_spl_image_builder = $(objtree)/tools/sunxi-spl-image-builder \
 				-s -b $< $@
 $(obj)/sunxi-spl-with-ecc.bin: $(obj)/sunxi-spl.bin
 	$(call if_changed,sunxi_spl_image_builder)
+
+
+# MediaTek's specific SPL build
+MKIMAGEFLAGS_u-boot-spl-mtk.bin = -T mtk_image \
+	-a $(CONFIG_SPL_TEXT_BASE) -e $(CONFIG_SPL_TEXT_BASE) \
+	-n "$(patsubst "%",%,$(CONFIG_MTK_BROM_HEADER_INFO))"
+
+$(obj)/u-boot-spl-mtk.bin: $(obj)/u-boot-spl.bin FORCE
+	$(call if_changed,mkimage)
 
 # Rule to link u-boot-spl
 # May be overridden by arch/$(ARCH)/config.mk
@@ -365,7 +391,7 @@ $(u-boot-spl-dirs): $(u-boot-spl-platdata)
 
 quiet_cmd_cpp_lds = LDS     $@
 cmd_cpp_lds = $(CPP) -Wp,-MD,$(depfile) $(cpp_flags) $(LDPPFLAGS) -ansi \
-		-D__ASSEMBLY__ -x assembler-with-cpp -P -o $@ $<
+		-D__ASSEMBLY__ -x assembler-with-cpp -std=c99 -P -o $@ $<
 
 $(obj)/u-boot-spl.lds: $(LDSCRIPT) FORCE
 	$(call if_changed_dep,cpp_lds)
@@ -379,17 +405,6 @@ ifneq ($(cmd_files),)
   $(cmd_files): ;	# Do not try to update included dependency files
   include $(cmd_files)
 endif
-
-checkdtoc: tools
-	@if ! ( echo 'import libfdt' | ( PYTHONPATH=tools $(PYTHON) )); then \
-		echo '*** dtoc needs the Python libfdt library. Either '; \
-		echo '*** install it on your system, or try:'; \
-		echo '***'; \
-		echo '*** sudo apt-get install swig libpython-dev'; \
-		echo '***'; \
-		echo '*** to have U-Boot build its own version.'; \
-		false; \
-	fi
 
 PHONY += FORCE
 FORCE:
@@ -413,9 +428,18 @@ MKIMAGEFLAGS_$(SPL_BIN).multidtb.fit = -f auto -A $(ARCH) -T firmware -C none -O
 
 $(obj)/$(SPL_BIN).multidtb.fit: /dev/null $(SHRUNK_ARCH_DTB) FORCE
 	$(call if_changed,mkimage)
+ifneq ($(SOURCE_DATE_EPOCH),)
+	touch -d @$(SOURCE_DATE_EPOCH) $(obj)/$(SPL_BIN).multidtb.fit
+	chmod 0600 $(obj)/$(SPL_BIN).multidtb.fit
+endif
 
 $(obj)/$(SPL_BIN).multidtb.fit.gz: $(obj)/$(SPL_BIN).multidtb.fit
 	@gzip -kf9 $< > $@
 
 $(obj)/$(SPL_BIN).multidtb.fit.lzo: $(obj)/$(SPL_BIN).multidtb.fit
 	@lzop -f9 $< > $@
+
+ifdef CONFIG_ARCH_K3
+tispl.bin: $(obj)/u-boot-spl-nodtb.bin $(SHRUNK_ARCH_DTB) $(SPL_ITS) FORCE
+	$(call if_changed,mkfitimage)
+endif

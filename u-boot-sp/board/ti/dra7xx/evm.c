@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2013
  * Texas Instruments Incorporated, <www.ti.com>
@@ -7,8 +8,6 @@
  * Based on previous work by:
  * Aneesh V       <aneesh@ti.com>
  * Steve Sakoman  <steve@sakoman.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 #include <common.h>
 #include <palmas.h>
@@ -285,6 +284,8 @@ void emif_get_reg_dump(u32 emif_nr, const struct emif_regs **regs)
 			break;
 		}
 		break;
+	case DRA762_ABZ_ES1_0:
+	case DRA762_ACD_ES1_0:
 	case DRA762_ES1_0:
 		if (emif_nr == 1)
 			*regs = &emif_1_regs_ddr3_666_mhz_1cs_dra76;
@@ -347,6 +348,8 @@ void emif_get_dmm_regs(const struct dmm_lisa_map_regs **dmm_lisa_regs)
 	ram_size = board_ti_get_emif_size();
 
 	switch (omap_revision()) {
+	case DRA762_ABZ_ES1_0:
+	case DRA762_ACD_ES1_0:
 	case DRA762_ES1_0:
 	case DRA752_ES1_0:
 	case DRA752_ES1_1:
@@ -643,6 +646,19 @@ int dram_init_banksize(void)
 	return 0;
 }
 
+#if CONFIG_IS_ENABLED(DM_USB) && CONFIG_IS_ENABLED(OF_CONTROL)
+static int device_okay(const char *path)
+{
+	int node;
+
+	node = fdt_path_offset(gd->fdt_blob, path);
+	if (node < 0)
+		return 0;
+
+	return fdtdec_get_is_enabled(gd->fdt_blob, node);
+}
+#endif
+
 int board_late_init(void)
 {
 #ifdef CONFIG_ENV_VARS_UBOOT_RUNTIME_CONFIG
@@ -655,8 +671,10 @@ int board_late_init(void)
 			name = "dra71x";
 		else
 			name = "dra72x";
-	} else if (is_dra76x()) {
-		name = "dra76x";
+	} else if (is_dra76x_abz()) {
+		name = "dra76x_abz";
+	} else if (is_dra76x_acd()) {
+		name = "dra76x_acd";
 	} else {
 		name = "dra7xx";
 	}
@@ -672,6 +690,19 @@ int board_late_init(void)
 
 	omap_die_id_serial();
 	omap_set_fastboot_vars();
+
+	/*
+	 * Hook the LDO1 regulator to EN pin. This applies only to LP8733
+	 * Rest all regulators are hooked to EN Pin at reset.
+	 */
+	if (board_is_dra71x_evm())
+		palmas_i2c_write_u8(LP873X_I2C_SLAVE_ADDR, 0x9, 0x7);
+#endif
+#if CONFIG_IS_ENABLED(DM_USB) && CONFIG_IS_ENABLED(OF_CONTROL)
+	if (device_okay("/ocp/omap_dwc3_1@48880000"))
+		enable_usb_clocks(0);
+	if (device_okay("/ocp/omap_dwc3_2@488c0000"))
+		enable_usb_clocks(1);
 #endif
 	return 0;
 }
@@ -786,6 +817,7 @@ void recalibrate_iodelay(void)
 		iodelay = dra742_es1_1_iodelay_cfg_array;
 		niodelays = ARRAY_SIZE(dra742_es1_1_iodelay_cfg_array);
 		break;
+	case DRA762_ACD_ES1_0:
 	case DRA762_ES1_0:
 		pads = dra76x_core_padconf_array;
 		npads = ARRAY_SIZE(dra76x_core_padconf_array);
@@ -794,6 +826,7 @@ void recalibrate_iodelay(void)
 		break;
 	default:
 	case DRA752_ES2_0:
+	case DRA762_ABZ_ES1_0:
 		pads = dra74x_core_padconf_array;
 		npads = ARRAY_SIZE(dra74x_core_padconf_array);
 		iodelay = dra742_es2_0_iodelay_cfg_array;
@@ -815,6 +848,11 @@ void recalibrate_iodelay(void)
 	if (delta_npads)
 		do_set_mux32((*ctrl)->control_padconf_core_base,
 			     delta_pads, delta_npads);
+
+	if (is_dra76x())
+		/* Set mux for MCAN instead of DCAN1 */
+		clrsetbits_le32((*ctrl)->control_core_control_spare_rw,
+				MCAN_SEL_ALT_MASK, MCAN_SEL);
 
 	/* Setup IOdelay configuration */
 	ret = do_set_iodelay((*ctrl)->iodelay_config_base, iodelay, niodelays);
@@ -846,109 +884,34 @@ void board_mmc_poweron_ldo(uint voltage)
 		palmas_mmc1_poweron_ldo(LDO1_VOLTAGE, LDO1_CTRL, voltage);
 	}
 }
-#endif
 
-#ifdef CONFIG_USB_DWC3
-static struct dwc3_device usb_otg_ss1 = {
-	.maximum_speed = USB_SPEED_SUPER,
-	.base = DRA7_USB_OTG_SS1_BASE,
-	.tx_fifo_resize = false,
-	.index = 0,
+static const struct mmc_platform_fixups dra7x_es1_1_mmc1_fixups = {
+	.hw_rev = "rev11",
+	.unsupported_caps = MMC_CAP(MMC_HS_200) |
+			    MMC_CAP(UHS_SDR104),
+	.max_freq = 96000000,
 };
 
-static struct dwc3_omap_device usb_otg_ss1_glue = {
-	.base = (void *)DRA7_USB_OTG_SS1_GLUE_BASE,
-	.utmi_mode = DWC3_OMAP_UTMI_MODE_SW,
-	.index = 0,
+static const struct mmc_platform_fixups dra7x_es1_1_mmc23_fixups = {
+	.hw_rev = "rev11",
+	.unsupported_caps = MMC_CAP(MMC_HS_200) |
+			    MMC_CAP(UHS_SDR104) |
+			    MMC_CAP(UHS_SDR50),
+	.max_freq = 48000000,
 };
 
-static struct ti_usb_phy_device usb_phy1_device = {
-	.pll_ctrl_base = (void *)DRA7_USB3_PHY1_PLL_CTRL,
-	.usb2_phy_power = (void *)DRA7_USB2_PHY1_POWER,
-	.usb3_phy_power = (void *)DRA7_USB3_PHY1_POWER,
-	.index = 0,
-};
-
-static struct dwc3_device usb_otg_ss2 = {
-	.maximum_speed = USB_SPEED_SUPER,
-	.base = DRA7_USB_OTG_SS2_BASE,
-	.tx_fifo_resize = false,
-	.index = 1,
-};
-
-static struct dwc3_omap_device usb_otg_ss2_glue = {
-	.base = (void *)DRA7_USB_OTG_SS2_GLUE_BASE,
-	.utmi_mode = DWC3_OMAP_UTMI_MODE_SW,
-	.index = 1,
-};
-
-static struct ti_usb_phy_device usb_phy2_device = {
-	.usb2_phy_power = (void *)DRA7_USB2_PHY2_POWER,
-	.index = 1,
-};
-
-int omap_xhci_board_usb_init(int index, enum usb_init_type init)
+const struct mmc_platform_fixups *platform_fixups_mmc(uint32_t addr)
 {
-	enable_usb_clocks(index);
-	switch (index) {
-	case 0:
-		if (init == USB_INIT_DEVICE) {
-			usb_otg_ss1.dr_mode = USB_DR_MODE_PERIPHERAL;
-			usb_otg_ss1_glue.vbus_id_status = OMAP_DWC3_VBUS_VALID;
-		} else {
-			usb_otg_ss1.dr_mode = USB_DR_MODE_HOST;
-			usb_otg_ss1_glue.vbus_id_status = OMAP_DWC3_ID_GROUND;
-		}
-
-		ti_usb_phy_uboot_init(&usb_phy1_device);
-		dwc3_omap_uboot_init(&usb_otg_ss1_glue);
-		dwc3_uboot_init(&usb_otg_ss1);
-		break;
-	case 1:
-		if (init == USB_INIT_DEVICE) {
-			usb_otg_ss2.dr_mode = USB_DR_MODE_PERIPHERAL;
-			usb_otg_ss2_glue.vbus_id_status = OMAP_DWC3_VBUS_VALID;
-		} else {
-			usb_otg_ss2.dr_mode = USB_DR_MODE_HOST;
-			usb_otg_ss2_glue.vbus_id_status = OMAP_DWC3_ID_GROUND;
-		}
-
-		ti_usb_phy_uboot_init(&usb_phy2_device);
-		dwc3_omap_uboot_init(&usb_otg_ss2_glue);
-		dwc3_uboot_init(&usb_otg_ss2);
-		break;
+	switch (omap_revision()) {
+	case DRA752_ES1_0:
+	case DRA752_ES1_1:
+		if (addr == OMAP_HSMMC1_BASE)
+			return &dra7x_es1_1_mmc1_fixups;
+		else
+			return &dra7x_es1_1_mmc23_fixups;
 	default:
-		printf("Invalid Controller Index\n");
+		return NULL;
 	}
-
-	return 0;
-}
-
-int omap_xhci_board_usb_cleanup(int index, enum usb_init_type init)
-{
-	switch (index) {
-	case 0:
-	case 1:
-		ti_usb_phy_uboot_exit(index);
-		dwc3_uboot_exit(index);
-		dwc3_omap_uboot_exit(index);
-		break;
-	default:
-		printf("Invalid Controller Index\n");
-	}
-	disable_usb_clocks(index);
-	return 0;
-}
-
-int usb_gadget_handle_interrupts(int index)
-{
-	u32 status;
-
-	status = dwc3_omap_uboot_interrupt_status(index);
-	if (status)
-		dwc3_uboot_handle_interrupt(index);
-
-	return 0;
 }
 #endif
 
@@ -1118,13 +1081,24 @@ int board_fit_config_name_match(const char *name)
 		} else if (!strcmp(name, "dra72-evm")) {
 			return 0;
 		}
-	} else if (is_dra76x() && !strcmp(name, "dra76-evm")) {
+	} else if (is_dra76x_acd() && !strcmp(name, "dra76-evm")) {
 		return 0;
-	} else if (!is_dra72x() && !is_dra76x() && !strcmp(name, "dra7-evm")) {
+	} else if (!is_dra72x() && !is_dra76x_acd() &&
+		   !strcmp(name, "dra7-evm")) {
 		return 0;
 	}
 
 	return -1;
+}
+#endif
+
+#if CONFIG_IS_ENABLED(FASTBOOT) && !CONFIG_IS_ENABLED(ENV_IS_NOWHERE)
+int fastboot_set_reboot_flag(void)
+{
+	printf("Setting reboot to fastboot flag ...\n");
+	env_set("dofastboot", "1");
+	env_save();
+	return 0;
 }
 #endif
 

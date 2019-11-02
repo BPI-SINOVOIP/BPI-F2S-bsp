@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Operating System Interface
  *
@@ -5,7 +6,6 @@
  * They are kept in a separate file so we can include system headers.
  *
  * Copyright (c) 2011 The Chromium OS Authors.
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __OS_H__
@@ -25,16 +25,6 @@ struct sandbox_state;
  * \return number of bytes read, or -1 on error
  */
 ssize_t os_read(int fd, void *buf, size_t count);
-
-/**
- * Access to the OS read() system call with non-blocking access
- *
- * \param fd	File descriptor as returned by os_open()
- * \param buf	Buffer to place data
- * \param count	Number of bytes to read
- * \return number of bytes read, or -1 on error
- */
-ssize_t os_read_no_block(int fd, void *buf, size_t count);
 
 /**
  * Access to the OS write() system call
@@ -75,6 +65,7 @@ int os_open(const char *pathname, int flags);
 #define OS_O_RDWR	2
 #define OS_O_MASK	3	/* Mask for read/write flags */
 #define OS_O_CREAT	0100
+#define OS_O_TRUNC	01000
 
 /**
  * Access to the OS close() system call
@@ -241,6 +232,26 @@ const char *os_dirent_get_typename(enum os_dirent_t type);
 int os_get_filesize(const char *fname, loff_t *size);
 
 /**
+ * Write a character to the controlling OS terminal
+ *
+ * This bypasses the U-Boot console support and writes directly to the OS
+ * stdout file descriptor.
+ *
+ * @param ch	Character to write
+ */
+void os_putc(int ch);
+
+/**
+ * Write a string to the controlling OS terminal
+ *
+ * This bypasses the U-Boot console support and writes directly to the OS
+ * stdout file descriptor.
+ *
+ * @param str	String to write (note that \n is not appended)
+ */
+void os_puts(const char *str);
+
+/**
  * Write the sandbox RAM buffer to a existing file
  *
  * @param fname		Filename to write memory to (simple binary format)
@@ -309,5 +320,48 @@ int os_spl_to_uboot(const char *fname);
  * @param rt		Place to put system time
  */
 void os_localtime(struct rtc_time *rt);
+
+/**
+ * os_abort() - Raise SIGABRT to exit sandbox (e.g. to debugger)
+ */
+void os_abort(void);
+
+/**
+ * os_mprotect_allow() - Remove write-protection on a region of memory
+ *
+ * The start and length will be page-aligned before use.
+ *
+ * @start:	Region start
+ * @len:	Region length in bytes
+ * @return 0 if OK, -1 on error from mprotect()
+ */
+int os_mprotect_allow(void *start, size_t len);
+
+/**
+ * os_write_file() - Write a file to the host filesystem
+ *
+ * This can be useful when debugging for writing data out of sandbox for
+ * inspection by external tools.
+ *
+ * @name:	File path to write to
+ * @buf:	Data to write
+ * @size:	Size of data to write
+ * @return 0 if OK, -ve on error
+ */
+int os_write_file(const char *name, const void *buf, int size);
+
+/**
+ * os_read_file() - Read a file from the host filesystem
+ *
+ * This can be useful when reading test data into sandbox for use by test
+ * routines. The data is allocated using os_malloc() and should be freed by
+ * the caller.
+ *
+ * @name:	File path to read from
+ * @bufp:	Returns buffer containing data read
+ * @sizep:	Returns size of data
+ * @return 0 if OK, -ve on error
+ */
+int os_read_file(const char *name, void **bufp, int *sizep);
 
 #endif

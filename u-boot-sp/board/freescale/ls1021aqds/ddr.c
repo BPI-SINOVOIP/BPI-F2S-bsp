@@ -1,7 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright 2014 Freescale Semiconductor, Inc.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -179,6 +178,8 @@ int fsl_initdram(void)
 #if defined(CONFIG_DEEP_SLEEP) && !defined(CONFIG_SPL_BUILD)
 	fsl_dp_resume();
 #endif
+
+	erratum_a008850_post();
 
 	gd->ram_size = dram_size;
 

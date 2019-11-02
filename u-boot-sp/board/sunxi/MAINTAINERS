@@ -116,6 +116,12 @@ M:	Paul Kocialkowski <contact@paulk.fr>
 S:	Maintained
 F:	configs/Ainol_AW1_defconfig
 
+AMARULA A64-RELIC
+M:	Jagan Teki <jagan@amarulasolutions.com>
+S:	Maintained
+F:	configs/amarula_a64_relic_defconfig
+F:	arch/arm/dts/sun50i-a64-amarula-relic.dts
+
 AMPE A76 BOARD
 M:	Paul Kocialkowski <contact@paulk.fr>
 S:	Maintained
@@ -126,6 +132,18 @@ M:	Jagan Teki <jagan@amarulasolutions.com>
 S:	Maintained
 F:	configs/bananapi_m1_plus_defconfig
 
+BANANAPI M2 BERRY
+M:	Jagan Teki <jagan@amarulasolutions.com>
+S:	Maintained
+F:	configs/bananapi_m2_berry_defconfig
+
+BANANAPI M2 PLUS BOARDS
+M:	Icenowy Zheng <icenowy@aosc.io>
+M:	Chen-Yu Tsai <wens@csie.org>
+S:	Maintained
+F:	configs/bananapi_m2_plus_h3_defconfig
+F:	configs/bananapi_m2_plus_h5_defconfig
+
 BANANAPI M2 ULTRA BOARD
 M:	Chen-Yu Tsai <wens@csie.org>
 S:	Maintained
@@ -133,10 +151,15 @@ F:	configs/Bananapi_M2_Ultra_defconfig
 F:	arch/arm/dts/sun8i-r40-bananapi-m2-ultra.dts
 
 BANANAPI M2 MAGIC BOARD
-M:	Maxime Ripard <maxime.ripard@free-electrons.com>
+M:	Maxime Ripard <maxime.ripard@bootlin.com>
 S:	Maintained
 F:	configs/Bananapi_m2m_defconfig
 F:	arch/arm/dts/sun8i-r16-bananapi-m2m.dts
+
+BANANAPI M2 ZERO BOARD
+M:	Icenowy Zheng <icenowy@aosc.io>
+S:	Maintained
+F:	configs/bananapi_m2_zero_defconfig
 
 BANANAPI M64
 M:	Jagan Teki <jagan@amarulasolutions.com>
@@ -144,7 +167,7 @@ S:	Maintained
 F:	configs/bananapi_m64_defconfig
 
 COLOMBUS BOARD
-M:	Maxime Ripard <maxime.ripard@free-electrons.com>
+M:	Maxime Ripard <maxime.ripard@bootlin.com>
 S:	Maintained
 F:	configs/Colombus_defconfig
 
@@ -165,6 +188,11 @@ CUBIETRUCK-PLUS BOARD
 M:	Chen-Yu Tsai <wens@csie.org>
 S:	Maintained
 F:	configs/Cubietruck_plus_defconfig
+
+EMLID NEUTIS N5 DEV BOARD
+M:	Aleksandr Aleksandrov <aleksandr.aleksandrov@emlid.com>
+S:	Maintained
+F:	configs/emlid_neutis_n5_devboard_defconfig
 
 GEMEI-G9 TABLET
 M:	Priit Laes <plaes@plaes.org>
@@ -266,6 +294,13 @@ M:	Siarhei Siamashka <siarhei.siamashka@gmail.com>
 S:	Maintained
 F:	configs/MSI_Primo81_defconfig
 
+LIBRETECH ALL-H3-CC BOARDS
+M:	Chen-Yu Tsai <wens@csie.org>
+S:	Maintained
+F:	configs/libretech_all_h3_cc_h2_plus_defconfig
+F:	configs/libretech_all_h3_cc_h3_defconfig
+F:	configs/libretech_all_h3_cc_h5_defconfig
+
 NANOPI-M1 BOARD
 M:	Mylène Josserand <mylene.josserand@free-electrons.com>
 S:	Maintained
@@ -286,6 +321,11 @@ M:	Jagan Teki <jagan@amarulasolutions.com>
 S:	Maintained
 F:	configs/nanopi_neo2_defconfig
 
+NANOPI-NEO-PLUS2 BOARD
+M:	Antony Antony <antony@phenome.org>
+S:	Maintained
+F:	configs/nanopi_neo_plus2_defconfig
+
 NANOPI-NEO-AIR BOARD
 M:	Jelle van der Waa <jelle@vdwaa.nl>
 S:	Maintained
@@ -301,6 +341,22 @@ M:	FUKAUMI Naoki <naobsd@gmail.com>
 S:	Maintained
 F:	configs/Nintendo_NES_Classic_Edition_defconfig
 
+OLIMEX A20-SOM204 BOARD
+M:	Stefan Mavrodiev <stefan@olimex.com>
+S:	Maintained
+F:	configs/A20-Olimex-SOM204-EVB_defconfig
+F:	configs/A20-Olimex-SOM204-EVB-eMMC_defconfig
+
+ORANGEPI LITE2 BOARD
+M:	Jagan Teki <jagan@openedev.com>
+S:	Maintained
+F:	configs/orangepi_lite2_defconfig
+
+ORANGEPI ONE PLUS BOARD
+M:	Jagan Teki <jagan@amarulasolutions.com>
+S:	Maintained
+F:	configs/orangepi_one_plus_defconfig
+
 ORANGEPI WIN/WIN PLUS BOARD
 M:	Jagan Teki <jagan@amarulasolutions.com>
 S:	Maintained
@@ -310,6 +366,11 @@ ORANGEPI ZERO BOARD
 M:	Icenowy Zheng <icenowy@aosc.xyz>
 S:	Maintained
 F:	configs/orangepi_zero_defconfig
+
+ORANGEPI ZERO PLUS BOARD
+M:	Hauke Mehrtens <hauke@hauke-m.de>
+S:	Maintained
+F:	configs/orangepi_zero_plus_defconfig
 
 ORANGEPI ZERO PLUS 2 BOARD
 M:	Jagan Teki <jagan@amarulasolutions.com>
@@ -326,10 +387,26 @@ M:	Jagan Teki <jagan@amarulasolutions.com>
 S:	Maintained
 F:	configs/orangepi_prime_defconfig
 
+ORANGEPI R1 BOARD
+M:	Hauke Mehrtens <hauke@hauke-m.de>
+S:	Maintained
+F:	configs/orangepi_r1_defconfig
+
+PINEBOOK BOARD:
+M:	Vasily Khoruzhick <anarsoul@gmail.com>
+S:	Maintained
+F:	configs/pinebook_defconfig
+
 PINE64 BOARDS
 M:	Andre Przywara <andre.przywara@arm.com>
 S:	Maintained
 F:	configs/pine64_plus_defconfig
+F:	configs/pine64-lts_defconfig
+
+PINE H64 BOARD
+M:	Icenowy Zheng <icenowy@aosc.io>
+S:	Maintained
+F:	configs/pine_h64_defconfig
 
 R16 EVB PARROT BOARD
 M:	Quentin Schulz <quentin.schulz@free-electrons.com>
@@ -348,11 +425,6 @@ S:	Maintained
 F:	configs/Sinlinx_SinA33_defconfig
 W:	http://linux-sunxi.org/Sinlinx_SinA33
 
-SINOVOIP BPI M2 PLUS H3 BOARD
-M:	Icenowy Zheng <icenowy@aosc.io>
-S:	Maintained
-F:	configs/Sinovoip_BPI_M2_Plus_defconfig
-
 SINOVOIP BPI M3 A83T BOARD
 M:	VishnuPatekar <vishnupatekar0510@gmail.com>
 S:	Maintained
@@ -368,6 +440,11 @@ M:	Rask Ingemann Lambertsen <rask@formelder.dk>
 S:	Maintained
 F:	configs/Sunchip_CX-A99_defconfig
 W:	https://linux-sunxi.org/Sunchip_CX-A99
+
+TBS A711 BOARD
+M:	Maxime Ripard <maxime.ripard@bootlin.com>
+S:	Maintained
+F:	configs/tbs_a711_defconfig
 
 WEXLER-TAB7200 BOARD
 M:	Aleksei Mamlin <mamlinav@gmail.com>

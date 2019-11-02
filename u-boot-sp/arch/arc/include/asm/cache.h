@@ -1,7 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright (C) 2013-2014 Synopsys, Inc. All rights reserved.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __ASM_ARC_CACHE_H
@@ -17,6 +16,9 @@
  */
 #define ARCH_DMA_MINALIGN	128
 
+/* CONFIG_SYS_CACHELINE_SIZE is used a lot in drivers */
+#define CONFIG_SYS_CACHELINE_SIZE	ARCH_DMA_MINALIGN
+
 #if defined(ARC_MMU_ABSENT)
 #define CONFIG_ARC_MMU_VER 0
 #elif defined(CONFIG_ARC_MMU_V2)
@@ -30,6 +32,13 @@
 #ifndef __ASSEMBLY__
 
 void cache_init(void);
+void flush_n_invalidate_dcache_all(void);
+void sync_n_cleanup_cache_all(void);
+
+static const inline int is_ioc_enabled(void)
+{
+	return IS_ENABLED(CONFIG_ARC_DBG_IOC_ENABLE);
+}
 
 #endif /* __ASSEMBLY__ */
 

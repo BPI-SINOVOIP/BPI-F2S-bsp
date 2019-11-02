@@ -1,9 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright (C) 2013 Samsung Electronics
  *
  * Configuration settings for the SAMSUNG EXYNOS5 board.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __CONFIG_EXYNOS5_COMMON_H
@@ -109,16 +108,9 @@
 #define CONFIG_SYS_I2C_S3C24X0_SLAVE    0x0
 
 /* SPI */
-#ifdef CONFIG_SPI_FLASH
-#define CONFIG_SF_DEFAULT_MODE		SPI_MODE_0
-#define CONFIG_SF_DEFAULT_SPEED		50000000
-#endif
 
 #ifdef CONFIG_ENV_IS_IN_SPI_FLASH
-#define CONFIG_ENV_SPI_MODE	SPI_MODE_0
 #define CONFIG_ENV_SECT_SIZE	CONFIG_ENV_SIZE
-#define CONFIG_ENV_SPI_BUS	1
-#define CONFIG_ENV_SPI_MAX_HZ	50000000
 #endif
 
 /* Ethernet Controllor Driver */
@@ -139,6 +131,7 @@
 #define BOOT_TARGET_DEVICES(func) \
 	func(MMC, mmc, 1) \
 	func(MMC, mmc, 0) \
+	func(MMC, mmc, 2) \
 	func(PXE, pxe, na) \
 	func(DHCP, dhcp, na)
 

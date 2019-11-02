@@ -1,11 +1,12 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * Copyright (c) 2016 Google, Inc
- *
- * SPDX-License-Identifier:	GPL-2.0
  */
 
 #ifndef __asm_arch_rcba_h
 #define __asm_arch_rcba_h
+
+#define ACPIIRQEN	0x31e0	/* 32bit */
 
 #define PMSYNC_CONFIG	0x33c4	/* 32bit */
 #define PMSYNC_CONFIG2	0x33cc	/* 32bit */

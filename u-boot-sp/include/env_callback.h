@@ -1,8 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * (C) Copyright 2012
  * Joe Hershberger, National Instruments, joe.hershberger@ni.com
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __ENV_CALLBACK_H__
@@ -33,10 +32,8 @@
 
 #ifdef CONFIG_REGEX
 #define ENV_DOT_ESCAPE "\\"
-#define ETHADDR_WILDCARD "\\d?"
 #else
 #define ENV_DOT_ESCAPE
-#define ETHADDR_WILDCARD
 #endif
 
 #ifdef CONFIG_CMD_DNS
@@ -45,7 +42,7 @@
 #define DNS_CALLBACK
 #endif
 
-#ifdef CONFIG_NET
+#ifdef CONFIG_CMD_NET
 #define NET_CALLBACKS \
 	"bootfile:bootfile," \
 	"ipaddr:ipaddr," \

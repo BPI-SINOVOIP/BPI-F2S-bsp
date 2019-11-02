@@ -1,8 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2012
  * Lei Wen <leiwen@marvell.com>, Marvell Inc.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -29,7 +28,7 @@ static int do_zip(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 	if (gzip((void *) dst, &dst_len, (void *) src, src_len) != 0)
 		return 1;
 
-	printf("Compressed size: %ld = 0x%lX\n", dst_len, dst_len);
+	printf("Compressed size: %lu = 0x%lX\n", dst_len, dst_len);
 	env_set_hex("filesize", dst_len);
 
 	return 0;

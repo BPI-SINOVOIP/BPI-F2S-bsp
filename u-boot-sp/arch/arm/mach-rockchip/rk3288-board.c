@@ -1,7 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2015 Google, Inc
- *
- * SPDX-License-Identifier:     GPL-2.0+
  */
 
 #include <common.h>
@@ -22,31 +21,6 @@
 #include <power/regulator.h>
 
 DECLARE_GLOBAL_DATA_PTR;
-
-#define PMU_BASE	0xff730000
-
-static void setup_boot_mode(void)
-{
-	struct rk3288_pmu *const pmu = (void *)PMU_BASE;
-	int boot_mode = readl(&pmu->sys_reg[0]);
-
-	debug("boot mode %x.\n", boot_mode);
-
-	/* Clear boot mode */
-	writel(BOOT_NORMAL, &pmu->sys_reg[0]);
-
-	switch (boot_mode) {
-	case BOOT_FASTBOOT:
-		printf("enter fastboot!\n");
-		env_set("preboot", "setenv preboot; fastboot usb0");
-		break;
-	case BOOT_UMS:
-		printf("enter UMS!\n");
-		env_set("preboot", "setenv preboot; if mmc dev 0;"
-		       "then ums mmc 0; else ums mmc 1;fi");
-		break;
-	}
-}
 
 __weak int rk_board_late_init(void)
 {
@@ -147,6 +121,22 @@ static int veyron_init(void)
 	ret = clk_set_rate(&clk, 1800000000);
 	if (IS_ERR_VALUE(ret))
 		return ret;
+
+	ret = regulator_get_by_platname("vcc33_sd", &dev);
+	if (ret) {
+		debug("Cannot get regulator name\n");
+		return ret;
+	}
+
+	ret = regulator_set_value(dev, 3300000);
+	if (ret)
+		return ret;
+
+	ret = regulators_enable_boot_on(false);
+	if (ret) {
+		debug("%s: Cannot enable boot on regulators\n", __func__);
+		return ret;
+	}
 
 	return 0;
 }
@@ -327,10 +317,10 @@ U_BOOT_CMD(
 	""
 );
 
-#define GRF_SOC_CON2 0xff77024c
-
 int board_early_init_f(void)
 {
+	const uintptr_t GRF_SOC_CON0 = 0xff770244;
+	const uintptr_t GRF_SOC_CON2 = 0xff77024c;
 	struct udevice *pinctrl;
 	struct udevice *dev;
 	int ret;
@@ -358,6 +348,12 @@ int board_early_init_f(void)
 		return ret;
 	}
 	rk_setreg(GRF_SOC_CON2, 1 << 0);
+
+	/*
+	 * Disable JTAG on sdmmc0 IO. The SDMMC won't work until this bit is
+	 * cleared
+	 */
+	rk_clrreg(GRF_SOC_CON0, 1 << 12);
 
 	return 0;
 }

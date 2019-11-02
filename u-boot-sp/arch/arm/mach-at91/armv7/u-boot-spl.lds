@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * (C) Copyright 2002
  * Gary Jennejohn, DENX Software Engineering, <garyj@denx.de>
@@ -8,12 +9,10 @@
  *
  * (C) 2013 Atmel Corporation
  *	    Bo Shen <voice.shen@atmel.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
-MEMORY { .sram : ORIGIN = CONFIG_SPL_TEXT_BASE, \
-		LENGTH = CONFIG_SPL_MAX_SIZE }
+MEMORY { .sram : ORIGIN = IMAGE_TEXT_BASE, \
+		LENGTH = IMAGE_MAX_SIZE }
 MEMORY { .sdram : ORIGIN = CONFIG_SPL_BSS_START_ADDR, \
 		LENGTH = CONFIG_SPL_BSS_MAX_SIZE }
 

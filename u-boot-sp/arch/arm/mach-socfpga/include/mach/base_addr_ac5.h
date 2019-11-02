@@ -1,12 +1,12 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  *  Copyright (C) 2012 Altera Corporation <www.altera.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef _SOCFPGA_BASE_ADDRS_H_
 #define _SOCFPGA_BASE_ADDRS_H_
 
+#define SOCFPGA_FPGA_SLAVES_ADDRESS	0xc0000000
 #define SOCFPGA_STM_ADDRESS		0xfc000000
 #define SOCFPGA_DAP_ADDRESS		0xff000000
 #define SOCFPGA_EMAC0_ADDRESS		0xff700000

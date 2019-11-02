@@ -1,10 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2004-2006 Atmel Corporation
  *
  * Modified to support C structur SoC access by
  * Andreas Bießmann <biessmann@corscience.de>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 #include <common.h>
 #include <clk.h>
@@ -295,7 +294,9 @@ U_BOOT_DRIVER(serial_atmel) = {
 #endif
 	.probe = atmel_serial_probe,
 	.ops	= &atmel_serial_ops,
+#if !CONFIG_IS_ENABLED(OF_CONTROL)
 	.flags = DM_FLAG_PRE_RELOC,
+#endif
 	.priv_auto_alloc_size	= sizeof(struct atmel_serial_priv),
 };
 #endif

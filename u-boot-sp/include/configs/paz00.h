@@ -1,10 +1,9 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * Copyright (c) 2010-2012 NVIDIA CORPORATION.  All rights reserved.
  *
  * See file CREDITS for list of people who contributed to this
  * project.
- *
- * SPDX-License-Identifier:	GPL-2.0
  */
 
 #ifndef __CONFIG_H
@@ -26,11 +25,6 @@
 #define CONFIG_ENV_OFFSET (-CONFIG_ENV_SIZE)
 #define CONFIG_SYS_MMC_ENV_DEV 0
 #define CONFIG_SYS_MMC_ENV_PART 2
-
-/* USB Host support */
-#define CONFIG_USB_EHCI_TEGRA
-
-/* USB networking support */
 
 #include "tegra-common-post.h"
 

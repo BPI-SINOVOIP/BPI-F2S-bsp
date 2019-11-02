@@ -1,7 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
- * Copyright (c) 2013 Xilinx Inc.
- *
- * SPDX-License-Identifier:	GPL-2.0+
+ * Copyright (c) 2013 - 2017 Xilinx Inc.
  */
 
 #include <common.h>
@@ -179,8 +178,9 @@ u32 zynq_slcr_get_idcode(void)
 int zynq_slcr_get_mio_pin_status(const char *periph)
 {
 	const struct zynq_slcr_mio_get_status *mio_ptr;
-	int val, i, j;
+	int val, j;
 	int mio = 0;
+	u32 i;
 
 	for (i = 0; i < ARRAY_SIZE(mio_periphs); i++) {
 		if (strcmp(periph, mio_periphs[i].peri_name) == 0) {

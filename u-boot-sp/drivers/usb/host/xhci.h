@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * USB HOST XHCI Controller
  *
@@ -10,8 +11,6 @@
  * Copyright (C) 2013 Samsung Electronics Co.Ltd
  * Authors: Vivek Gautam <gautam.vivek@samsung.com>
  *	    Vikas Sajjan <vikas.sajjan@samsung.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef HOST_XHCI_H_
@@ -1212,7 +1211,7 @@ void xhci_hcd_stop(int index);
 #define XHCI_STS_CNR		(1 << 11)
 
 struct xhci_ctrl {
-#ifdef CONFIG_DM_USB
+#if CONFIG_IS_ENABLED(DM_USB)
 	struct udevice *dev;
 #endif
 	struct xhci_hccr *hccr;	/* R/O registers, not need for volatile */

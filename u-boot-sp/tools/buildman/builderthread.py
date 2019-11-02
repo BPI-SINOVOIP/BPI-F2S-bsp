@@ -1,12 +1,12 @@
+# SPDX-License-Identifier: GPL-2.0+
 # Copyright (c) 2014 Google, Inc
-#
-# SPDX-License-Identifier:      GPL-2.0+
 #
 
 import errno
 import glob
 import os
 import shutil
+import sys
 import threading
 
 import command
@@ -27,6 +27,9 @@ def Mkdir(dirname, parents = False):
             os.mkdir(dirname)
     except OSError as err:
         if err.errno == errno.EEXIST:
+            if os.path.realpath('.') == os.path.realpath(dirname):
+                print "Cannot create the current working directory '%s'!" % dirname
+                sys.exit(1)
             pass
         else:
             raise
@@ -153,7 +156,12 @@ class BuilderThread(threading.Thread):
         if result.already_done:
             # Get the return code from that build and use it
             with open(done_file, 'r') as fd:
-                result.return_code = int(fd.readline())
+                try:
+                    result.return_code = int(fd.readline())
+                except ValueError:
+                    # The file may be empty due to running out of disk space.
+                    # Try a rebuild
+                    result.return_code = RETURN_CODE_RETRY
 
             # Check the signal that the build needs to be retried
             if result.return_code == RETURN_CODE_RETRY:
@@ -216,9 +224,12 @@ class BuilderThread(threading.Thread):
                     args.append('-s')
                 if self.builder.num_jobs is not None:
                     args.extend(['-j', str(self.builder.num_jobs)])
+                if self.builder.warnings_as_errors:
+                    args.append('KCFLAGS=-Werror')
                 config_args = ['%s_defconfig' % brd.target]
                 config_out = ''
                 args.extend(self.builder.toolchains.GetMakeArguments(brd))
+                args.extend(self.toolchain.MakeArgs())
 
                 # If we need to reconfigure, do that now
                 if do_config:
@@ -311,6 +322,9 @@ class BuilderThread(threading.Thread):
 
             # Write out the image and function size information and an objdump
             env = result.toolchain.MakeEnvironment(self.builder.full_path)
+            with open(os.path.join(build_dir, 'env'), 'w') as fd:
+                for var in sorted(env.keys()):
+                    print >>fd, '%s="%s"' % (var, env[var])
             lines = []
             for fname in ['u-boot', 'spl/u-boot-spl']:
                 cmd = ['%snm' % self.toolchain.cross, '--size-sort', fname]
@@ -345,6 +359,16 @@ class BuilderThread(threading.Thread):
                 if size_result.stdout:
                     lines.append(size_result.stdout.splitlines()[1] + ' ' +
                                  rodata_size)
+
+            # Extract the environment from U-Boot and dump it out
+            cmd = ['%sobjcopy' % self.toolchain.cross, '-O', 'binary',
+                   '-j', '.rodata.default_environment',
+                   'env/built-in.o', 'uboot.env']
+            command.RunPipe([cmd], capture=True,
+                            capture_stderr=True, cwd=result.out_dir,
+                            raise_on_error=False, env=env)
+            ubootenv = os.path.join(result.out_dir, 'uboot.env')
+            self.CopyFiles(result.out_dir, build_dir, '', ['uboot.env'])
 
             # Write out the image sizes file. This is similar to the output
             # of binutil's 'size' utility, but it omits the header line and

@@ -1,12 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2002
  * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
- *
- * SPDX-License-Identifier:	GPL-2.0+
- *
- * Be sure to mark tests to be run before relocation as such with the
- * CONFIG_SYS_POST_PREREL flag so that logging is done correctly if the
- * logbuffer support is enabled.
  */
 
 #include <common.h>

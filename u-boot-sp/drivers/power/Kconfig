@@ -22,6 +22,7 @@ config SUNXI_NO_PMIC
 config AXP152_POWER
 	bool "axp152 pmic support"
 	depends on MACH_SUN5I
+	select AXP_PMIC_BUS
 	select CMD_POWEROFF
 	---help---
 	Select this to enable support for the axp152 pmic found on most
@@ -30,6 +31,7 @@ config AXP152_POWER
 config AXP209_POWER
 	bool "axp209 pmic support"
 	depends on MACH_SUN4I || MACH_SUN5I || MACH_SUN7I
+	select AXP_PMIC_BUS
 	select CMD_POWEROFF
 	---help---
 	Select this to enable support for the axp209 pmic found on most
@@ -38,6 +40,7 @@ config AXP209_POWER
 config AXP221_POWER
 	bool "axp221 / axp223 pmic support"
 	depends on MACH_SUN6I || MACH_SUN8I_A23 || MACH_SUN8I_A33 || MACH_SUN8I_R40
+	select AXP_PMIC_BUS
 	select CMD_POWEROFF
 	---help---
 	Select this to enable support for the axp221/axp223 pmic found on most
@@ -46,6 +49,7 @@ config AXP221_POWER
 config AXP809_POWER
 	bool "axp809 pmic support"
 	depends on MACH_SUN9I
+	select AXP_PMIC_BUS
 	select CMD_POWEROFF
 	---help---
 	Say y here to enable support for the axp809 pmic found on A80 boards.
@@ -53,6 +57,7 @@ config AXP809_POWER
 config AXP818_POWER
 	bool "axp818 pmic support"
 	depends on MACH_SUN8I_A83T
+	select AXP_PMIC_BUS
 	select CMD_POWEROFF
 	---help---
 	Say y here to enable support for the axp818 pmic found on
@@ -191,6 +196,49 @@ config AXP_ALDO3_VOLT
 	On A80 boards aldo3 is normally not used.
 	On A83T / H8 boards aldo3 is AVCC, VCC-PL, and VCC-LED, and should be
 	3.0V.
+
+choice
+	prompt "axp pmic (a)ldo3 voltage rate control"
+	depends on AXP209_POWER
+	default AXP_ALDO3_VOLT_SLOPE_NONE
+	---help---
+	The AXP can slowly ramp up voltage to reduce the inrush current when
+	changing voltages.
+	Note, this does not apply when enabling/disabling LDO3. See
+	"axp pmic (a)ldo3 inrush quirk" below to enable a slew rate to limit
+	inrush current on broken board designs.
+
+config AXP_ALDO3_VOLT_SLOPE_NONE
+	bool "No voltage slope"
+	---help---
+	Tries to reach the next voltage setting near instantaneously. Measurements
+	indicate that this is about 0.0167 V/uS.
+
+config AXP_ALDO3_VOLT_SLOPE_16
+	bool "1.6 mV per uS"
+	---help---
+	Increases the voltage by 1.6 mV per uS until the final voltage has
+	been reached. Note that the scaling is in 25 mV steps and thus
+	the slew rate in reality is about 25 mV/31.250 uS.
+
+config AXP_ALDO3_VOLT_SLOPE_08
+	bool "0.8 mV per uS"
+	---help---
+	Increases the voltage by 0.8 mV per uS until the final voltage has
+	been reached. Note that the scaling is in 25 mV steps however and thus
+	the slew rate in reality is about 25 mV/15.625 uS.
+	This is the slowest supported rate.
+
+endchoice
+
+config AXP_ALDO3_INRUSH_QUIRK
+	bool "axp pmic (a)ldo3 inrush quirk"
+	depends on AXP209_POWER
+	default n
+	---help---
+	The reference design denotes a value of 4.7 uF for the output capacitor
+	of LDO3. Some boards have too high capacitance causing 	an inrush current
+	and resulting an AXP209 shutdown.
 
 config AXP_ALDO4_VOLT
 	int "axp pmic (a)ldo4 voltage"

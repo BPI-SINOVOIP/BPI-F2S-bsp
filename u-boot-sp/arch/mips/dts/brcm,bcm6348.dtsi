@@ -1,16 +1,20 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2017 Álvaro Fernández Rojas <noltari@gmail.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <dt-bindings/clock/bcm6348-clock.h>
+#include <dt-bindings/dma/bcm6348-dma.h>
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/reset/bcm6348-reset.h>
 #include "skeleton.dtsi"
 
 / {
 	compatible = "brcm,bcm6348";
+
+	aliases {
+		spi0 = &spi;
+	};
 
 	cpus {
 		reg = <0xfffe0000 0x4>;
@@ -118,10 +122,84 @@
 			status = "disabled";
 		};
 
+		spi: spi@fffe0c00 {
+			compatible = "brcm,bcm6348-spi";
+			reg = <0xfffe0c00 0xc0>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			clocks = <&periph_clk BCM6348_CLK_SPI>;
+			resets = <&periph_rst BCM6348_RST_SPI>;
+			spi-max-frequency = <20000000>;
+			num-cs = <4>;
+
+			status = "disabled";
+		};
+
+		ohci: usb-controller@fffe1b00 {
+			compatible = "brcm,bcm6348-ohci", "generic-ohci";
+			reg = <0xfffe1b00 0x100>;
+			phys = <&usbh>;
+			big-endian;
+
+			status = "disabled";
+		};
+
+		usbh: usb-phy@fffe1c00 {
+			compatible = "brcm,bcm6348-usbh";
+			reg = <0xfffe1c00 0x4>;
+			#phy-cells = <0>;
+			clocks = <&periph_clk BCM6348_CLK_USBH>;
+			clock-names = "usbh";
+			resets = <&periph_rst BCM6348_RST_USBH>;
+
+			status = "disabled";
+		};
+
 		memory-controller@fffe2300 {
 			compatible = "brcm,bcm6338-mc";
 			reg = <0xfffe2300 0x38>;
 			u-boot,dm-pre-reloc;
+		};
+
+		enet0: ethernet@fffe6000 {
+			compatible = "brcm,bcm6348-enet";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0xfffe6000 0x2dc>;
+			dmas = <&iudma BCM6348_DMA_ENET0_RX>,
+			       <&iudma BCM6348_DMA_ENET0_TX>;
+			dma-names = "rx",
+				    "tx";
+
+			status = "disabled";
+		};
+
+		enet1: ethernet@fffe6800 {
+			compatible = "brcm,bcm6348-enet";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0xfffe6800 0x2dc>;
+			dmas = <&iudma BCM6348_DMA_ENET1_RX>,
+			       <&iudma BCM6348_DMA_ENET1_TX>;
+			dma-names = "rx",
+				    "tx";
+
+			status = "disabled";
+		};
+
+		iudma: dma-controller@fffe7000 {
+			compatible = "brcm,bcm6348-iudma";
+			reg = <0xfffe7000 0x1c>,
+			      <0xfffe7100 0x40>,
+			      <0xfffe7200 0x40>;
+			reg-names = "dma",
+				    "dma-channels",
+				    "dma-sram";
+			#dma-cells = <1>;
+			dma-channels = <4>;
+			clocks = <&periph_clk BCM6348_CLK_ENET>;
+			resets = <&periph_rst BCM6348_RST_ENET>,
+				 <&periph_rst BCM6348_RST_DMAMEM>;
 		};
 	};
 };

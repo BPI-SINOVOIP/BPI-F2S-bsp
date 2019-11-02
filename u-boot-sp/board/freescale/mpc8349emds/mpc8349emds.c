@@ -1,8 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2006
  * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -19,7 +18,7 @@
 #endif
 
 #if defined(CONFIG_OF_LIBFDT)
-#include <libfdt.h>
+#include <linux/libfdt.h>
 #endif
 
 DECLARE_GLOBAL_DATA_PTR;
@@ -274,7 +273,7 @@ void spi_cs_deactivate(struct spi_slave *slave)
 
 	iopd->dat |=  SPI_CS_MASK;
 }
-#endif /* CONFIG_HARD_SPI */
+#endif
 
 #if defined(CONFIG_OF_BOARD_SETUP)
 int ft_board_setup(void *blob, bd_t *bd)

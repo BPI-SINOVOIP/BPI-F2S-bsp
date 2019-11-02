@@ -1,15 +1,17 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * (C) Copyright 2012
  * Texas Instruments, <www.ti.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 #ifndef	_SPL_H_
 #define	_SPL_H_
 
+#include <binman_sym.h>
+
 /* Platform-specific defines */
 #include <linux/compiler.h>
 #include <asm/spl.h>
+#include <handoff.h>
 
 /* Value in r0 indicates we booted from U-Boot */
 #define UBOOT_NOT_LOADED_FROM_SPL	0x13578642
@@ -20,14 +22,63 @@
 #define MMCSD_MODE_FS		2
 #define MMCSD_MODE_EMMCBOOT	3
 
+/*
+ * u_boot_first_phase() - check if this is the first U-Boot phase
+ *
+ * U-Boot has up to three phases: TPL, SPL and U-Boot proper. Depending on the
+ * build flags we can determine whether the current build is for the first
+ * phase of U-Boot or not. If there is no SPL, then this is U-Boot proper. If
+ * there is SPL but no TPL, the the first phase is SPL. If there is TPL, then
+ * it is the first phase.
+ *
+ * @returns true if this is the first phase of U-Boot
+ *
+ */
+static inline bool u_boot_first_phase(void)
+{
+	if (IS_ENABLED(CONFIG_TPL)) {
+		if (IS_ENABLED(CONFIG_TPL_BUILD))
+			return true;
+	} else if (IS_ENABLED(CONFIG_SPL)) {
+		if (IS_ENABLED(CONFIG_SPL_BUILD))
+			return true;
+	} else {
+		return true;
+	}
+
+	return false;
+}
+
+/* A string name for SPL or TPL */
+#ifdef CONFIG_SPL_BUILD
+# ifdef CONFIG_TPL_BUILD
+#  define SPL_TPL_NAME	"TPL"
+# else
+#  define SPL_TPL_NAME	"SPL"
+# endif
+# define SPL_TPL_PROMPT	SPL_TPL_NAME ": "
+#else
+# define SPL_TPL_NAME	""
+# define SPL_TPL_PROMPT	""
+#endif
+
 struct spl_image_info {
 	const char *name;
 	u8 os;
-	ulong load_addr;
-	ulong entry_point;
+	uintptr_t load_addr;
+	uintptr_t entry_point;
+#if CONFIG_IS_ENABLED(LOAD_FIT)
+	void *fdt_addr;
+#endif
+	u32 boot_device;
 	u32 size;
 	u32 flags;
 	void *arg;
+#ifdef CONFIG_SPL_LEGACY_IMAGE_CRC_CHECK
+	ulong dcrc_data;
+	ulong dcrc_length;
+	ulong dcrc;
+#endif
 };
 
 /*
@@ -48,6 +99,15 @@ struct spl_load_info {
 		      void *buf);
 };
 
+/*
+ * We need to know the position of U-Boot in memory so we can jump to it. We
+ * allow any U-Boot binary to be used (u-boot.bin, u-boot-nodtb.bin,
+ * u-boot.img), hence the '_any'. These is no checking here that the correct
+ * image is found. For * example if u-boot.img is used we don't check that
+ * spl_parse_image_header() can parse a valid header.
+ */
+binman_sym_extern(ulong, u_boot_any, image_pos);
+
 /**
  * spl_load_simple_fit() - Loads a fit image from a device.
  * @spl_image:	Image description to set up
@@ -63,11 +123,13 @@ int spl_load_simple_fit(struct spl_image_info *spl_image,
 			struct spl_load_info *info, ulong sector, void *fdt);
 
 #define SPL_COPY_PAYLOAD_ONLY	1
+#define SPL_FIT_FOUND		2
 
 /* SPL common functions */
 void preloader_console_init(void);
 u32 spl_boot_device(void);
 u32 spl_boot_mode(const u32 boot_device);
+int spl_boot_partition(const u32 boot_device);
 void spl_set_bd(void);
 
 /**
@@ -268,7 +330,23 @@ int spl_dfu_cmd(int usbctrl, char *dfu_alt_info, char *interface, char *devstr);
 int spl_mmc_load_image(struct spl_image_info *spl_image,
 		       struct spl_boot_device *bootdev);
 
-void bl31_entry(void);
+/**
+ * spl_invoke_atf - boot using an ARM trusted firmware image
+ */
+void spl_invoke_atf(struct spl_image_info *spl_image);
+
+/**
+ * spl_optee_entry - entry function for optee
+ *
+ * args defind in op-tee project
+ * https://github.com/OP-TEE/optee_os/
+ * core/arch/arm/kernel/generic_entry_a32.S
+ * @arg0: pagestore
+ * @arg1: (ARMv7 standard bootarg #1)
+ * @arg2: device tree address, (ARMv7 standard bootarg #2)
+ * @arg3: non-secure entry address (ARMv7 bootarg #0)
+ */
+void spl_optee_entry(void *arg0, void *arg1, void *arg2, void *arg3);
 
 /**
  * board_return_to_bootrom - allow for boards to continue with the boot ROM
@@ -279,4 +357,31 @@ void bl31_entry(void);
  * can implement 'board_return_to_bootrom'.
  */
 void board_return_to_bootrom(void);
+
+/**
+ * board_spl_fit_post_load - allow process images after loading finished
+ *
+ */
+void board_spl_fit_post_load(ulong load_addr, size_t length);
+
+/**
+ * board_spl_fit_size_align - specific size align before processing payload
+ *
+ */
+ulong board_spl_fit_size_align(ulong size);
+
+/**
+ * spl_perform_fixups() - arch/board-specific callback before processing
+ *                        the boot-payload
+ */
+void spl_perform_fixups(struct spl_image_info *spl_image);
+
+/*
+ * spl_get_load_buffer() - get buffer for loading partial image data
+ *
+ * Returns memory area which can be populated by partial image data,
+ * ie. uImage or fitImage header.
+ */
+struct image_header *spl_get_load_buffer(ssize_t offset, size_t size);
+
 #endif

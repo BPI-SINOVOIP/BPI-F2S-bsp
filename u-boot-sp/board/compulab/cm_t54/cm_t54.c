@@ -1,14 +1,14 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Board functions for Compulab CM-T54 board
  *
  * Copyright (C) 2014, Compulab Ltd - http://compulab.co.il/
  *
  * Author: Dmitry Lifshitz <lifshitz@compulab.co.il>
- *
- * SPDX-License-Identifier:     GPL-2.0+
  */
 
 #include <common.h>
+#include <environment.h>
 #include <fdt_support.h>
 #include <usb.h>
 #include <mmc.h>
@@ -246,7 +246,7 @@ int ehci_hcd_stop(void)
 	return ret;
 }
 
-void usb_hub_reset_devices(int port)
+void usb_hub_reset_devices(struct usb_hub_device *hub, int port)
 {
 	/* The LAN9730 needs to be reset after the port power has been set. */
 	if (port == 3) {

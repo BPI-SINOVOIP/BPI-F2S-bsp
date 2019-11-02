@@ -1,7 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2015 Google, Inc
- *
- * SPDX-License-Identifier:     GPL-2.0+
  */
 
 #include <common.h>
@@ -9,21 +8,25 @@
 #include <dm.h>
 #include <ram.h>
 #include <syscon.h>
+#include <asm/gpio.h>
 #include <asm/io.h>
 #include <asm/arch/clock.h>
 #include <asm/arch/grf_rk3188.h>
 #include <asm/arch/periph.h>
 #include <asm/arch/pmu_rk3288.h>
 #include <asm/arch/boot_mode.h>
-#include <asm/gpio.h>
 #include <dm/pinctrl.h>
 
-DECLARE_GLOBAL_DATA_PTR;
+__weak int rk_board_late_init(void)
+{
+	return 0;
+}
 
 int board_late_init(void)
 {
 	struct rk3188_grf *grf;
 
+	setup_boot_mode();
 	grf = syscon_get_first_range(ROCKCHIP_SYSCON_GRF);
 	if (IS_ERR(grf)) {
 		pr_err("grf syscon returned %ld\n", PTR_ERR(grf));
@@ -34,7 +37,7 @@ int board_late_init(void)
 			NOC_REMAP_MASK << NOC_REMAP_SHIFT);
 	}
 
-	return 0;
+	return rk_board_late_init();
 }
 
 int board_init(void)

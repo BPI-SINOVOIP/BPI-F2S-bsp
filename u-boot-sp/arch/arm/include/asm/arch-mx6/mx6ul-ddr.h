@@ -1,13 +1,12 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright (C) 2015 Freescale Semiconductor, Inc.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __ASM_ARCH_MX6UL_DDR_H__
 #define __ASM_ARCH_MX6UL_DDR_H__
 
-#ifndef CONFIG_MX6UL
+#if !(defined(CONFIG_MX6UL) || defined(CONFIG_MX6ULL))
 #error "wrong CPU"
 #endif
 

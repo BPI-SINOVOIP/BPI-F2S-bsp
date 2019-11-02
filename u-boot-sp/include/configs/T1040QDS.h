@@ -36,14 +36,9 @@
 
 /* High Level Configuration Options */
 #define CONFIG_SYS_BOOK3E_HV		/* Category E.HV supported */
-#define CONFIG_MP			/* support multiple processors */
 
 /* support deep sleep */
 #define CONFIG_DEEP_SLEEP
-
-#ifndef CONFIG_SYS_TEXT_BASE
-#define CONFIG_SYS_TEXT_BASE	0xeff40000
-#endif
 
 #ifndef CONFIG_RESET_VECTOR_ADDRESS
 #define CONFIG_RESET_VECTOR_ADDRESS	0xeffffffc
@@ -62,30 +57,16 @@
 
 #define CONFIG_ENV_OVERWRITE
 
-#ifndef CONFIG_MTD_NOR_FLASH
-#else
-#define CONFIG_FLASH_CFI_DRIVER
-#define CONFIG_SYS_FLASH_CFI
-#define CONFIG_SYS_FLASH_USE_BUFFER_WRITE
-#endif
-
 #ifdef CONFIG_MTD_NOR_FLASH
 #if defined(CONFIG_SPIFLASH)
-#define CONFIG_SYS_EXTRA_ENV_RELOC
-#define CONFIG_ENV_SPI_BUS              0
-#define CONFIG_ENV_SPI_CS               0
-#define CONFIG_ENV_SPI_MAX_HZ           10000000
-#define CONFIG_ENV_SPI_MODE             0
 #define CONFIG_ENV_SIZE                 0x2000          /* 8KB */
 #define CONFIG_ENV_OFFSET               0x100000        /* 1MB */
 #define CONFIG_ENV_SECT_SIZE            0x10000
 #elif defined(CONFIG_SDCARD)
-#define CONFIG_SYS_EXTRA_ENV_RELOC
 #define CONFIG_SYS_MMC_ENV_DEV          0
 #define CONFIG_ENV_SIZE			0x2000
 #define CONFIG_ENV_OFFSET		(512 * 1658)
 #elif defined(CONFIG_NAND)
-#define CONFIG_SYS_EXTRA_ENV_RELOC
 #define CONFIG_ENV_SIZE			CONFIG_SYS_NAND_BLOCK_SIZE
 #define CONFIG_ENV_OFFSET		(7 * CONFIG_SYS_NAND_BLOCK_SIZE)
 #else
@@ -126,8 +107,6 @@ unsigned long get_board_ddr_clk(void);
 
 #define CONFIG_SYS_MEMTEST_START	0x00200000	/* memtest works on */
 #define CONFIG_SYS_MEMTEST_END		0x00400000
-#define CONFIG_SYS_ALT_MEMTEST
-#define CONFIG_PANIC_HANG	/* do not reset board on panic */
 
 /*
  *  Config the L3 Cache as L3 SRAM
@@ -157,7 +136,6 @@ unsigned long get_board_ddr_clk(void);
 #define CONFIG_CHIP_SELECTS_PER_CTRL	(2 * CONFIG_DIMM_SLOTS_PER_CTLR)
 
 #define CONFIG_DDR_SPD
-#define CONFIG_FSL_DDR_INTERACTIVE
 
 #define CONFIG_SYS_SPD_BUS_NUM	0
 #define SPD_EEPROM_ADDRESS	0x51
@@ -232,7 +210,7 @@ unsigned long get_board_ddr_clk(void);
 				| CSPR_PORT_SIZE_8 \
 				| CSPR_MSEL_GPCM \
 				| CSPR_V)
-#define CONFIG_SYS_AMASK3	IFC_AMASK(4*1024)
+#define CONFIG_SYS_AMASK3	IFC_AMASK(64 * 1024)
 #define CONFIG_SYS_CSOR3	0x0
 /* QIXIS Timing parameters for IFC CS3 */
 #define CONFIG_SYS_CS3_FTIM0		(FTIM0_GPCM_TACSE(0x0e) | \
@@ -344,9 +322,6 @@ unsigned long get_board_ddr_clk(void);
 #define CONFIG_SYS_RAMBOOT
 #endif
 
-#define CONFIG_BOARD_EARLY_INIT_R
-#define CONFIG_MISC_INIT_R
-
 #define CONFIG_HWCONFIG
 
 /* define to use L1 as initial stack */
@@ -372,7 +347,6 @@ unsigned long get_board_ddr_clk(void);
  * open - index 2
  * shorted - index 1
  */
-#define CONFIG_CONS_INDEX	1
 #define CONFIG_SYS_NS16550_SERIAL
 #define CONFIG_SYS_NS16550_REG_SIZE	1
 #define CONFIG_SYS_NS16550_CLK		(get_bus_freq(0)/2)
@@ -437,8 +411,6 @@ unsigned long get_board_ddr_clk(void);
 /*
  * eSPI - Enhanced SPI
  */
-#define CONFIG_SF_DEFAULT_SPEED         10000000
-#define CONFIG_SF_DEFAULT_MODE          0
 
 /*
  * General PCI
@@ -500,9 +472,6 @@ unsigned long get_board_ddr_clk(void);
 /* SATA */
 #define CONFIG_FSL_SATA_V2
 #ifdef CONFIG_FSL_SATA_V2
-#define CONFIG_LIBATA
-#define CONFIG_FSL_SATA
-
 #define CONFIG_SYS_SATA_MAX_DEVICE	2
 #define CONFIG_SATA1
 #define CONFIG_SYS_SATA1		CONFIG_SYS_MPC85xx_SATA1_ADDR
@@ -527,7 +496,6 @@ unsigned long get_board_ddr_clk(void);
 #endif
 
 #ifdef CONFIG_MMC
-#define CONFIG_FSL_ESDHC
 #define CONFIG_FSL_ESDHC_USE_PERIPHERAL_CLK
 #define CONFIG_SYS_FSL_ESDHC_ADDR       CONFIG_SYS_MPC85xx_ESDHC_ADDR
 #define CONFIG_FSL_ESDHC_ADAPTER_IDENT
@@ -535,7 +503,6 @@ unsigned long get_board_ddr_clk(void);
 
 /* Qman/Bman */
 #ifndef CONFIG_NOBQFMAN
-#define CONFIG_SYS_DPAA_QBMAN		/* Support Q/Bman */
 #define CONFIG_SYS_BMAN_NUM_PORTALS	10
 #define CONFIG_SYS_BMAN_MEM_BASE	0xf4000000
 #define CONFIG_SYS_BMAN_MEM_PHYS	0xff4000000ull
@@ -565,7 +532,6 @@ unsigned long get_board_ddr_clk(void);
 #define CONFIG_SYS_DPAA_PME
 
 #define CONFIG_QE
-#define CONFIG_U_QE
 /* Default address of microcode for the Linux Fman driver */
 #if defined(CONFIG_SPIFLASH)
 /*
@@ -615,7 +581,6 @@ unsigned long get_board_ddr_clk(void);
 #define CONFIG_SYS_FM1_DTSEC3_RISER_PHY_ADDR    0x1e
 #define CONFIG_SYS_FM1_DTSEC4_RISER_PHY_ADDR    0x1f
 
-#define CONFIG_MII		/* MII PHY management */
 #define CONFIG_ETHPRIME		"FM1@DTSEC1"
 #endif
 
@@ -627,11 +592,6 @@ unsigned long get_board_ddr_clk(void);
 /*
  * Dynamic MTD Partition support with mtdparts
  */
-#ifdef CONFIG_MTD_NOR_FLASH
-#define CONFIG_MTD_DEVICE
-#define CONFIG_MTD_PARTITIONS
-#define CONFIG_FLASH_CFI_MTD
-#endif
 
 /*
  * Environment
@@ -642,9 +602,6 @@ unsigned long get_board_ddr_clk(void);
 /*
  * Miscellaneous configurable options
  */
-#define CONFIG_SYS_LONGHELP			/* undef to save memory	*/
-#define CONFIG_CMDLINE_EDITING			/* Command-line editing */
-#define CONFIG_AUTO_COMPLETE			/* add autocompletion support */
 #define CONFIG_SYS_LOAD_ADDR	0x2000000	/* default load address */
 
 /*

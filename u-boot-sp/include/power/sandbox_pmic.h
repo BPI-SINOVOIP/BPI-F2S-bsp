@@ -1,8 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  *  Copyright (C) 2015 Samsung Electronics
  *  Przemyslaw Marczak  <p.marczak@samsung.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef _SANDBOX_PMIC_H_
@@ -13,7 +12,7 @@
 #define SANDBOX_BUCK_DRIVER		"sandbox_buck"
 #define SANDBOX_OF_BUCK_PREFIX		"buck"
 
-#define SANDBOX_BUCK_COUNT	2
+#define SANDBOX_BUCK_COUNT	3
 #define SANDBOX_LDO_COUNT	2
 /*
  * Sandbox PMIC registers:
@@ -109,6 +108,9 @@ enum {
 #define SANDBOX_BUCK1_PLATNAME	"SUPPLY_1.2V"
 #define SANDBOX_BUCK2_DEVNAME	"buck2"
 #define SANDBOX_BUCK2_PLATNAME	"SUPPLY_3.3V"
+/* BUCK3: for testing fallback regulator prefix matching during bind */
+#define SANDBOX_BUCK3_DEVNAME	"no_match_by_nodename"
+#define SANDBOX_BUCK3_PLATNAME	"buck_SUPPLY_1.5V"
 /* LDO names */
 #define SANDBOX_LDO1_DEVNAME	"ldo1"
 #define SANDBOX_LDO1_PLATNAME	"VDD_EMMC_1.8V"

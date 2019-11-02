@@ -1,7 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * Copyright 2007-2011 Freescale Semiconductor, Inc.
- *
- * SPDX-License-Identifier:	GPL-2.0
  */
 
 /*
@@ -13,8 +12,6 @@
 
 /* High Level Configuration Options */
 #define CONFIG_LINUX_RESET_VEC	0x100	/* Reset vector used by Linux */
-
-#define	CONFIG_SYS_TEXT_BASE	0xfff00000
 
 /* video */
 #define CONFIG_FSL_DIU_FB
@@ -60,8 +57,6 @@
 #define CONFIG_SYS_CLK_FREQ	get_board_sys_clk(0)
 #endif
 
-#define CONFIG_MISC_INIT_R		1
-
 #define CONFIG_SYS_MEMTEST_START	0x00200000	/* memtest region */
 #define CONFIG_SYS_MEMTEST_END		0x00400000
 
@@ -77,7 +72,6 @@
 #define CONFIG_SYS_CCSRBAR_PHYS		CONFIG_SYS_CCSRBAR_PHYS_LOW
 
 /* DDR Setup */
-#undef CONFIG_FSL_DDR_INTERACTIVE
 #define CONFIG_SPD_EEPROM		/* Use SPD for DDR */
 #define CONFIG_DDR_SPD
 
@@ -171,8 +165,6 @@
 #define CONFIG_SYS_MONITOR_BASE	CONFIG_SYS_TEXT_BASE	/* start of monitor */
 #define CONFIG_SYS_MONITOR_BASE_EARLY   0xfff00000	/* early monitor loc */
 
-#define CONFIG_FLASH_CFI_DRIVER
-#define CONFIG_SYS_FLASH_CFI
 #define CONFIG_SYS_FLASH_EMPTY_INFO
 
 #if (CONFIG_SYS_MONITOR_BASE < CONFIG_SYS_FLASH_BASE)
@@ -203,7 +195,6 @@
 #define CONFIG_SYS_MALLOC_LEN		(6 * 1024 * 1024)	/* Reserved for malloc */
 
 /* Serial Port */
-#define CONFIG_CONS_INDEX	1
 #define CONFIG_SYS_NS16550_SERIAL
 #define CONFIG_SYS_NS16550_REG_SIZE	1
 #define CONFIG_SYS_NS16550_CLK		get_bus_freq(0)
@@ -263,8 +254,6 @@
 #define CONFIG_PCI_SCAN_SHOW		/* show pci devices on startup */
 
 #define CONFIG_ULI526X
-#ifdef CONFIG_ULI526X
-#endif
 
 /************************************************************
  * USB support
@@ -281,15 +270,11 @@
 #define PCI_IDSEL_NUMBER	0x0c	/* slot0->3(IDSEL)=12->15 */
 #endif
 
-#define CONFIG_SCSI_AHCI
-
 #ifdef CONFIG_SCSI_AHCI
-#define CONFIG_LIBATA
 #define CONFIG_SATA_ULI5288
 #define CONFIG_SYS_SCSI_MAX_SCSI_ID	4
 #define CONFIG_SYS_SCSI_MAX_LUN	1
 #define CONFIG_SYS_SCSI_MAX_DEVICE	(CONFIG_SYS_SCSI_MAX_SCSI_ID * CONFIG_SYS_SCSI_MAX_LUN)
-#define CONFIG_SYS_SCSI_MAXDEVICE	CONFIG_SYS_SCSI_MAX_DEVICE
 #endif
 
 #endif	/* CONFIG_PCI */
@@ -415,9 +400,6 @@
  * BOOTP options
  */
 #define CONFIG_BOOTP_BOOTFILESIZE
-#define CONFIG_BOOTP_BOOTPATH
-#define CONFIG_BOOTP_GATEWAY
-#define CONFIG_BOOTP_HOSTNAME
 
 /*
  * Command line configuration.
@@ -429,8 +411,6 @@
 /*
  * Miscellaneous configurable options
  */
-#define CONFIG_SYS_LONGHELP			/* undef to save memory	*/
-#define CONFIG_CMDLINE_EDITING          /* Command-line editing */
 #define CONFIG_SYS_LOAD_ADDR	0x2000000	/* default load address */
 
 /*
@@ -450,7 +430,7 @@
  */
 #define CONFIG_IPADDR		192.168.1.100
 
-#define CONFIG_HOSTNAME		unknown
+#define CONFIG_HOSTNAME		"unknown"
 #define CONFIG_ROOTPATH		"/opt/nfsroot"
 #define CONFIG_BOOTFILE		"uImage"
 #define CONFIG_UBOOTPATH	8610hpcd/u-boot.bin

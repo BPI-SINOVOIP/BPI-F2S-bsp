@@ -1,7 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2014-2016 Stefan Roese <sr@denx.de>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -29,6 +28,16 @@ static u32 get_boot_device(void)
 	if (boot_device == BOOTROM_ERR_MODE_UART)
 		return BOOT_DEVICE_UART;
 
+#ifdef CONFIG_ARMADA_38X
+	/*
+	 * If the bootrom error code contains any other than zeros it's an
+	 * error condition and the bootROM has fallen back to UART boot
+	 */
+	boot_device = (val & BOOTROM_ERR_CODE_MASK) >> BOOTROM_ERR_CODE_OFFS;
+	if (boot_device)
+		return BOOT_DEVICE_UART;
+#endif
+
 	/*
 	 * Now check the SAR register for the strapped boot-device
 	 */
@@ -36,6 +45,10 @@ static u32 get_boot_device(void)
 	boot_device = (val & BOOT_DEV_SEL_MASK) >> BOOT_DEV_SEL_OFFS;
 	debug("SAR_REG=0x%08x boot_device=0x%x\n", val, boot_device);
 	switch (boot_device) {
+#if defined(CONFIG_ARMADA_38X)
+	case BOOT_FROM_NAND:
+		return BOOT_DEVICE_NAND;
+#endif
 #ifdef CONFIG_SPL_MMC_SUPPORT
 	case BOOT_FROM_MMC:
 	case BOOT_FROM_MMC_ALT:
@@ -56,13 +69,6 @@ u32 spl_boot_device(void)
 {
 	return get_boot_device();
 }
-
-#ifdef CONFIG_SPL_MMC_SUPPORT
-u32 spl_boot_mode(const u32 boot_device)
-{
-	return MMCSD_MODE_RAW;
-}
-#endif
 
 void board_init_f(ulong dummy)
 {
@@ -119,7 +125,15 @@ void board_init_f(ulong dummy)
 	 * SPL has no chance to receive this information. So we
 	 * need to return to the BootROM to enable this xmodem
 	 * UART download.
+	 *
+	 * If booting from NAND lets let the BootROM load the
+	 * rest of the bootloader.
 	 */
-	if (get_boot_device() == BOOT_DEVICE_UART)
-		return_to_bootrom();
+	switch (get_boot_device()) {
+		case BOOT_DEVICE_UART:
+#if defined(CONFIG_ARMADA_38X)
+		case BOOT_DEVICE_NAND:
+#endif
+			return_to_bootrom();
+	}
 }

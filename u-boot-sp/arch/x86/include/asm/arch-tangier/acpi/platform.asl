@@ -1,9 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright (c) 2017 Intel Corporation
  *
  * Partially based on platform.asl for other x86 platforms
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <asm/acpi/statdef.asl>
@@ -20,6 +19,19 @@ Method(_PTS, 1)
 Method(_WAK, 1)
 {
     Return (Package() {0, 0})
+}
+
+Scope (_SB)
+{
+    /* Real Time Clock */
+    Device (RTC0)
+    {
+        Name (_HID, EisaId ("PNP0B00"))
+        Name (_CRS, ResourceTemplate()
+        {
+            IO(Decode16, 0x70, 0x70, 0x01, 0x08)
+        })
+    }
 }
 
 /* ACPI global NVS */

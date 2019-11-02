@@ -1,9 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright (c) 2017 Toradex, Inc.
  *
  * Configuration settings for the Toradex Apalis TK1 modules.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __CONFIG_H
@@ -15,15 +14,9 @@
 
 #define CONFIG_ARCH_MISC_INIT
 
-/* High-level configuration options */
-#define CONFIG_DISPLAY_BOARDINFO_LATE	/* Calls show_board_info() */
-
 /* Board-specific serial config */
 #define CONFIG_TEGRA_ENABLE_UARTA
 #define CONFIG_SYS_NS16550_COM1		NV_PA_APB_UARTA_BASE
-
-/* I2C */
-#define CONFIG_SYS_I2C_TEGRA
 
 /* SD/MMC support */
 #define CONFIG_SUPPORT_EMMC_BOOT	/* eMMC specific */
@@ -33,9 +26,6 @@
 					 CONFIG_TDX_CFG_BLOCK_OFFSET)
 #define CONFIG_SYS_MMC_ENV_DEV		0
 #define CONFIG_SYS_MMC_ENV_PART		1
-
-/* USB host support */
-#define CONFIG_USB_EHCI_TEGRA
 
 /* PCI host support */
 #undef CONFIG_PCI_SCAN_SHOW
@@ -53,10 +43,6 @@
 #define CONFIG_NETMASK		255.255.255.0
 #undef CONFIG_SERVERIP
 #define CONFIG_SERVERIP		192.168.10.1
-
-#define CONFIG_BOOTCOMMAND \
-	"run emmcboot; setenv fdtfile ${soc}-apalis-${fdt_board}.dtb && " \
-		"run distro_bootcmd"
 
 #define DFU_ALT_EMMC_INFO	"apalis-tk1.img raw 0x0 0x500 mmcpart 1; " \
 				"boot part 0 1 mmcpart 0; " \
@@ -86,7 +72,7 @@
 		"&& setenv dtbparam ${fdt_addr_r}\0"
 
 #define SD_BOOTCMD \
-	"sdargs=ip=off root=/dev/mmcblk1p2 rw rootfstype=ext3 rootwait\0" \
+	"sdargs=ip=off root=/dev/mmcblk1p2 rw rootfstype=ext4 rootwait\0" \
 	"sdboot=run setup; setenv bootargs ${defargs} ${sdargs} ${setupargs} " \
 		"${vidargs}; echo Booting from SD card in 8bit slot...; " \
 		"run sddtbload; load mmc 1:1 ${kernel_addr_r} " \
@@ -97,7 +83,7 @@
 		"&& setenv dtbparam ${fdt_addr_r}\0"
 
 #define USB_BOOTCMD \
-	"usbargs=ip=off root=/dev/sda2 rw rootfstype=ext3 rootwait\0" \
+	"usbargs=ip=off root=/dev/sda2 rw rootfstype=ext4 rootwait\0" \
 	"usbboot=run setup; setenv bootargs ${defargs} ${setupargs} " \
 		"${usbargs} ${vidargs}; echo Booting from USB stick...; " \
 		"usb start && run usbdtbload; load usb 0:1 ${kernel_addr_r} " \
@@ -151,7 +137,6 @@
 
 #define CONFIG_CMD_TIME
 
-#define CONFIG_SUPPORT_RAW_INITRD
 #define CONFIG_SYS_BOOT_RAMDISK_HIGH
 
 #include "tegra-common-usb-gadget.h"

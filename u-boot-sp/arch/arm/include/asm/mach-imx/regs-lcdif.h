@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Freescale i.MX28/6SX/6UL/7D LCDIF Register Definitions
  *
@@ -6,8 +7,6 @@
  *
  * Based on code from LTIB:
  * Copyright 2008-2010 Freescale Semiconductor, Inc. All Rights Reserved.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __IMX_REGS_LCDIF_H__
@@ -19,8 +18,11 @@
 struct mxs_lcdif_regs {
 	mxs_reg_32(hw_lcdif_ctrl)		/* 0x00 */
 	mxs_reg_32(hw_lcdif_ctrl1)		/* 0x10 */
-#if defined(CONFIG_MX28) || defined(CONFIG_MX6SX) || defined(CONFIG_MX6UL) || \
-	defined(CONFIG_MX7) || defined(CONFIG_MX6SL) || defined(CONFIG_MX6SLL)
+#if defined(CONFIG_MX28) || defined(CONFIG_MX6SX) || \
+	defined(CONFIG_MX6SL) || defined(CONFIG_MX6SLL) || \
+	defined(CONFIG_MX6UL) || defined(CONFIG_MX6ULL) || \
+	defined(CONFIG_MX7) || defined(CONFIG_MX7ULP) || \
+	defined(CONFIG_IMX8M)
 	mxs_reg_32(hw_lcdif_ctrl2)		/* 0x20 */
 #endif
 	mxs_reg_32(hw_lcdif_transfer_count)	/* 0x20/0x30 */
@@ -55,8 +57,11 @@ struct mxs_lcdif_regs {
 #endif
 	mxs_reg_32(hw_lcdif_data)		/* 0x1b0/0x180 */
 	mxs_reg_32(hw_lcdif_bm_error_stat)	/* 0x1c0/0x190 */
-#if defined(CONFIG_MX28) || defined(CONFIG_MX6SX) || defined(CONFIG_MX6UL) || \
-	defined(CONFIG_MX7) || defined(CONFIG_MX6SL) || defined(CONFIG_MX6SLL)
+#if defined(CONFIG_MX28) || defined(CONFIG_MX6SX) || \
+	defined(CONFIG_MX6SL) || defined(CONFIG_MX6SLL) || \
+	defined(CONFIG_MX6UL) || defined(CONFIG_MX6ULL) || \
+	defined(CONFIG_MX7) || defined(CONFIG_MX7ULP) || \
+	defined(CONFIG_IMX8M)
 	mxs_reg_32(hw_lcdif_crc_stat)		/* 0x1a0 */
 #endif
 	mxs_reg_32(hw_lcdif_lcdif_stat)		/* 0x1d0/0x1b0 */
@@ -64,8 +69,11 @@ struct mxs_lcdif_regs {
 	mxs_reg_32(hw_lcdif_debug0)		/* 0x1f0/0x1d0 */
 	mxs_reg_32(hw_lcdif_debug1)		/* 0x200/0x1e0 */
 	mxs_reg_32(hw_lcdif_debug2)		/* 0x1f0 */
-#if defined(CONFIG_MX6SX) || defined(CONFIG_MX6UL) || defined(CONFIG_MX7) || \
-	defined(CONFIG_MX6SL) || defined(CONFIG_MX6SLL)
+#if defined(CONFIG_MX6SX) || \
+	defined(CONFIG_MX6SL) || defined(CONFIG_MX6SLL) || \
+	defined(CONFIG_MX6UL) || defined(CONFIG_MX6ULL) || \
+	defined(CONFIG_MX7) || defined(CONFIG_MX7ULP) || \
+	defined(CONFIG_IMX8M)
 	mxs_reg_32(hw_lcdif_thres)
 	mxs_reg_32(hw_lcdif_as_ctrl)
 	mxs_reg_32(hw_lcdif_as_buf)

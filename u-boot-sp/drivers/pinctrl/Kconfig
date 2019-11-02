@@ -47,9 +47,9 @@ config PINMUX
 	default y
 	help
 	  This option enables pin multiplexing through the generic pinctrl
-	  framework. Most SoCs have their own own multiplexing arrangement
-	  where a single pin can be used for several functions. An SoC pinctrl
-	  driver allows the required function to be selected for each pin.
+	  framework. Most SoCs have their own multiplexing arrangement where
+	  a single pin can be used for several functions. An SoC pinctrl driver
+	  allows the required function to be selected for each pin.
 	  The driver is typically controlled by the device tree.
 
 config PINCONF
@@ -146,83 +146,13 @@ config PINCTRL_PIC32
 	  Supports individual pin selection and configuration for each
 	  remappable peripheral available on Microchip PIC32
 	  SoCs. This driver is controlled by a device tree node which
-	  contains both GPIO defintion and pin control functions.
+	  contains both GPIO definition and pin control functions.
 
 config PINCTRL_QCA953X
 	bool "QCA/Athores qca953x pin control driver"
 	depends on DM && SOC_QCA953X
 	help
 	  Support pin multiplexing control on QCA/Athores qca953x SoCs.
-
-	  The driver is controlled by a device tree node which contains both
-	  the GPIO definitions and pin control functions for each available
-	  multiplex function.
-
-config PINCTRL_ROCKCHIP_RK3036
-	bool "Rockchip rk3036 pin control driver"
-	depends on DM
-	help
-	  Support pin multiplexing control on Rockchip rk3036 SoCs.
-
-	  The driver is controlled by a device tree node which contains both
-	  the GPIO definitions and pin control functions for each available
-	  multiplex function.
-
-config PINCTRL_ROCKCHIP_RK3188
-	bool "Rockchip rk3188 pin control driver"
-	depends on DM
-	help
-	  Support pin multiplexing control on Rockchip rk3188 SoCs.
-
-	  The driver is controlled by a device tree node which contains both
-	  the GPIO definitions and pin control functions for each available
-	  multiplex function.
-
-config PINCTRL_ROCKCHIP_RK322X
-	bool "Rockchip rk322x pin control driver"
-	depends on DM
-	help
-	  Support pin multiplexing control on Rockchip rk322x SoCs.
-
-	  The driver is controlled by a device tree node which contains both
-	  the GPIO definitions and pin control functions for each available
-	  multiplex function.
-
-config PINCTRL_ROCKCHIP_RK3288
-	bool "Rockchip rk3288 pin control driver"
-	depends on DM
-	help
-	  Support pin multiplexing control on Rockchip rk3288 SoCs.
-
-	  The driver is controlled by a device tree node which contains both
-	  the GPIO definitions and pin control functions for each available
-	  multiplex function.
-
-config PINCTRL_ROCKCHIP_RK3328
-	bool "Rockchip rk3328 pin control driver"
-	depends on DM
-	help
-	  Support pin multiplexing control on Rockchip rk3328 SoCs.
-
-	  The driver is controlled by a device tree node which contains both
-	  the GPIO definitions and pin control functions for each available
-	  multiplex function.
-
-config PINCTRL_ROCKCHIP_RK3368
-	bool "Rockchip RK3368 pin control driver"
-	depends on DM
-	help
-	  Support pin multiplexing control on Rockchip rk3368 SoCs.
-
-	  The driver is controlled by a device tree node which contains both
-	  the GPIO definitions and pin control functions for each available
-	  multiplex function.
-
-config PINCTRL_ROCKCHIP_RK3399
-	bool "Rockchip rk3399 pin control driver"
-	depends on DM
-	help
-	  Support pin multiplexing control on Rockchip rk3399 SoCs.
 
 	  The driver is controlled by a device tree node which contains both
 	  the GPIO definitions and pin control functions for each available
@@ -290,12 +220,15 @@ config ASPEED_AST2500_PINCTRL
 
 endif
 
+source "drivers/pinctrl/broadcom/Kconfig"
+source "drivers/pinctrl/exynos/Kconfig"
+source "drivers/pinctrl/mediatek/Kconfig"
 source "drivers/pinctrl/meson/Kconfig"
+source "drivers/pinctrl/mscc/Kconfig"
+source "drivers/pinctrl/mvebu/Kconfig"
 source "drivers/pinctrl/nxp/Kconfig"
 source "drivers/pinctrl/renesas/Kconfig"
+source "drivers/pinctrl/rockchip/Kconfig"
 source "drivers/pinctrl/uniphier/Kconfig"
-source "drivers/pinctrl/exynos/Kconfig"
-source "drivers/pinctrl/mvebu/Kconfig"
-source "drivers/pinctrl/sunplus/Kconfig"
 
 endmenu

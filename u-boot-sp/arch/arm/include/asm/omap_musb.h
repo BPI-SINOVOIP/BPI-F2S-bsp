@@ -1,13 +1,13 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Board data structure for musb gadget on OMAPs
  *
  * Copyright (C) 2012, Ilya Yanok <ilya.yanok@gmail.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __ASM_ARM_OMAP_MUSB_H
 #define __ASM_ARM_OMAP_MUSB_H
+#include <linux/usb/musb.h>
 
 extern struct musb_platform_ops musb_dsps_ops;
 extern const struct musb_platform_ops am35x_ops;
@@ -22,4 +22,11 @@ struct omap_musb_board_data {
 };
 
 enum musb_interface    {MUSB_INTERFACE_ULPI, MUSB_INTERFACE_UTMI};
+
+struct ti_musb_platdata {
+	void *base;
+	void *ctrl_mod_base;
+	struct musb_hdrc_platform_data plat;
+};
+
 #endif /* __ASM_ARM_OMAP_MUSB_H */

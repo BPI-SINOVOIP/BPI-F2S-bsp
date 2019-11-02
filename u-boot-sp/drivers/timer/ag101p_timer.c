@@ -1,18 +1,15 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Andestech ATFTMR010 timer driver
  *
  * (C) Copyright 2016
  * Rick Chen, NDS32 Software Engineering, rick@andestech.com
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 #include <common.h>
 #include <dm.h>
 #include <errno.h>
 #include <timer.h>
 #include <linux/io.h>
-
-DECLARE_GLOBAL_DATA_PTR;
 
 /*
  * Timer Control Register
@@ -118,5 +115,4 @@ U_BOOT_DRIVER(altera_timer) = {
 	.platdata_auto_alloc_size = sizeof(struct atftmr_timer_platdata),
 	.probe = atftmr_timer_probe,
 	.ops	= &ag101p_timer_ops,
-	.flags = DM_FLAG_PRE_RELOC,
 };

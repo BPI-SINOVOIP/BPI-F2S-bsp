@@ -1,9 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright 2017 NXP
  * Copyright 2014-2015 Freescale Semiconductor, Inc.
  * Layerscape PCIe driver
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -12,7 +11,7 @@
 #include <asm/io.h>
 #include <errno.h>
 #ifdef CONFIG_OF_BOARD_SETUP
-#include <libfdt.h>
+#include <linux/libfdt.h>
 #include <fdt_support.h>
 #ifdef CONFIG_ARM
 #include <asm/arch/clock.h>
@@ -219,7 +218,7 @@ static void fdt_fixup_pcie(void *blob)
 }
 #endif
 
-static void ft_pcie_ls_setup(void *blob, struct ls_pcie *pcie)
+static void ft_pcie_rc_fix(void *blob, struct ls_pcie *pcie)
 {
 	int off;
 	uint svr;
@@ -244,10 +243,31 @@ static void ft_pcie_ls_setup(void *blob, struct ls_pcie *pcie)
 			return;
 	}
 
-	if (pcie->enabled)
+	if (pcie->enabled && pcie->mode == PCI_HEADER_TYPE_BRIDGE)
 		fdt_set_node_status(blob, off, FDT_STATUS_OKAY, 0);
 	else
 		fdt_set_node_status(blob, off, FDT_STATUS_DISABLED, 0);
+}
+
+static void ft_pcie_ep_fix(void *blob, struct ls_pcie *pcie)
+{
+	int off;
+
+	off = fdt_node_offset_by_compat_reg(blob, "fsl,ls-pcie-ep",
+					    pcie->dbi_res.start);
+	if (off < 0)
+		return;
+
+	if (pcie->enabled && pcie->mode == PCI_HEADER_TYPE_NORMAL)
+		fdt_set_node_status(blob, off, FDT_STATUS_OKAY, 0);
+	else
+		fdt_set_node_status(blob, off, FDT_STATUS_DISABLED, 0);
+}
+
+static void ft_pcie_ls_setup(void *blob, struct ls_pcie *pcie)
+{
+	ft_pcie_ep_fix(blob, pcie);
+	ft_pcie_rc_fix(blob, pcie);
 }
 
 /* Fixup Kernel DT for PCIe */

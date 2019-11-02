@@ -1,9 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2015  Thomas Chou <thomas@wytron.com.tw>
  * Copyright (C) 2011  Missing Link Electronics
  *                     Joachim Foerster <joachim@missinglinkelectronics.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 #include <common.h>
 #include <dm.h>
@@ -57,7 +56,7 @@ static int altera_pio_get_value(struct udevice *dev, unsigned pin)
 	struct altera_pio_platdata *plat = dev_get_platdata(dev);
 	struct altera_pio_regs *const regs = plat->regs;
 
-	return readl(&regs->data) & (1 << pin);
+	return !!(readl(&regs->data) & (1 << pin));
 }
 
 

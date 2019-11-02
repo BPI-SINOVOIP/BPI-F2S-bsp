@@ -1,7 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2017 Álvaro Fernández Rojas <noltari@gmail.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 /dts-v1/;
@@ -18,6 +17,42 @@
 
 	chosen {
 		stdout-path = "serial0:115200n8";
+	};
+};
+
+&ehci {
+	status = "okay";
+};
+
+&enet {
+	status = "okay";
+
+	port@0 {
+		compatible = "brcm,enetsw-port";
+		reg = <0>;
+		label = "fe1";
+		brcm,phy-id = <1>;
+	};
+
+	port@1 {
+		compatible = "brcm,enetsw-port";
+		reg = <1>;
+		label = "fe2";
+		brcm,phy-id = <2>;
+	};
+
+	port@2 {
+		compatible = "brcm,enetsw-port";
+		reg = <2>;
+		label = "fe3";
+		brcm,phy-id = <3>;
+	};
+
+	port@3 {
+		compatible = "brcm,enetsw-port";
+		reg = <3>;
+		label = "fe4";
+		brcm,phy-id = <4>;
 	};
 };
 
@@ -51,7 +86,27 @@
 	};
 };
 
+&ohci {
+	status = "okay";
+};
+
+&spi {
+	status = "okay";
+
+	spi-flash@0 {
+		compatible = "spi-flash";
+		reg = <0>;
+		#address-cells = <1>;
+		#size-cells = <1>;
+		spi-max-frequency = <33333334>;
+	};
+};
+
 &uart0 {
 	u-boot,dm-pre-reloc;
+	status = "okay";
+};
+
+&usbh {
 	status = "okay";
 };

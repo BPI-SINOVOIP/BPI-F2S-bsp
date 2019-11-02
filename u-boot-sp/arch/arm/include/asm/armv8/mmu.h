@@ -1,12 +1,13 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * (C) Copyright 2013
  * David Feng <fenghua@phytium.com.cn>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef _ASM_ARMV8_MMU_H_
 #define _ASM_ARMV8_MMU_H_
+
+#include <linux/const.h>
 
 /*
  * block/section address mask and size definitions.
@@ -43,6 +44,7 @@
 #define PTE_TYPE_MASK		(3 << 0)
 #define PTE_TYPE_FAULT		(0 << 0)
 #define PTE_TYPE_TABLE		(3 << 0)
+#define PTE_TYPE_PAGE		(3 << 0)
 #define PTE_TYPE_BLOCK		(1 << 0)
 #define PTE_TYPE_VALID		(1 << 0)
 

@@ -1,10 +1,9 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * (C) Copyright 2014 Google, Inc
  * Copyright (C) 1991, 1992, 1993  Linus Torvalds
  *
  * Parts of this copied from Linux arch/x86/boot/compressed/head_64.S
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <asm/global_data.h>
@@ -79,6 +78,10 @@ lret_target:
 	pop	%eax			/* target */
 	mov	%eax, %eax		/* Clear bits 63:32 */
 	jmp	*%eax			/* Jump to the 64-bit target */
+
+.globl call64_stub_size
+call64_stub_size:
+	.long	. - cpu_call64
 
 	.data
 	.align	16

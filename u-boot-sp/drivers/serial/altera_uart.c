@@ -1,8 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2004, Psyent Corporation <www.psyent.com>
  * Scott McNutt <smcnutt@psyent.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -118,7 +117,6 @@ U_BOOT_DRIVER(altera_uart) = {
 	.platdata_auto_alloc_size = sizeof(struct altera_uart_platdata),
 	.probe = altera_uart_probe,
 	.ops	= &altera_uart_ops,
-	.flags = DM_FLAG_PRE_RELOC,
 };
 
 #ifdef CONFIG_DEBUG_UART_ALTERA_UART

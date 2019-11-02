@@ -1,9 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright (c) 2017 Intel Corporation
  *
  * Partially based on southcluster.asl for other x86 platforms
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 Device (PCI0)
@@ -173,13 +172,16 @@ Device (PCI0)
         Name (RBUF, ResourceTemplate()
         {
             GpioIo(Exclusive, PullUp, 0, 0, IoRestrictionOutputOnly,
-                "\\_SB.PCI0.GPIO", 0, ResourceConsumer, , ) { 91 }
+                "\\_SB.PCI0.GPIO", 0, ResourceConsumer, , ) { 110 }
             GpioIo(Exclusive, PullUp, 0, 0, IoRestrictionOutputOnly,
-                "\\_SB.PCI0.GPIO", 0, ResourceConsumer, , ) { 92 }
+                "\\_SB.PCI0.GPIO", 0, ResourceConsumer, , ) { 111 }
             GpioIo(Exclusive, PullUp, 0, 0, IoRestrictionOutputOnly,
-                "\\_SB.PCI0.GPIO", 0, ResourceConsumer, , ) { 93 }
+                "\\_SB.PCI0.GPIO", 0, ResourceConsumer, , ) { 112 }
             GpioIo(Exclusive, PullUp, 0, 0, IoRestrictionOutputOnly,
-                "\\_SB.PCI0.GPIO", 0, ResourceConsumer, , ) { 94 }
+                "\\_SB.PCI0.GPIO", 0, ResourceConsumer, , ) { 113 }
+
+            FixedDMA(0x000d, 0x0002, Width32bit, )
+            FixedDMA(0x000c, 0x0003, Width32bit, )
         })
 
         Method (_CRS, 0, NotSerialized)
@@ -220,6 +222,27 @@ Device (PCI0)
         {
             Return (STA_VISIBLE)
         }
+
+        Name (RBUF, ResourceTemplate()
+        {
+            FixedDMA(0x0009, 0x0000, Width32bit, )
+            FixedDMA(0x0008, 0x0001, Width32bit, )
+        })
+
+        Method (_CRS, 0, NotSerialized)
+        {
+            Return (RBUF)
+        }
+    }
+
+    Device (I2C6)
+    {
+        Name (_ADR, 0x00090001)
+
+        Method (_STA, 0, NotSerialized)
+        {
+            Return (STA_VISIBLE)
+        }
     }
 
     Device (GPIO)
@@ -245,7 +268,7 @@ Device (PCI0)
         {
             Connection (
                 GpioIo(Exclusive, PullDefault, 0, 0, IoRestrictionOutputOnly,
-                    "\\_SB.PCI0.GPIO", 0, ResourceConsumer, , ) { 56 }
+                    "\\_SB.PCI0.GPIO", 0, ResourceConsumer, , ) { 96 }
             ),
             WFD3, 1,
         }
@@ -260,15 +283,153 @@ Device (PCI0)
             Return (STA_VISIBLE)
         }
     }
+
+    Device (HSU0)
+    {
+        Name (_ADR, 0x00040001)
+
+        Method (_STA, 0, NotSerialized)
+        {
+            Return (STA_VISIBLE)
+        }
+
+        Device (BTH0)
+        {
+            Name (_HID, "BCM2E95")
+            Name (_DEP, Package ()
+            {
+                GPIO,
+                HSU0
+            })
+
+            Method (_STA, 0, NotSerialized)
+            {
+                Return (STA_VISIBLE)
+            }
+
+            Method (_CRS, 0, Serialized)
+            {
+                Name (RBUF, ResourceTemplate()
+                {
+                    UartSerialBus(0x0001C200, DataBitsEight, StopBitsOne,
+                        0xFC, LittleEndian, ParityTypeNone, FlowControlHardware,
+                        0x20, 0x20, "\\_SB.PCI0.HSU0", 0, ResourceConsumer, , )
+                    GpioInt(Level, ActiveHigh, Exclusive, PullNone, 0,
+                        "\\_SB.PCI0.GPIO", 0, ResourceConsumer, , ) { 185 }
+                    GpioIo(Exclusive, PullDefault, 0, 0, IoRestrictionOutputOnly,
+                        "\\_SB.PCI0.GPIO", 0, ResourceConsumer, , ) { 184 }
+                    GpioIo(Exclusive, PullDefault, 0, 0, IoRestrictionOutputOnly,
+                        "\\_SB.PCI0.GPIO", 0, ResourceConsumer, , ) { 71 }
+                })
+                Return (RBUF)
+            }
+
+            Name (_DSD, Package () {
+                ToUUID("daffd814-6eba-4d8c-8a91-bc9bbf4aa301"),
+                Package () {
+                    Package () { "host-wakeup-gpios", Package () { ^BTH0, 0, 0, 0 } },
+                    Package () { "device-wakeup-gpios", Package () { ^BTH0, 1, 0, 0 } },
+                    Package () { "shutdown-gpios", Package () { ^BTH0, 2, 0, 0 } },
+                }
+            })
+        }
+    }
+
+    Device (IPC1)
+    {
+        Name (_ADR, 0x00130000)
+
+        Method (_STA, 0, NotSerialized)
+        {
+            Return (STA_VISIBLE)
+        }
+
+        Device (PMIC)
+        {
+            Name (_ADR, Zero)
+            Name (_HID, "INTC100E")
+            Name (_CID, "INTC100E")
+            Name (_DDN, "Basin Cove PMIC")
+            Name (_DEP, Package ()
+            {
+                IPC1
+            })
+
+            Method (_STA, 0, NotSerialized)
+            {
+                Return (STA_VISIBLE)
+            }
+
+            Method (_CRS, 0, Serialized)
+            {
+                Name (RBUF, ResourceTemplate()
+                {
+                    /*
+		     * Shadow registers in SRAM for PMIC:
+		     *   SRAM	PMIC register
+		     *   --------------------
+		     *   0x00-	Unknown
+		     *   0x03	THRMIRQ (0x04)
+		     *   0x04	BCUIRQ (0x05)
+		     *   0x05	ADCIRQ (0x06)
+		     *   0x06	CHGRIRQ0 (0x07)
+		     *   0x07	CHGRIRQ1 (0x08)
+		     *   0x08-	Unknown
+		     *   0x0a	PBSTATUS (0x27)
+		     *   0x0b-	Unknown
+		     */
+                    Memory32Fixed(ReadWrite, 0xFFFFF610, 0x00000010)
+                    Interrupt(ResourceConsumer, Level, ActiveHigh, Shared, ,, ) { 30 }
+                    Interrupt(ResourceConsumer, Level, ActiveHigh, Shared, ,, ) { 23 }
+                    Interrupt(ResourceConsumer, Level, ActiveHigh, Shared, ,, ) { 52 }
+                    Interrupt(ResourceConsumer, Level, ActiveHigh, Shared, ,, ) { 51 }
+                    Interrupt(ResourceConsumer, Level, ActiveHigh, Shared, ,, ) { 50 }
+                    Interrupt(ResourceConsumer, Level, ActiveHigh, Shared, ,, ) { 27 }
+                    Interrupt(ResourceConsumer, Level, ActiveHigh, Shared, ,, ) { 49 }
+                })
+                Return (RBUF)
+            }
+
+            OperationRegion (PMOP, 0x8D, Zero, 0x0100)
+            Field (PMOP, DWordAcc, NoLock, Preserve)
+            {
+                SEL1,   32,
+                SEL2,   32,
+                VCCL,   32,
+                VNNL,   32,
+                AONL,   32,
+                CNTC,   32,
+                CNTN,   32,
+                AONN,   32,
+                CNT1,   32,
+                CNT2,   32,
+                CNT3,   32,
+                FLEX,   32,
+                PRG1,   32,
+                PRG2,   32,
+                PRG3,   32,
+                VLDO,   32,
+            }
+
+            Name (AVBL, Zero)
+            Method (_REG, 2, NotSerialized)
+            {
+                If ((Arg0 == 0x8D))
+                {
+                    AVBL = Arg1
+                }
+            }
+        }
+    }
 }
 
 Device (FLIS)
 {
-    Name (_HID, "PRP0001")
+    Name (_HID, "INTC1002")
     Name (_DDN, "Intel Merrifield Family-Level Interface Shim")
     Name (RBUF, ResourceTemplate()
     {
-        Memory32Fixed(ReadWrite, 0xFF0C0000, 0x00008000, )
+        Memory32Fixed(ReadWrite, 0xFF0C0000, 0x00008000)
         PinGroup("spi5", ResourceProducer, ) { 90, 91, 92, 93, 94, 95, 96 }
         PinGroup("uart0", ResourceProducer, ) { 115, 116, 117, 118 }
         PinGroup("uart1", ResourceProducer, ) { 119, 120, 121, 122 }
@@ -283,13 +444,6 @@ Device (FLIS)
     {
         Return (RBUF)
     }
-
-    Name (_DSD, Package () {
-        ToUUID("daffd814-6eba-4d8c-8a91-bc9bbf4aa301"),
-        Package () {
-            Package () {"compatible", "intel,merrifield-pinctrl"},
-        }
-    })
 
     Method (_STA, 0, NotSerialized)
     {

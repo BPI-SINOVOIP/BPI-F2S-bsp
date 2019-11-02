@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * brxre1.h
  *
@@ -5,8 +6,6 @@
  *
  * Copyright (C) 2013 Hannes Schmelzer <oe5hpm@oevsv.at> -
  * Bernecker & Rainer Industrieelektronik GmbH - http://www.br-automation.com
- *
- * SPDX-License-Identifier:        GPL-2.0+
  */
 
 #ifndef __CONFIG_BRXRE1_H__
@@ -25,17 +24,7 @@
 #define V_OSCK				26000000  /* Clock output from T2 */
 #define V_SCLK				(V_OSCK)
 
-#define CONFIG_POWER_TPS65217
-
 #define CONFIG_MACH_TYPE		3589
-/* I2C IP block */
-#define CONFIG_SYS_OMAP24_I2C_SPEED_PSOC	20000
-
-/* MMC/SD IP block */
-#define CONFIG_SUPPORT_EMMC_BOOT
-
-/* Always 64 KiB env size */
-#define CONFIG_ENV_SIZE			(64 << 10)
 
 #ifndef CONFIG_SPL_BUILD
 
@@ -80,16 +69,12 @@ BUR_COMMON_ENV \
 #define CONFIG_INITRD_TAG
 
 /* USB configuration */
-#define CONFIG_USB_MUSB_DSPS
-#define CONFIG_USB_MUSB_PIO_ONLY
 #define CONFIG_USB_MUSB_DISABLE_BULK_COMBINE_SPLIT
-#define CONFIG_AM335X_USB0
-#define CONFIG_AM335X_USB0_MODE	MUSB_HOST
-#define CONFIG_AM335X_USB1
-#define CONFIG_AM335X_USB1_MODE	MUSB_HOST
 
+/* Environment */
 #define CONFIG_SYS_MMC_ENV_DEV		1
 #define CONFIG_SYS_MMC_ENV_PART		2
+#define CONFIG_ENV_SIZE			0x10000
 #define CONFIG_ENV_OFFSET		0x40000	/* TODO: Adresse definieren */
 #define CONFIG_ENV_OFFSET_REDUND	(CONFIG_ENV_OFFSET + CONFIG_ENV_SIZE)
 #define CONFIG_SYS_REDUNDAND_ENVIRONMENT

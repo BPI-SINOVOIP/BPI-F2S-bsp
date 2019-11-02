@@ -1,7 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2016 Synopsys, Inc. All rights reserved.
- *
- * SPDX-License-Identifier: GPL-2.0+
  */
 
 #include <common.h>
@@ -108,6 +107,5 @@ U_BOOT_DRIVER(arc_timer) = {
 	.of_match = arc_timer_ids,
 	.probe = arc_timer_probe,
 	.ops	= &arc_timer_ops,
-	.flags = DM_FLAG_PRE_RELOC,
 	.priv_auto_alloc_size = sizeof(struct arc_timer_priv),
 };

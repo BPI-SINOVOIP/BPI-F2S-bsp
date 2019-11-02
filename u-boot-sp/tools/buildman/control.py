@@ -1,6 +1,5 @@
+# SPDX-License-Identifier: GPL-2.0+
 # Copyright (c) 2013 The Chromium OS Authors.
-#
-# SPDX-License-Identifier:	GPL-2.0+
 #
 
 import multiprocessing
@@ -42,7 +41,8 @@ def GetActionSummary(is_summary, commits, selected, options):
             GetPlural(options.threads), options.jobs, GetPlural(options.jobs))
     return str
 
-def ShowActions(series, why_selected, boards_selected, builder, options):
+def ShowActions(series, why_selected, boards_selected, builder, options,
+                board_warnings):
     """Display a list of actions that we would take, if not a dry run.
 
     Args:
@@ -56,6 +56,7 @@ def ShowActions(series, why_selected, boards_selected, builder, options):
                 value is Board object
         builder: The builder that will be used to build the commits
         options: Command line options object
+        board_warnings: List of warnings obtained from board selected
     """
     col = terminal.Color()
     print 'Dry run, so not doing much. But I would do this:'
@@ -80,6 +81,31 @@ def ShowActions(series, why_selected, boards_selected, builder, options):
                 print '   %s' % ' '.join(why_selected[arg])
     print ('Total boards to build for each commit: %d\n' %
             len(why_selected['all']))
+    if board_warnings:
+        for warning in board_warnings:
+            print col.Color(col.YELLOW, warning)
+
+def CheckOutputDir(output_dir):
+    """Make sure that the output directory is not within the current directory
+
+    If we try to use an output directory which is within the current directory
+    (which is assumed to hold the U-Boot source) we may end up deleting the
+    U-Boot source code. Detect this and print an error in this case.
+
+    Args:
+        output_dir: Output directory path to check
+    """
+    path = os.path.realpath(output_dir)
+    cwd_path = os.path.realpath('.')
+    while True:
+        if os.path.realpath(path) == cwd_path:
+            Print("Cannot use output directory '%s' since it is within the current directory '%s'" %
+                  (path, cwd_path))
+            sys.exit(1)
+        parent = os.path.dirname(path)
+        if parent == path:
+            break
+        path = parent
 
 def DoBuildman(options, args, toolchains=None, make_func=None, boards=None,
                clean_dir=False):
@@ -115,7 +141,7 @@ def DoBuildman(options, args, toolchains=None, make_func=None, boards=None,
 
     no_toolchains = toolchains is None
     if no_toolchains:
-        toolchains = toolchain.Toolchains()
+        toolchains = toolchain.Toolchains(options.override_toolchain)
 
     if options.fetch_arch:
         if options.fetch_arch == 'list':
@@ -138,7 +164,7 @@ def DoBuildman(options, args, toolchains=None, make_func=None, boards=None,
 
     if no_toolchains:
         toolchains.GetSettings()
-        toolchains.Scan(options.list_tool_chains)
+        toolchains.Scan(options.list_tool_chains and options.verbose)
     if options.list_tool_chains:
         toolchains.List()
         print
@@ -189,7 +215,15 @@ def DoBuildman(options, args, toolchains=None, make_func=None, boards=None,
         for arg in options.exclude:
             exclude += arg.split(',')
 
-    why_selected = boards.SelectBoards(args, exclude)
+
+    if options.boards:
+        requested_boards = []
+        for b in options.boards:
+            requested_boards += b.split(',')
+    else:
+        requested_boards = None
+    why_selected, board_warnings = boards.SelectBoards(args, exclude,
+                                                       requested_boards)
     selected = boards.GetSelected()
     if not len(selected):
         sys.exit(col.Color(col.RED, 'No matching boards found'))
@@ -252,9 +286,9 @@ def DoBuildman(options, args, toolchains=None, make_func=None, boards=None,
         # output directory itself rather than any subdirectory.
         if not options.no_subdirs:
             output_dir = os.path.join(options.output_dir, dirname)
-    if (clean_dir and output_dir != options.output_dir and
-            os.path.exists(output_dir)):
-        shutil.rmtree(output_dir)
+        if clean_dir and os.path.exists(output_dir):
+            shutil.rmtree(output_dir)
+    CheckOutputDir(output_dir)
     builder = Builder(toolchains, output_dir, options.git_dir,
             options.threads, options.jobs, gnu_make=gnu_make, checkout=True,
             show_unknown=options.show_unknown, step=options.step,
@@ -263,14 +297,16 @@ def DoBuildman(options, args, toolchains=None, make_func=None, boards=None,
             incremental=options.incremental,
             per_board_out_dir=options.per_board_out_dir,
             config_only=options.config_only,
-            squash_config_y=not options.preserve_config_y)
+            squash_config_y=not options.preserve_config_y,
+            warnings_as_errors=options.warnings_as_errors)
     builder.force_config_on_failure = not options.quick
     if make_func:
         builder.do_make = make_func
 
     # For a dry run, just show our actions as a sanity check
     if options.dry_run:
-        ShowActions(series, why_selected, selected, builder, options)
+        ShowActions(series, why_selected, selected, builder, options,
+                    board_warnings)
     else:
         builder.force_build = options.force_build
         builder.force_build_failures = options.force_build_failures
@@ -297,7 +333,8 @@ def DoBuildman(options, args, toolchains=None, make_func=None, boards=None,
         builder.SetDisplayOptions(options.show_errors, options.show_sizes,
                                   options.show_detail, options.show_bloat,
                                   options.list_error_boards,
-                                  options.show_config)
+                                  options.show_config,
+                                  options.show_environment)
         if options.summary:
             builder.ShowSummary(commits, board_selected)
         else:

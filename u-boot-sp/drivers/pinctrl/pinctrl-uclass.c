@@ -1,17 +1,17 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2015  Masahiro Yamada <yamada.masahiro@socionext.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
-#include <libfdt.h>
+#include <linux/libfdt.h>
 #include <linux/err.h>
 #include <linux/list.h>
 #include <dm.h>
 #include <dm/lists.h>
 #include <dm/pinctrl.h>
 #include <dm/util.h>
+#include <dm/of_access.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -25,6 +25,28 @@ int pinctrl_decode_pin_config(const void *blob, int node)
 		flags |= 1 << PIN_CONFIG_BIAS_PULL_DOWN;
 
 	return flags;
+}
+
+/*
+ * TODO: this function is temporary for v2019.01.
+ * It should be renamed to pinctrl_decode_pin_config(),
+ * the original pinctrl_decode_pin_config() function should
+ * be removed and all callers of the original function should
+ * be migrated to use the new one.
+ */
+int pinctrl_decode_pin_config_dm(struct udevice *dev)
+{
+	int pinconfig = 0;
+
+	if (dev->uclass->uc_drv->id != UCLASS_PINCONFIG)
+		return -EINVAL;
+
+	if (dev_read_bool(dev, "bias-pull-up"))
+		pinconfig |= 1 << PIN_CONFIG_BIAS_PULL_UP;
+	else if (dev_read_bool(dev, "bias-pull-down"))
+		pinconfig |= 1 << PIN_CONFIG_BIAS_PULL_DOWN;
+
+	return pinconfig;
 }
 
 #if CONFIG_IS_ENABLED(PINCTRL_FULL)
@@ -63,16 +85,13 @@ static int pinctrl_config_one(struct udevice *config)
  */
 static int pinctrl_select_state_full(struct udevice *dev, const char *statename)
 {
-	const void *fdt = gd->fdt_blob;
-	int node = dev_of_offset(dev);
 	char propname[32]; /* long enough */
 	const fdt32_t *list;
 	uint32_t phandle;
-	int config_node;
 	struct udevice *config;
 	int state, size, i, ret;
 
-	state = fdt_stringlist_search(fdt, node, "pinctrl-names", statename);
+	state = dev_read_stringlist_search(dev, "pinctrl-names", statename);
 	if (state < 0) {
 		char *end;
 		/*
@@ -85,22 +104,15 @@ static int pinctrl_select_state_full(struct udevice *dev, const char *statename)
 	}
 
 	snprintf(propname, sizeof(propname), "pinctrl-%d", state);
-	list = fdt_getprop(fdt, node, propname, &size);
+	list = dev_read_prop(dev, propname, &size);
 	if (!list)
 		return -EINVAL;
 
 	size /= sizeof(*list);
 	for (i = 0; i < size; i++) {
 		phandle = fdt32_to_cpu(*list++);
-
-		config_node = fdt_node_offset_by_phandle(fdt, phandle);
-		if (config_node < 0) {
-			dev_err(dev, "prop %s index %d invalid phandle\n",
-				propname, i);
-			return -EINVAL;
-		}
-		ret = uclass_get_device_by_of_offset(UCLASS_PINCONFIG,
-						     config_node, &config);
+		ret = uclass_get_device_by_phandle_id(UCLASS_PINCONFIG, phandle,
+						      &config);
 		if (ret)
 			return ret;
 
@@ -209,6 +221,12 @@ static int pinctrl_select_state_simple(struct udevice *dev)
 int pinctrl_select_state(struct udevice *dev, const char *statename)
 {
 	/*
+	 * Some device which is logical like mmc.blk, do not have
+	 * a valid ofnode.
+	 */
+	if (!ofnode_valid(dev->node))
+		return 0;
+	/*
 	 * Try full-implemented pinctrl first.
 	 * If it fails or is not implemented, try simple one.
 	 */
@@ -251,6 +269,40 @@ int pinctrl_get_gpio_mux(struct udevice *dev, int banknum, int index)
 		return -ENOSYS;
 
 	return ops->get_gpio_mux(dev, banknum, index);
+}
+
+int pinctrl_get_pins_count(struct udevice *dev)
+{
+	struct pinctrl_ops *ops = pinctrl_get_ops(dev);
+
+	if (!ops->get_pins_count)
+		return -ENOSYS;
+
+	return ops->get_pins_count(dev);
+}
+
+int pinctrl_get_pin_name(struct udevice *dev, int selector, char *buf,
+			 int size)
+{
+	struct pinctrl_ops *ops = pinctrl_get_ops(dev);
+
+	if (!ops->get_pin_name)
+		return -ENOSYS;
+
+	snprintf(buf, size, ops->get_pin_name(dev, selector));
+
+	return 0;
+}
+
+int pinctrl_get_pin_muxing(struct udevice *dev, int selector, char *buf,
+			   int size)
+{
+	struct pinctrl_ops *ops = pinctrl_get_ops(dev);
+
+	if (!ops->get_pin_muxing)
+		return -ENOSYS;
+
+	return ops->get_pin_muxing(dev, selector, buf, size);
 }
 
 /**

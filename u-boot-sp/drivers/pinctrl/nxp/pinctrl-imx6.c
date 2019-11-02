@@ -1,8 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0+
 
 /*
  * Copyright (C) 2016 Peng Fan <van.freenix@gmail.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -12,6 +11,11 @@
 #include "pinctrl-imx.h"
 
 static struct imx_pinctrl_soc_info imx6_pinctrl_soc_info;
+
+/* FIXME Before reloaction, BSS is overlapped with DT area */
+static struct imx_pinctrl_soc_info imx6ul_pinctrl_soc_info = {
+	.flags = ZERO_OFFSET_VALID,
+};
 
 static struct imx_pinctrl_soc_info imx6_snvs_pinctrl_soc_info = {
 	.flags = ZERO_OFFSET_VALID,
@@ -32,7 +36,7 @@ static const struct udevice_id imx6_pinctrl_match[] = {
 	{ .compatible = "fsl,imx6sll-iomuxc-snvs", .data = (ulong)&imx6_snvs_pinctrl_soc_info },
 	{ .compatible = "fsl,imx6sll-iomuxc", .data = (ulong)&imx6_pinctrl_soc_info },
 	{ .compatible = "fsl,imx6sx-iomuxc", .data = (ulong)&imx6_pinctrl_soc_info },
-	{ .compatible = "fsl,imx6ul-iomuxc", .data = (ulong)&imx6_pinctrl_soc_info },
+	{ .compatible = "fsl,imx6ul-iomuxc", .data = (ulong)&imx6ul_pinctrl_soc_info },
 	{ .compatible = "fsl,imx6ull-iomuxc-snvs", .data = (ulong)&imx6_snvs_pinctrl_soc_info },
 	{ /* sentinel */ }
 };
@@ -45,5 +49,7 @@ U_BOOT_DRIVER(imx6_pinctrl) = {
 	.remove = imx_pinctrl_remove,
 	.priv_auto_alloc_size = sizeof(struct imx_pinctrl_priv),
 	.ops = &imx_pinctrl_ops,
+#if !CONFIG_IS_ENABLED(OF_CONTROL)
 	.flags = DM_FLAG_PRE_RELOC,
+#endif
 };

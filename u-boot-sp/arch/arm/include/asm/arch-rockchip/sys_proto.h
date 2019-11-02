@@ -1,7 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * (C) Copyright 2016 Rockchip Electronics Co.,Ltd
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef _ASM_ARCH_SYS_PROTO_H
@@ -29,5 +28,8 @@ static void configure_l2ctlr(void)
 	write_l2ctlr(l2ctlr);
 }
 #endif /* CONFIG_ROCKCHIP_RK3288 */
+
+/* provided to defeat compiler optimisation in board_init_f() */
+void gru_dummy_function(int i);
 
 #endif /* _ASM_ARCH_SYS_PROTO_H */

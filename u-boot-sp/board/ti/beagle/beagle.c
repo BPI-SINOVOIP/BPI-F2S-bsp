@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2004-2011
  * Texas Instruments, <www.ti.com>
@@ -10,8 +11,6 @@
  *	Richard Woodruff <r-woodruff2@ti.com>
  *	Syed Mohammed Khasim <khasim@ti.com>
  *
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 #include <common.h>
 #include <dm.h>
@@ -20,7 +19,7 @@
 #include <status_led.h>
 #endif
 #include <twl4030.h>
-#include <linux/mtd/nand.h>
+#include <linux/mtd/rawnand.h>
 #include <asm/io.h>
 #include <asm/arch/mmc_host_def.h>
 #include <asm/arch/mux.h>
@@ -72,18 +71,6 @@ static struct {
 	char env_setting[64];
 } expansion_config;
 
-static const struct ns16550_platdata beagle_serial = {
-	.base = OMAP34XX_UART3,
-	.reg_shift = 2,
-	.clock = V_NS16550_CLK,
-	.fcr = UART_FCR_DEFVAL,
-};
-
-U_BOOT_DEVICE(beagle_uart) = {
-	"ns16550_serial",
-	&beagle_serial
-};
-
 /*
  * Routine: board_init
  * Description: Early hardware init.
@@ -102,6 +89,17 @@ int board_init(void)
 
 	return 0;
 }
+
+#if defined(CONFIG_SPL_OS_BOOT)
+int spl_start_uboot(void)
+{
+	/* break into full u-boot on 'c' */
+	if (serial_tstc() && serial_getc() == 'c')
+		return 1;
+
+	return 0;
+}
+#endif /* CONFIG_SPL_OS_BOOT */
 
 /*
  * Routine: get_board_revision
@@ -509,6 +507,14 @@ int misc_init_r(void)
 
 	if (generate_fake_mac)
 		omap_die_id_usbethaddr();
+
+#if defined(CONFIG_MTDIDS_DEFAULT) && defined(CONFIG_MTDPARTS_DEFAULT)
+	if (strlen(CONFIG_MTDIDS_DEFAULT))
+		env_set("mtdids", CONFIG_MTDIDS_DEFAULT);
+
+	if (strlen(CONFIG_MTDPARTS_DEFAULT))
+		env_set("mtdparts", CONFIG_MTDPARTS_DEFAULT);
+#endif
 
 	return 0;
 }

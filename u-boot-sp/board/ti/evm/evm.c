@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2004-2011
  * Texas Instruments, <www.ti.com>
@@ -8,8 +9,6 @@
  * Derived from Beagle Board and 3430 SDP code by
  *	Richard Woodruff <r-woodruff2@ti.com>
  *	Syed Mohammed Khasim <khasim@ti.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 #include <common.h>
 #include <dm.h>
@@ -25,7 +24,7 @@
 #include <twl4030.h>
 #include <asm/mach-types.h>
 #include <asm/omap_musb.h>
-#include <linux/mtd/nand.h>
+#include <linux/mtd/rawnand.h>
 #include <linux/usb/ch9.h>
 #include <linux/usb/gadget.h>
 #include <linux/usb/musb.h>
@@ -40,18 +39,6 @@
 #define OMAP3EVM_GPIO_ETH_RST_GEN2 7
 
 DECLARE_GLOBAL_DATA_PTR;
-
-static const struct ns16550_platdata omap3_evm_serial = {
-	.base = OMAP34XX_UART1,
-	.reg_shift = 2,
-	.clock = V_NS16550_CLK,
-	.fcr = UART_FCR_DEFVAL,
-};
-
-U_BOOT_DEVICE(omap3_evm_uart) = {
-	"ns16550_serial",
-	&omap3_evm_serial
-};
 
 static u32 omap3_evm_version;
 
@@ -299,26 +286,12 @@ static void reset_net_chip(void)
 
 int board_eth_init(bd_t *bis)
 {
-	int rc = 0;
 #if defined(CONFIG_SMC911X)
-#define STR_ENV_ETHADDR	"ethaddr"
-
-	struct eth_device *dev;
-	uchar eth_addr[6];
-
-	rc = smc911x_initialize(0, CONFIG_SMC911X_BASE);
-
-	if (!eth_env_get_enetaddr(STR_ENV_ETHADDR, eth_addr)) {
-		dev = eth_get_dev_by_index(0);
-		if (dev) {
-			eth_env_set_enetaddr(STR_ENV_ETHADDR, dev->enetaddr);
-		} else {
-			printf("omap3evm: Couldn't get eth device\n");
-			rc = -1;
-		}
-	}
-#endif /* CONFIG_SMC911X */
-	return rc;
+	env_set("ethaddr", NULL);
+	return smc911x_initialize(0, CONFIG_SMC911X_BASE);
+#else
+	return 0;
+#endif
 }
 #endif /* CONFIG_CMD_NET */
 

@@ -1,7 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2016 Rockchip Electronics Co., Ltd
- *
- * SPDX-License-Identifier:     GPL-2.0+
  */
 
 /dts-v1/;
@@ -17,6 +16,8 @@
 
 	chosen {
 		stdout-path = &uart2;
+		u-boot,spl-boot-order = \
+			&sdhci, &sdmmc;
 	};
 
 	vdd_center: vdd-center {
@@ -154,6 +155,7 @@
 };
 
 &sdmmc {
+	u-boot,dm-pre-reloc;
 	bus-width = <4>;
 	status = "okay";
 };
@@ -276,7 +278,7 @@
 	assigned-clock-parents = <&clkin_gmac>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&rgmii_pins>;
-	tx_delay = <0x10>;
-	rx_delay = <0x10>;
+	tx_delay = <0x28>;
+	rx_delay = <0x11>;
 	status = "okay";
 };

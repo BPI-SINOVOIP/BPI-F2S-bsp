@@ -1,8 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2002
  * Gerald Van Baren, Custom IDEAS, vanbaren@cideas.com
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 /*
@@ -21,13 +20,6 @@
 
 #ifndef MAX_SPI_BYTES
 #   define MAX_SPI_BYTES 32	/* Maximum number of bytes we can handle */
-#endif
-
-#ifndef CONFIG_DEFAULT_SPI_BUS
-#   define CONFIG_DEFAULT_SPI_BUS	0
-#endif
-#ifndef CONFIG_DEFAULT_SPI_MODE
-#   define CONFIG_DEFAULT_SPI_MODE	SPI_MODE_0
 #endif
 
 /*

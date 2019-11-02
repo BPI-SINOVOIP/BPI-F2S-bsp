@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2015 Hans de Goede <hdegoede@redhat.com>
  *
@@ -5,8 +6,6 @@
  *
  * The axp152 & axp209 use an i2c bus, the axp221 uses the p2wi bus and the
  * axp223 uses the rsb bus, these functions abstract this.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -102,6 +101,9 @@ int pmic_bus_setbits(u8 reg, u8 bits)
 	if (ret)
 		return ret;
 
+	if ((val & bits) == bits)
+		return 0;
+
 	val |= bits;
 	return pmic_bus_write(reg, val);
 }
@@ -114,6 +116,9 @@ int pmic_bus_clrbits(u8 reg, u8 bits)
 	ret = pmic_bus_read(reg, &val);
 	if (ret)
 		return ret;
+
+	if (!(val & bits))
+		return 0;
 
 	val &= ~bits;
 	return pmic_bus_write(reg, val);

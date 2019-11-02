@@ -1,9 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2015 - 2016 Xilinx, Inc.
  * Copyright (C) 2017 National Instruments Corp
  * Written by Michal Simek
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -18,7 +17,8 @@ DECLARE_GLOBAL_DATA_PTR;
 enum pca_type {
 	PCA9544,
 	PCA9547,
-	PCA9548
+	PCA9548,
+	PCA9646
 };
 
 struct chip_desc {
@@ -51,6 +51,11 @@ static const struct chip_desc chips[] = {
 		.enable = 0x8,
 		.muxtype = pca954x_isswi,
 		.width = 8,
+	},
+	[PCA9646] = {
+		.enable = 0x0,
+		.muxtype = pca954x_isswi,
+		.width = 4,
 	},
 };
 
@@ -87,6 +92,7 @@ static const struct udevice_id pca954x_ids[] = {
 	{ .compatible = "nxp,pca9544", .data = PCA9544 },
 	{ .compatible = "nxp,pca9547", .data = PCA9547 },
 	{ .compatible = "nxp,pca9548", .data = PCA9548 },
+	{ .compatible = "nxp,pca9646", .data = PCA9646 },
 	{ }
 };
 
@@ -95,7 +101,7 @@ static int pca954x_ofdata_to_platdata(struct udevice *dev)
 	struct pca954x_priv *priv = dev_get_priv(dev);
 	const struct chip_desc *chip = &chips[dev_get_driver_data(dev)];
 
-	priv->addr = fdtdec_get_int(gd->fdt_blob, dev_of_offset(dev), "reg", 0);
+	priv->addr = dev_read_u32_default(dev, "reg", 0);
 	if (!priv->addr) {
 		debug("MUX not found\n");
 		return -ENODEV;

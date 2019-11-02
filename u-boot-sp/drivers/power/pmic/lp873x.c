@@ -1,8 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2016 Texas Instruments Incorporated, <www.ti.com>
  * Keerthy <j-keerthy@ti.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -15,8 +14,6 @@
 #include <power/lp873x.h>
 #include <dm/device.h>
 
-DECLARE_GLOBAL_DATA_PTR;
-
 static const struct pmic_child_info pmic_children_info[] = {
 	{ .prefix = "ldo", .driver = LP873X_LDO_DRIVER },
 	{ .prefix = "buck", .driver = LP873X_BUCK_DRIVER },
@@ -27,7 +24,7 @@ static int lp873x_write(struct udevice *dev, uint reg, const uint8_t *buff,
 			  int len)
 {
 	if (dm_i2c_write(dev, reg, buff, len)) {
-		pr_err("write error to device: %p register: %#x!", dev, reg);
+		pr_err("write error to device: %p register: %#x!\n", dev, reg);
 		return -EIO;
 	}
 
@@ -37,7 +34,7 @@ static int lp873x_write(struct udevice *dev, uint reg, const uint8_t *buff,
 static int lp873x_read(struct udevice *dev, uint reg, uint8_t *buff, int len)
 {
 	if (dm_i2c_read(dev, reg, buff, len)) {
-		pr_err("read error from device: %p register: %#x!", dev, reg);
+		pr_err("read error from device: %p register: %#x!\n", dev, reg);
 		return -EIO;
 	}
 
@@ -51,7 +48,7 @@ static int lp873x_bind(struct udevice *dev)
 
 	regulators_node = dev_read_subnode(dev, "regulators");
 	if (!ofnode_valid(regulators_node)) {
-		debug("%s: %s regulators subnode not found!", __func__,
+		debug("%s: %s regulators subnode not found!\n", __func__,
 		      dev->name);
 		return -ENXIO;
 	}

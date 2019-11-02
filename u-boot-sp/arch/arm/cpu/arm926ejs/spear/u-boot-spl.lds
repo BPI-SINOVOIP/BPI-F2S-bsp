@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright (C) 2015 Stefan Roese <sr@denx.de>
  *
@@ -9,12 +10,10 @@
  *
  * (C) Copyright 2002
  * Gary Jennejohn, DENX Software Engineering, <garyj@denx.de>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
-MEMORY { .sram : ORIGIN = CONFIG_SPL_TEXT_BASE,\
-		LENGTH = CONFIG_SPL_MAX_SIZE }
+MEMORY { .sram : ORIGIN = IMAGE_TEXT_BASE,\
+		LENGTH = IMAGE_MAX_SIZE }
 
 OUTPUT_FORMAT("elf32-littlearm", "elf32-littlearm", "elf32-littlearm")
 OUTPUT_ARCH(arm)

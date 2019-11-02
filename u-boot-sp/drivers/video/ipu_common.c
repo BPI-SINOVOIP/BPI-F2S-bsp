@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Porting to u-boot:
  *
@@ -7,8 +8,6 @@
  * Linux IPU driver for MX51:
  *
  * (C) Copyright 2005-2010 Freescale Semiconductor, Inc.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 /* #define DEBUG */
@@ -132,8 +131,12 @@ struct clk *clk_get_parent(struct clk *clk)
 
 int clk_set_rate(struct clk *clk, unsigned long rate)
 {
-	if (clk && clk->set_rate)
+	if (!clk)
+		return 0;
+
+	if (clk->set_rate)
 		clk->set_rate(clk, rate);
+
 	return clk->rate;
 }
 

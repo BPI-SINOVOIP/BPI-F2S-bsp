@@ -1,12 +1,11 @@
+# SPDX-License-Identifier: GPL-2.0+
 #
 # (C) Copyright 2000-2006
 # Wolfgang Denk, DENX Software Engineering, wd@denx.de.
-#
-# SPDX-License-Identifier:	GPL-2.0+
-#
 
 # Enable all the config-independent tools
 ifneq ($(HOST_TOOLS_ALL),)
+CONFIG_KIRKWOOD = y
 CONFIG_LCD_LOGO = y
 CONFIG_CMD_LOADS = y
 CONFIG_CMD_NET = y
@@ -57,22 +56,20 @@ mkenvimage-objs := mkenvimage.o os_support.o lib/crc32.o
 hostprogs-y += dumpimage mkimage
 hostprogs-$(CONFIG_FIT_SIGNATURE) += fit_info fit_check_sign
 
+hostprogs-$(CONFIG_CMD_BOOTEFI_SELFTEST) += file2include
+
 FIT_SIG_OBJS-$(CONFIG_FIT_SIGNATURE) := common/image-sig.o
-# Flattened device tree objects
-LIBFDT_CSRCS := fdt.c fdt_ro.c fdt_wip.c fdt_sw.c fdt_rw.c fdt_strerror.c  \
-			fdt_empty_tree.c fdt_addresses.c fdt_overlay.c \
-			fdt_region.c
 
-# Unfortunately setup.py below cannot handle srctree being ".." which it often
-# is. It fails with an error like:
-# Fatal error: can't create build/temp.linux-x86_64-2.7/../lib/libfdt/fdt.o:
-#    No such file or directory
-# To fix this, use an absolute path.
-libfdt_tree := $(shell readlink -f $(srctree)/lib/libfdt)
+# The following files are synced with upstream DTC.
+# Use synced versions from scripts/dtc/libfdt/.
+LIBFDT_SRCS_SYNCED := fdt.c fdt_wip.c fdt_sw.c fdt_rw.c \
+		fdt_strerror.c fdt_empty_tree.c fdt_addresses.c fdt_overlay.c
+# The following files are locally modified for U-Boot (unfotunately).
+# Use U-Boot own versions from lib/libfdt/.
+LIBFDT_SRCS_UNSYNCED := fdt_ro.c fdt_region.c
 
-LIBFDT_SRCS := $(addprefix $(libfdt_tree)/, $(LIBFDT_CSRCS))
-LIBFDT_SWIG := $(addprefix $(libfdt_tree)/, pylibfdt/libfdt.i)
-LIBFDT_OBJS := $(addprefix lib/libfdt/, $(patsubst %.c, %.o, $(LIBFDT_CSRCS)))
+LIBFDT_OBJS := $(addprefix libfdt/, $(patsubst %.c, %.o, $(LIBFDT_SRCS_SYNCED))) \
+	       $(addprefix lib/libfdt/, $(patsubst %.c, %.o, $(LIBFDT_SRCS_UNSYNCED)))
 
 RSA_OBJS-$(CONFIG_FIT_SIGNATURE) := $(addprefix lib/rsa/, \
 					rsa-sign.o rsa-verify.o rsa-checksum.o \
@@ -96,6 +93,8 @@ dumpimage-mkimage-objs := aisimage.o \
 			common/image.o \
 			imagetool.o \
 			imximage.o \
+			imx8image.o \
+			imx8mimage.o \
 			kwbimage.o \
 			lib/md5.o \
 			lpc32xximage.o \
@@ -104,44 +103,31 @@ dumpimage-mkimage-objs := aisimage.o \
 			os_support.o \
 			pblimage.o \
 			pbl_crc32.o \
-			qkboot_image.o \
 			vybridimage.o \
+			stm32image.o \
 			$(ROCKCHIP_OBS) \
 			socfpgaimage.o \
+			lib/crc16.o \
 			lib/sha1.o \
 			lib/sha256.o \
 			common/hash.o \
 			ublimage.o \
 			zynqimage.o \
 			zynqmpimage.o \
+			zynqmpbif.o \
 			$(LIBFDT_OBJS) \
 			gpimage.o \
 			gpimage-common.o \
+			mtk_image.o \
 			$(RSA_OBJS-y)
 
 dumpimage-objs := $(dumpimage-mkimage-objs) dumpimage.o
 mkimage-objs   := $(dumpimage-mkimage-objs) mkimage.o
 fit_info-objs   := $(dumpimage-mkimage-objs) fit_info.o
 fit_check_sign-objs   := $(dumpimage-mkimage-objs) fit_check_sign.o
+file2include-objs := file2include.o
 
-# Unfortunately setup.py (or actually the Python distutil implementation)
-# puts files into the same directory as the .i file. We cannot touch the source
-# directory, so we copy the .i file into the tools/ build subdirectory before
-# calling setup. This directory is safe to write to. This ensures that we get
-# all three files in $(obj)/tools: _libfdt.so, libfdt.py and libfdt_wrap.c
-# The latter is a temporary file which we could actually remove.
-tools/_libfdt.so: $(LIBFDT_SRCS) $(LIBFDT_SWIG)
-	$(Q)cp $(LIBFDT_SWIG) tools/.
-	$(Q)unset CC; \
-	unset CROSS_COMPILE; \
-	LDFLAGS="$(HOSTLDFLAGS)" CFLAGS= VERSION="u-boot-$(UBOOTVERSION)" \
-		CPPFLAGS="$(_hostc_flags)" OBJDIR=tools \
-		SOURCES="$(LIBFDT_SRCS) tools/libfdt.i" \
-		SWIG_OPTS="-I$(srctree)/lib/libfdt -I$(srctree)/lib" \
-		$(PYTHON) $(libfdt_tree)/pylibfdt/setup.py --quiet build_ext \
-			--build-lib tools
-
-ifneq ($(CONFIG_MX23)$(CONFIG_MX28),)
+ifneq ($(CONFIG_MX23)$(CONFIG_MX28)$(CONFIG_FIT_SIGNATURE),)
 # Add CONFIG_MXS into host CFLAGS, so we can check whether or not register
 # the mxsimage support within tools/mxsimage.c .
 HOSTCFLAGS_mxsimage.o += -DCONFIG_MXS
@@ -151,6 +137,7 @@ ifdef CONFIG_FIT_SIGNATURE
 # This affects include/image.h, but including the board config file
 # is tricky, so manually define this options here.
 HOST_EXTRACFLAGS	+= -DCONFIG_FIT_SIGNATURE
+HOST_EXTRACFLAGS	+= -DCONFIG_FIT_SIGNATURE_MAX_SIZE=$(CONFIG_FIT_SIGNATURE_MAX_SIZE)
 endif
 
 ifdef CONFIG_SYS_U_BOOT_OFFS
@@ -207,6 +194,7 @@ hostprogs-$(CONFIG_KIRKWOOD) += kwboot
 hostprogs-$(CONFIG_ARCH_MVEBU) += kwboot
 hostprogs-y += proftool
 hostprogs-$(CONFIG_STATIC_RELA) += relocate-rela
+hostprogs-$(CONFIG_RISCV) += prelink-riscv
 
 hostprogs-y += fdtgrep
 fdtgrep-objs += $(LIBFDT_OBJS) fdtgrep.o
@@ -231,10 +219,6 @@ $(obj)/lib/%.c $(obj)/common/%.c $(obj)/env/%.c:
 clean-dirs := lib common
 
 always := $(hostprogs-y)
-
-# Build a libfdt Python module if swig is available
-# Use 'sudo apt-get install swig libpython-dev' to enable this
-always += $(if $(shell which swig 2> /dev/null),_libfdt.so)
 
 # Generated LCD/video logo
 LOGO_H = $(objtree)/include/bmp_logo.h
@@ -264,13 +248,14 @@ endif # !LOGO_BMP
 # Define __KERNEL_STRICT_NAMES to prevent typedef overlaps
 # Define _GNU_SOURCE to obtain the getline prototype from stdio.h
 #
-HOST_EXTRACFLAGS += -include $(srctree)/include/libfdt_env.h \
+HOST_EXTRACFLAGS += -include $(srctree)/include/compiler.h \
 		$(patsubst -I%,-idirafter%, $(filter -I%, $(UBOOTINCLUDE))) \
-		-I$(srctree)/lib/libfdt \
+		-I$(srctree)/scripts/dtc/libfdt \
 		-I$(srctree)/tools \
 		-DUSE_HOSTCC \
 		-D__KERNEL_STRICT_NAMES \
-		-D_GNU_SOURCE
+		-D_GNU_SOURCE \
+		-std=gnu99
 
 __build:	$(LOGO-y)
 

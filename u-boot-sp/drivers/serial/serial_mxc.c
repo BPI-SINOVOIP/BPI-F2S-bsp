@@ -1,7 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (c) 2007 Sascha Hauer <s.hauer@pengutronix.de>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -139,12 +138,17 @@ struct mxc_uart {
 	u32 ts;
 };
 
-static void _mxc_serial_init(struct mxc_uart *base)
+static void _mxc_serial_init(struct mxc_uart *base, int use_dte)
 {
 	writel(0, &base->cr1);
 	writel(0, &base->cr2);
 
 	while (!(readl(&base->cr2) & UCR2_SRST));
+
+	if (use_dte)
+		writel(0x404 | UCR3_ADNIMP, &base->cr3);
+	else
+		writel(0x704 | UCR3_ADNIMP, &base->cr3);
 
 	writel(0x704 | UCR3_ADNIMP, &base->cr3);
 	writel(0x8000, &base->cr4);
@@ -174,7 +178,7 @@ static void _mxc_serial_setbrg(struct mxc_uart *base, unsigned long clk,
 	writel(UCR1_UARTEN, &base->cr1);
 }
 
-#ifndef CONFIG_DM_SERIAL
+#if !CONFIG_IS_ENABLED(DM_SERIAL)
 
 #ifndef CONFIG_MXC_UART_BASE
 #error "define CONFIG_MXC_UART_BASE to use the MXC UART driver"
@@ -227,7 +231,7 @@ static int mxc_serial_tstc(void)
  */
 static int mxc_serial_init(void)
 {
-	_mxc_serial_init(mxc_base);
+	_mxc_serial_init(mxc_base, false);
 
 	serial_setbrg();
 
@@ -256,7 +260,7 @@ __weak struct serial_device *default_serial_console(void)
 }
 #endif
 
-#ifdef CONFIG_DM_SERIAL
+#if CONFIG_IS_ENABLED(DM_SERIAL)
 
 int mxc_serial_setbrg(struct udevice *dev, int baudrate)
 {
@@ -272,7 +276,7 @@ static int mxc_serial_probe(struct udevice *dev)
 {
 	struct mxc_serial_platdata *plat = dev->platdata;
 
-	_mxc_serial_init(plat->reg);
+	_mxc_serial_init(plat->reg, plat->use_dte);
 
 	return 0;
 }
@@ -340,6 +344,7 @@ static int mxc_serial_ofdata_to_platdata(struct udevice *dev)
 static const struct udevice_id mxc_serial_ids[] = {
 	{ .compatible = "fsl,imx6ul-uart" },
 	{ .compatible = "fsl,imx7d-uart" },
+	{ .compatible = "fsl,imx6q-uart" },
 	{ }
 };
 #endif
@@ -354,7 +359,9 @@ U_BOOT_DRIVER(serial_mxc) = {
 #endif
 	.probe = mxc_serial_probe,
 	.ops	= &mxc_serial_ops,
+#if !CONFIG_IS_ENABLED(OF_CONTROL)
 	.flags = DM_FLAG_PRE_RELOC,
+#endif
 };
 #endif
 
@@ -365,7 +372,7 @@ static inline void _debug_uart_init(void)
 {
 	struct mxc_uart *base = (struct mxc_uart *)CONFIG_DEBUG_UART_BASE;
 
-	_mxc_serial_init(base);
+	_mxc_serial_init(base, false);
 	_mxc_serial_setbrg(base, CONFIG_DEBUG_UART_CLOCK,
 			   CONFIG_BAUDRATE, false);
 }

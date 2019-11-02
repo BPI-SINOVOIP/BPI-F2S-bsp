@@ -1,9 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright 2014 Freescale Semiconductor, Inc.
  *
  * Configuration settings for the Freescale i.MX6SX Sabresd board.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __CONFIG_H
@@ -57,9 +56,9 @@
 	"videomode=video=ctfb:x:800,y:480,depth:24,pclk:29850,le:89,ri:164,up:23,lo:10,hs:10,vs:10,sync:0,vmode:0\0" \
 	"mmcdev=2\0" \
 	"mmcpart=1\0" \
-	"mmcroot=/dev/mmcblk0p2 rootwait rw\0" \
+	"finduuid=part uuid mmc 2:2 uuid\0" \
 	"mmcargs=setenv bootargs console=${console},${baudrate} " \
-		"root=${mmcroot}\0" \
+		"root=PARTUUID=${uuid} rootwait rw\0" \
 	"loadbootscript=" \
 		"fatload mmc ${mmcdev}:${mmcpart} ${loadaddr} ${script};\0" \
 	"bootscript=echo Running bootscript from mmc ...; " \
@@ -67,6 +66,7 @@
 	"loadimage=fatload mmc ${mmcdev}:${mmcpart} ${loadaddr} ${image}\0" \
 	"loadfdt=fatload mmc ${mmcdev}:${mmcpart} ${fdt_addr} ${fdt_file}\0" \
 	"mmcboot=echo Booting from mmc ...; " \
+		"run finduuid; " \
 		"run mmcargs; " \
 		"if test ${boot_fdt} = yes || test ${boot_fdt} = try; then " \
 			"if run loadfdt; then " \
@@ -104,10 +104,13 @@
 			"fi; " \
 		"else " \
 			"bootz; " \
-		"fi;\0"
+		"fi;\0" \
+	"findfdt="\
+		"if test test $board_rev = REVA ; then " \
+			"setenv fdt_file imx6sx-sdb-reva.dtb; fi; " \
 
 #define CONFIG_BOOTCOMMAND \
-	   "mmc dev ${mmcdev};" \
+	   "run findfdt; " \
 	   "mmc dev ${mmcdev}; if mmc rescan; then " \
 		   "if run loadbootscript; then " \
 			   "run bootscript; " \
@@ -124,7 +127,6 @@
 #define CONFIG_SYS_MEMTEST_END		(CONFIG_SYS_MEMTEST_START + 0x10000)
 
 /* Physical Memory Map */
-#define CONFIG_NR_DRAM_BANKS		1
 #define PHYS_SDRAM			MMDC0_ARB_BASE_ADDR
 
 #define CONFIG_SYS_SDRAM_BASE		PHYS_SDRAM
@@ -140,22 +142,14 @@
 #define CONFIG_SYS_FSL_ESDHC_ADDR	USDHC4_BASE_ADDR
 
 /* I2C Configs */
-#define CONFIG_SYS_I2C
 #define CONFIG_SYS_I2C_MXC
 #define CONFIG_SYS_I2C_MXC_I2C1		/* enable I2C bus 1 */
 #define CONFIG_SYS_I2C_MXC_I2C2		/* enable I2C bus 2 */
 #define CONFIG_SYS_I2C_MXC_I2C3		/* enable I2C bus 3 */
 #define CONFIG_SYS_I2C_SPEED		  100000
 
-/* PMIC */
-#define CONFIG_POWER
-#define CONFIG_POWER_I2C
-#define CONFIG_POWER_PFUZE100
-#define CONFIG_POWER_PFUZE100_I2C_ADDR	0x08
-
 /* Network */
 #define CONFIG_FEC_MXC
-#define CONFIG_MII
 
 #define IMX_FEC_BASE			ENET_BASE_ADDR
 #define CONFIG_FEC_MXC_PHYADDR          0x1
@@ -205,7 +199,7 @@
 #endif
 #endif
 
-#define CONFIG_ENV_OFFSET		(8 * SZ_64K)
+#define CONFIG_ENV_OFFSET		(14 * SZ_64K)
 #define CONFIG_ENV_SIZE			SZ_8K
 
 #define CONFIG_SYS_FSL_USDHC_NUM	3

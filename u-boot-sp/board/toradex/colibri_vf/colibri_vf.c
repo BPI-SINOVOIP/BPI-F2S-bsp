@@ -1,10 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright 2015 Toradex, Inc.
  *
  * Based on vf610twr.c:
  * Copyright 2013 Freescale Semiconductor, Inc.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -39,18 +38,11 @@ DECLARE_GLOBAL_DATA_PTR;
 #define ENET_PAD_CTRL	(PAD_CTL_PUS_47K_UP | PAD_CTL_SPEED_HIGH | \
 			PAD_CTL_DSE_50ohm | PAD_CTL_OBE_IBE_ENABLE)
 
-#define USB_PEN_GPIO           83
+#define USB_PEN_GPIO		83
 #define USB_CDET_GPIO		102
+#define PTC0_GPIO_45		45
 
 static struct ddrmc_cr_setting colibri_vf_cr_settings[] = {
-	/* levelling */
-	{ DDRMC_CR97_WRLVL_EN, 97 },
-	{ DDRMC_CR98_WRLVL_DL_0(0), 98 },
-	{ DDRMC_CR99_WRLVL_DL_1(0), 99 },
-	{ DDRMC_CR102_RDLVL_REG_EN | DDRMC_CR102_RDLVL_GT_REGEN, 102 },
-	{ DDRMC_CR105_RDLVL_DL_0(0), 105 },
-	{ DDRMC_CR106_RDLVL_GTDL_0(4), 106 },
-	{ DDRMC_CR110_RDLVL_DL_1(0) | DDRMC_CR110_RDLVL_GTDL_1(4), 110 },
 	/* AXI */
 	{ DDRMC_CR117_AXI0_W_PRI(0) | DDRMC_CR117_AXI0_R_PRI(0), 117 },
 	{ DDRMC_CR118_AXI1_W_PRI(1) | DDRMC_CR118_AXI1_R_PRI(1), 118 },
@@ -89,7 +81,7 @@ static struct ddrmc_cr_setting colibri_vf_cr_settings[] = {
 		   DDRMC_CR154_PAD_ZQ_MODE(1) |
 		   DDRMC_CR154_DDR_SEL_PAD_CONTR(3) |
 		   DDRMC_CR154_PAD_ZQ_HW_FOR(1), 154 },
-	{ DDRMC_CR155_PAD_ODT_BYTE1(1) | DDRMC_CR155_PAD_ODT_BYTE0(1), 155 },
+	{ DDRMC_CR155_PAD_ODT_BYTE1(2) | DDRMC_CR155_PAD_ODT_BYTE0(2), 155 },
 	{ DDRMC_CR158_TWR(6), 158 },
 	{ DDRMC_CR161_ODT_EN(1) | DDRMC_CR161_TODTH_RD(2) |
 		   DDRMC_CR161_TODTH_WR(2), 161 },
@@ -581,7 +573,7 @@ int ft_board_setup(void *blob, bd_t *bd)
 {
 	int ret = 0;
 #ifdef CONFIG_FDT_FIXUP_PARTITIONS
-	static struct node_info nodes[] = {
+	static const struct node_info nodes[] = {
 		{ "fsl,vf610-nfc", MTD_DEV_TYPE_NAND, }, /* NAND flash */
 	};
 
@@ -641,3 +633,12 @@ int board_usb_phy_mode(int port)
 	}
 }
 #endif
+
+/*
+ * Backlight off before OS handover
+ */
+void board_preboot_os(void)
+{
+	gpio_request(PTC0_GPIO_45, "BL_ON");
+	gpio_direction_output(PTC0_GPIO_45, 0);
+}

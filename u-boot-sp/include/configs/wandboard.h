@@ -1,19 +1,16 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright (C) 2013 Freescale Semiconductor, Inc.
  *
  * Configuration settings for the Wandboard.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __CONFIG_H
 #define __CONFIG_H
 
-#include <config_distro_defaults.h>
 #include "mx6_common.h"
 
 #include "imx6_spl.h"
-#define CONFIG_DISPLAY_BOARDINFO_LATE
 
 #define CONFIG_MACH_TYPE		MACH_TYPE_WANDBOARD_IMX6
 
@@ -26,12 +23,10 @@
 /* SATA Configs */
 
 #ifdef CONFIG_CMD_SATA
-#define CONFIG_DWC_AHSATA
 #define CONFIG_SYS_SATA_MAX_DEVICE	1
 #define CONFIG_DWC_AHSATA_PORT_ID	0
 #define CONFIG_DWC_AHSATA_BASE_ADDR	SATA_ARB_BASE_ADDR
 #define CONFIG_LBA48
-#define CONFIG_LIBATA
 #endif
 
 #define CONFIG_SYS_MEMTEST_START	0x10000000
@@ -62,7 +57,6 @@
 
 /* Ethernet Configuration */
 #define CONFIG_FEC_MXC
-#define CONFIG_MII
 #define IMX_FEC_BASE			ENET_BASE_ADDR
 #define CONFIG_FEC_XCV_TYPE		RGMII
 #define CONFIG_ETHPRIME			"FEC"
@@ -82,9 +76,8 @@
 #define CONFIG_IMX_VIDEO_SKIP
 #endif
 
-#define CONFIG_ENV_VARS_UBOOT_RUNTIME_CONFIG
 #define CONFIG_EXTRA_ENV_SETTINGS \
-	"console=ttymxc0,115200\0" \
+	"console=ttymxc0\0" \
 	"splashpos=m,m\0" \
 	"fdtfile=undefined\0" \
 	"fdt_high=0xffffffff\0" \
@@ -140,15 +133,9 @@
 	func(PXE, pxe, na) \
 	func(DHCP, dhcp, na)
 
-#define CONFIG_BOOTCOMMAND \
-	   "run findfdt; " \
-	   "run finduuid; " \
-	   "run distro_bootcmd"
-
 #include <config_distro_bootcmd.h>
 
 /* Physical Memory Map */
-#define CONFIG_NR_DRAM_BANKS		1
 #define PHYS_SDRAM			MMDC0_ARB_BASE_ADDR
 
 #define CONFIG_SYS_SDRAM_BASE		PHYS_SDRAM

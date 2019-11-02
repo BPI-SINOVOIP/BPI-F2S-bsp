@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2008-2011
  * Graeme Russ, <graeme.russ@gmail.com>
@@ -7,8 +8,6 @@
  *
  * Portions of this file are derived from the Linux kernel source
  *  Copyright (C) 1991, 1992  Linus Torvalds
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -265,7 +264,9 @@ int interrupt_init(void)
 	i8259_init();
 #endif
 
+#ifdef CONFIG_APIC
 	lapic_setup();
+#endif
 
 	/* Initialize core interrupt and exception functionality of CPU */
 	cpu_init_interrupts();

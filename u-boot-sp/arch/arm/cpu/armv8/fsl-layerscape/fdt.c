@@ -1,12 +1,11 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright 2014-2015 Freescale Semiconductor, Inc.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
 #include <efi_loader.h>
-#include <libfdt.h>
+#include <linux/libfdt.h>
 #include <fdt_support.h>
 #include <phy.h>
 #ifdef CONFIG_FSL_LSCH3
@@ -26,6 +25,8 @@
 #ifdef CONFIG_ARMV8_SEC_FIRMWARE_SUPPORT
 #include <asm/armv8/sec_firmware.h>
 #endif
+#include <asm/arch/speed.h>
+#include <fsl_qbman.h>
 
 int fdt_fixup_phy_connection(void *blob, int offset, phy_interface_t phyc)
 {
@@ -42,6 +43,33 @@ void ft_fixup_cpu(void *blob)
 	int addr_cells;
 	u64 val, core_id;
 	size_t *boot_code_size = &(__secondary_boot_code_size);
+	u32 mask = cpu_pos_mask();
+	int off_prev = -1;
+
+	off = fdt_path_offset(blob, "/cpus");
+	if (off < 0) {
+		puts("couldn't find /cpus node\n");
+		return;
+	}
+
+	fdt_support_default_count_cells(blob, off, &addr_cells, NULL);
+
+	off = fdt_node_offset_by_prop_value(blob, off_prev, "device_type",
+					    "cpu", 4);
+	while (off != -FDT_ERR_NOTFOUND) {
+		reg = (fdt32_t *)fdt_getprop(blob, off, "reg", 0);
+		if (reg) {
+			core_id = fdt_read_number(reg, addr_cells);
+			if (!test_bit(id_to_core(core_id), &mask)) {
+				fdt_del_node(blob, off);
+				off = off_prev;
+			}
+		}
+		off_prev = off;
+		off = fdt_node_offset_by_prop_value(blob, off_prev,
+						    "device_type", "cpu", 4);
+	}
+
 #if defined(CONFIG_ARMV8_SEC_FIRMWARE_SUPPORT) && \
 	defined(CONFIG_SEC_FIRMWARE_ARMV8_PSCI)
 	int node;
@@ -107,7 +135,7 @@ remove_psci_node:
 
 	fdt_add_mem_rsv(blob, (uintptr_t)&secondary_boot_code,
 			*boot_code_size);
-#if defined(CONFIG_EFI_LOADER) && !defined(CONFIG_SPL_BUILD)
+#if CONFIG_IS_ENABLED(EFI_LOADER)
 	efi_add_memory_map((uintptr_t)&secondary_boot_code,
 			   ALIGN(*boot_code_size, EFI_PAGE_SIZE) >> EFI_PAGE_SHIFT,
 			   EFI_RESERVED_MEMORY_TYPE, false);
@@ -145,7 +173,7 @@ static void fdt_fixup_gic(void *blob)
 
 	val = gur_in32(&gur->svr);
 
-	if (SVR_SOC_VER(val) != SVR_LS1043A) {
+	if (!IS_SVR_DEV(val, SVR_DEV(SVR_LS1043A))) {
 		align_64k = 1;
 	} else if (SVR_REV(val) != REV1_0) {
 		val = scfg_in32(&scfg->gic_align) & (0x01 << GIC_ADDR_BIT);
@@ -299,7 +327,7 @@ static int _fdt_fixup_pci_msi(void *blob, const char *name, int rev)
 	memcpy((char *)tmp, p, len);
 
 	val = fdt32_to_cpu(tmp[0][6]);
-	if (rev > REV1_0) {
+	if (rev == REV1_0) {
 		tmp[1][6] = cpu_to_fdt32(val + 1);
 		tmp[2][6] = cpu_to_fdt32(val + 2);
 		tmp[3][6] = cpu_to_fdt32(val + 3);
@@ -327,7 +355,7 @@ static void fdt_fixup_msi(void *blob)
 
 	rev = gur_in32(&gur->svr);
 
-	if (SVR_SOC_VER(rev) != SVR_LS1043A)
+	if (!IS_SVR_DEV(rev, SVR_DEV(SVR_LS1043A)))
 		return;
 
 	rev = SVR_REV(rev);
@@ -386,8 +414,8 @@ void ft_cpu_setup(void *blob, bd_t *bd)
 		ccsr_sec_t __iomem *sec;
 
 #ifdef CONFIG_ARMV8_SEC_FIRMWARE_SUPPORT
-		if (fdt_fixup_kaslr(blob))
-			fdt_fixup_remove_jr(blob);
+		fdt_fixup_remove_jr(blob);
+		fdt_fixup_kaslr(blob);
 #endif
 
 		sec = (void __iomem *)CONFIG_SYS_FSL_SEC_ADDR;
@@ -413,6 +441,13 @@ void ft_cpu_setup(void *blob, bd_t *bd)
 
 #ifdef CONFIG_FSL_ESDHC
 	fdt_fixup_esdhc(blob, bd);
+#endif
+
+#ifdef CONFIG_SYS_DPAA_QBMAN
+	fdt_fixup_bportals(blob);
+	fdt_fixup_qportals(blob);
+	do_fixup_by_compat_u32(blob, "fsl,qman",
+			       "clock-frequency", get_qman_freq(), 1);
 #endif
 
 #ifdef CONFIG_SYS_DPAA_FMAN

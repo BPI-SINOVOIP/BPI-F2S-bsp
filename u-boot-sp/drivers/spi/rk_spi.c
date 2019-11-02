@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * spi driver for rockchip
  *
@@ -5,8 +6,6 @@
  *
  * (C) Copyright 2008-2013 Rockchip Electronics
  * Peter, Software Engineering, <superpeter.cai@gmail.com>.
- *
- * SPDX-License-Identifier:     GPL-2.0+
  */
 
 #include <common.h>
@@ -21,8 +20,6 @@
 #include <asm/arch/periph.h>
 #include <dm/pinctrl.h>
 #include "rk_spi.h"
-
-DECLARE_GLOBAL_DATA_PTR;
 
 /* Change to 1 to output registers at the start of each transaction */
 #define DEBUG_RK_SPI	0
@@ -94,7 +91,7 @@ static void rkspi_set_clk(struct rockchip_spi_priv *priv, uint speed)
 	 */
 	if (clk_div > 0xfffe) {
 		clk_div = 0xfffe;
-		debug("%s: can't divide down to %d hz (actual will be %d hz)\n",
+		debug("%s: can't divide down to %d Hz (actual will be %d Hz)\n",
 		      __func__, speed, priv->input_rate / clk_div);
 	}
 

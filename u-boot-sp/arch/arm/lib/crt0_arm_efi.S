@@ -1,12 +1,13 @@
+/* SPDX-License-Identifier: GPL-2.0+ OR BSD-2-Clause */
 /*
  * crt0-efi-arm.S - PE/COFF header for ARM EFI applications
  *
  * Copright (C) 2014 Linaro Ltd. <ard.biesheuvel@linaro.org>
  *
- * SPDX-License-Identifier:     GPL-2.0+     BSD-2-Clause
- *
  * This file is taken and modified from the gnu-efi project.
  */
+
+#include <asm-generic/pe.h>
 
 	.section	.text.head
 
@@ -26,16 +27,16 @@ coff_header:
 	.short	2				/* nr_sections */
 	.long	0				/* TimeDateStamp */
 	.long	0				/* PointerToSymbolTable */
-	.long	1				/* NumberOfSymbols */
+	.long	0				/* NumberOfSymbols */
 	.short	section_table - optional_header	/* SizeOfOptionalHeader */
-	/*
-	 * Characteristics: IMAGE_FILE_32BIT_MACHINE |
-	 * IMAGE_FILE_DEBUG_STRIPPED | IMAGE_FILE_EXECUTABLE_IMAGE |
-	 * IMAGE_FILE_LINE_NUMS_STRIPPED
-	 */
-	.short	0x306
+	/* Characteristics */
+	.short	(IMAGE_FILE_EXECUTABLE_IMAGE | \
+		 IMAGE_FILE_LINE_NUMS_STRIPPED | \
+		 IMAGE_FILE_LOCAL_SYMS_STRIPPED | \
+		 IMAGE_FILE_32BIT_MACHINE | \
+		 IMAGE_FILE_DEBUG_STRIPPED)
 optional_header:
-	.short	0x10b				/* PE32+ format */
+	.short	0x10b				/* PE32 format */
 	.byte	0x02				/* MajorLinkerVersion */
 	.byte	0x14				/* MinorLinkerVersion */
 	.long	_edata - _start			/* SizeOfCode */
@@ -64,7 +65,7 @@ extra_header_fields:
 	 */
 	.long	_start - image_base		/* SizeOfHeaders */
 	.long	0				/* CheckSum */
-	.short	EFI_SUBSYSTEM			/* Subsystem */
+	.short	IMAGE_SUBSYSTEM_EFI_APPLICATION	/* Subsystem */
 	.short	0				/* DllCharacteristics */
 	.long	0				/* SizeOfStackReserve */
 	.long	0				/* SizeOfStackCommit */
@@ -118,8 +119,6 @@ section_table:
 _start:
 	stmfd		sp!, {r0-r2, lr}
 
-	mov		r2, r0
-	mov		r3, r1
 	adr		r1, .L_DYNAMIC
 	ldr		r0, [r1]
 	add		r1, r0, r1

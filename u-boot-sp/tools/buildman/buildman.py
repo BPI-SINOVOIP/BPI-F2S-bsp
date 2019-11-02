@@ -1,8 +1,7 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
+# SPDX-License-Identifier: GPL-2.0+
 #
 # Copyright (c) 2012 The Chromium OS Authors.
-#
-# SPDX-License-Identifier:	GPL-2.0+
 #
 
 """See README for more information"""
@@ -30,7 +29,7 @@ import patchstream
 import terminal
 import toolchain
 
-def RunTests():
+def RunTests(skip_net_tests):
     import func_test
     import test
     import doctest
@@ -41,6 +40,8 @@ def RunTests():
         suite.run(result)
 
     sys.argv = [sys.argv[0]]
+    if skip_net_tests:
+        test.use_network = False
     for module in (test.TestBuild, func_test.TestFunctional):
         suite = unittest.TestLoader().loadTestsFromTestCase(module)
         suite.run(result)
@@ -56,7 +57,7 @@ options, args = cmdline.ParseArgs()
 
 # Run our meagre tests
 if options.test:
-    RunTests()
+    RunTests(options.skip_net_tests)
 
 # Build selected commits for selected boards
 else:

@@ -1,10 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * board/renesas/ulcb/ulcb.c
  *     This file is ULCB board support.
  *
  * Copyright (C) 2017 Renesas Electronics Corporation
- *
- * SPDX-License-Identifier: GPL-2.0+
  */
 
 #include <common.h>
@@ -27,47 +26,21 @@
 
 DECLARE_GLOBAL_DATA_PTR;
 
-#define CPGWPCR	0xE6150904
-#define CPGWPR  0xE615090C
-
-#define CLK2MHZ(clk)	(clk / 1000 / 1000)
 void s_init(void)
 {
-	struct rcar_rwdt *rwdt = (struct rcar_rwdt *)RWDT_BASE;
-	struct rcar_swdt *swdt = (struct rcar_swdt *)SWDT_BASE;
-
-	/* Watchdog init */
-	writel(0xA5A5A500, &rwdt->rwtcsra);
-	writel(0xA5A5A500, &swdt->swtcsra);
-
-	writel(0xA5A50000, CPGWPCR);
-	writel(0xFFFFFFFF, CPGWPR);
 }
 
-#define GSX_MSTP112		BIT(12)	/* 3DG */
-#define TMU0_MSTP125		BIT(25)	/* secure */
-#define TMU1_MSTP124		BIT(24)	/* non-secure */
-#define SCIF2_MSTP310		BIT(10)	/* SCIF2 */
 #define DVFS_MSTP926		BIT(26)
 #define HSUSB_MSTP704		BIT(4)	/* HSUSB */
 
 int board_early_init_f(void)
 {
-	/* TMU0,1 */		/* which use ? */
-	mstp_clrbits_le32(MSTPSR1, SMSTPCR1, TMU0_MSTP125 | TMU1_MSTP124);
-
 #if defined(CONFIG_SYS_I2C) && defined(CONFIG_SYS_I2C_SH)
 	/* DVFS for reset */
-	mstp_clrbits_le32(MSTPSR9, SMSTPCR9, DVFS_MSTP926);
+	mstp_clrbits_le32(SMSTPCR9, SMSTPCR9, DVFS_MSTP926);
 #endif
 	return 0;
 }
-
-/* SYSC */
-/* R/- 32 Power status register 2(3DG) */
-#define	SYSC_PWRSR2	0xE6180100
-/* -/W 32 Power resume control register 2 (3DG) */
-#define	SYSC_PWRONCR2	0xE618010C
 
 /* HSUSB block registers */
 #define HSUSB_REG_LPSTS			0xE6590102
@@ -85,7 +58,7 @@ int board_init(void)
 	setbits_le32(PFC_PUEN6, PUEN_USB1_OVC | PUEN_USB1_PWEN);
 
 	/* Configure the HSUSB block */
-	mstp_clrbits_le32(MSTPSR7, SMSTPCR7, HSUSB_MSTP704);
+	mstp_clrbits_le32(SMSTPCR7, SMSTPCR7, HSUSB_MSTP704);
 	/* Choice USB0SEL */
 	clrsetbits_le32(HSUSB_REG_UGCTRL2, HSUSB_REG_UGCTRL2_USB0SEL,
 			HSUSB_REG_UGCTRL2_USB0SEL_EHCI);
@@ -97,39 +70,33 @@ int board_init(void)
 
 int dram_init(void)
 {
-	gd->ram_size = PHYS_SDRAM_1_SIZE;
-#if (CONFIG_NR_DRAM_BANKS >= 2)
-	gd->ram_size += PHYS_SDRAM_2_SIZE;
-#endif
-#if (CONFIG_NR_DRAM_BANKS >= 3)
-	gd->ram_size += PHYS_SDRAM_3_SIZE;
-#endif
-#if (CONFIG_NR_DRAM_BANKS >= 4)
-	gd->ram_size += PHYS_SDRAM_4_SIZE;
-#endif
+	if (fdtdec_setup_mem_size_base() != 0)
+		return -EINVAL;
 
 	return 0;
 }
 
 int dram_init_banksize(void)
 {
-	gd->bd->bi_dram[0].start = PHYS_SDRAM_1;
-	gd->bd->bi_dram[0].size = PHYS_SDRAM_1_SIZE;
-#if (CONFIG_NR_DRAM_BANKS >= 2)
-	gd->bd->bi_dram[1].start = PHYS_SDRAM_2;
-	gd->bd->bi_dram[1].size = PHYS_SDRAM_2_SIZE;
-#endif
-#if (CONFIG_NR_DRAM_BANKS >= 3)
-	gd->bd->bi_dram[2].start = PHYS_SDRAM_3;
-	gd->bd->bi_dram[2].size = PHYS_SDRAM_3_SIZE;
-#endif
-#if (CONFIG_NR_DRAM_BANKS >= 4)
-	gd->bd->bi_dram[3].start = PHYS_SDRAM_4;
-	gd->bd->bi_dram[3].size = PHYS_SDRAM_4_SIZE;
-#endif
+	fdtdec_setup_memory_banksize();
+
 	return 0;
 }
 
-const struct rmobile_sysinfo sysinfo = {
-	CONFIG_RCAR_BOARD_STRING
-};
+#ifdef CONFIG_MULTI_DTB_FIT
+int board_fit_config_name_match(const char *name)
+{
+	/* PRR driver is not available yet */
+	u32 cpu_type = rmobile_get_cpu_type();
+
+	if ((cpu_type == RMOBILE_CPU_TYPE_R8A7795) &&
+	    !strcmp(name, "r8a7795-h3ulcb-u-boot"))
+		return 0;
+
+	if ((cpu_type == RMOBILE_CPU_TYPE_R8A7796) &&
+	    !strcmp(name, "r8a7796-m3ulcb-u-boot"))
+		return 0;
+
+	return -1;
+}
+#endif

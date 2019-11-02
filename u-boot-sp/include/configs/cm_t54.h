@@ -1,11 +1,10 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Config file for Compulab CM-T54 board
  *
  * Copyright (C) 2014, Compulab Ltd - http://compulab.co.il/
  *
  * Author: Dmitry Lifshitz <lifshitz@compulab.co.il>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __CONFIG_CM_T54_H
@@ -13,6 +12,8 @@
 
 #define CONFIG_CM_T54
 #define CONFIG_DRAM_2G
+
+#define PARTS_DEFAULT
 
 #include <configs/ti_omap5_common.h>
 
@@ -25,7 +26,6 @@
 #define OMAP_HSMMC_USE_GPIO
 
 /* UART setup */
-#define CONFIG_CONS_INDEX		4
 #define CONFIG_SYS_NS16550_COM4		UART4_BASE
 
 /* MMC ENV related defines */
@@ -47,8 +47,6 @@
 #define CONFIG_SPL_SATA_BOOT_DEVICE		0
 #define CONFIG_SYS_SATA_FAT_BOOT_PARTITION	1
 
-#define CONFIG_LIBATA
-#define CONFIG_SCSI_AHCI
 #define CONFIG_SCSI_AHCI_PLAT
 #define CONFIG_SYS_SCSI_MAX_SCSI_ID	1
 #define CONFIG_SYS_SCSI_MAX_LUN		1

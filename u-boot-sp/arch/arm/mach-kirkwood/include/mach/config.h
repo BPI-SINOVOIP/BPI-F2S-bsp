@@ -1,9 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * (C) Copyright 2011
  * Marvell Semiconductor <www.marvell.com>
  * Written-by: Lei Wen <leiwen@marvell.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 /*
@@ -27,6 +26,12 @@
 #define CONFIG_KIRKWOOD_EGIGA_INIT	/* Enable GbePort0/1 for kernel */
 #define CONFIG_KIRKWOOD_RGMII_PAD_1V8	/* Set RGMII Pad voltage to 1.8V */
 #define CONFIG_KIRKWOOD_PCIE_INIT       /* Enable PCIE Port0 for kernel */
+/*
+ * Disable the dcache. Currently the network driver (mvgbe.c) and USB
+ * EHCI driver (ehci-marvell.c) and possibly others rely on the data
+ * cache being disabled.
+ */
+#define CONFIG_SYS_DCACHE_OFF
 
 /*
  * By default kwbimage.cfg from board specific folder is used
@@ -39,7 +44,6 @@
 
 /* Kirkwood has 2k of Security SRAM, use it for SP */
 #define CONFIG_SYS_INIT_SP_ADDR		0xC8012000
-#define CONFIG_NR_DRAM_BANKS_MAX	2
 
 #define CONFIG_I2C_MVTWSI_BASE0	KW_TWSI_BASE
 #define MV_UART_CONSOLE_BASE	KW_UART0_BASE
@@ -57,29 +61,10 @@
 #endif
 
 /*
- * SPI Flash configuration
- */
-#ifdef CONFIG_CMD_SF
-#define CONFIG_HARD_SPI			1
-#define CONFIG_KIRKWOOD_SPI		1
-#ifndef CONFIG_ENV_SPI_BUS
-# define CONFIG_ENV_SPI_BUS		0
-#endif
-#ifndef CONFIG_ENV_SPI_CS
-# define CONFIG_ENV_SPI_CS		0
-#endif
-#ifndef CONFIG_ENV_SPI_MAX_HZ
-# define CONFIG_ENV_SPI_MAX_HZ		50000000
-#endif
-#endif
-
-/*
  * Ethernet Driver configuration
  */
 #ifdef CONFIG_CMD_NET
 #define CONFIG_NETCONSOLE	/* include NetConsole support   */
-#define CONFIG_MII		/* expose smi ove miiphy interface */
-#define CONFIG_MVGBE		/* Enable Marvell Gbe Controller Driver */
 #define CONFIG_SYS_FAULT_ECHO_LINK_DOWN	/* detect link using phy */
 #define CONFIG_ENV_OVERWRITE	/* ethaddr can be reprogrammed */
 #define CONFIG_RESET_PHY_R	/* use reset_phy() to init mv8831116 PHY */
@@ -97,7 +82,6 @@
  */
 #ifdef CONFIG_IDE
 #define __io
-#define CONFIG_MVSATA_IDE
 #define CONFIG_IDE_PREINIT
 #define CONFIG_MVSATA_IDE_USE_PORT1
 /* Needs byte-swapping for ATA data register */
@@ -120,7 +104,7 @@
 /*
  * I2C related stuff
  */
-#ifdef CONFIG_CMD_I2C
+#if defined(CONFIG_CMD_I2C) && !defined(CONFIG_DM_I2C)
 #ifndef CONFIG_SYS_I2C_SOFT
 #define CONFIG_SYS_I2C
 #define CONFIG_SYS_I2C_MVTWSI

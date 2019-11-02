@@ -1,7 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2008-2011 Freescale Semiconductor, Inc.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 /* #define DEBUG */
@@ -15,8 +14,12 @@
 #include <malloc.h>
 #include <memalign.h>
 #include <mmc.h>
+#include <part.h>
 #include <search.h>
 #include <errno.h>
+
+#define __STR(X) #X
+#define STR(X) __STR(X)
 
 #if defined(CONFIG_ENV_SIZE_REDUND) &&  \
 	(CONFIG_ENV_SIZE_REDUND != CONFIG_ENV_SIZE)
@@ -30,18 +33,68 @@ DECLARE_GLOBAL_DATA_PTR;
 #endif
 
 #if CONFIG_IS_ENABLED(OF_CONTROL)
+static inline int mmc_offset_try_partition(const char *str, s64 *val)
+{
+	disk_partition_t info;
+	struct blk_desc *desc;
+	int len, i, ret;
+
+	ret = blk_get_device_by_str("mmc", STR(CONFIG_SYS_MMC_ENV_DEV), &desc);
+	if (ret < 0)
+		return (ret);
+
+	for (i = 1;;i++) {
+		ret = part_get_info(desc, i, &info);
+		if (ret < 0)
+			return ret;
+
+		if (!strncmp((const char *)info.name, str, sizeof(str)))
+			break;
+	}
+
+	/* round up to info.blksz */
+	len = (CONFIG_ENV_SIZE + info.blksz - 1) & ~(info.blksz - 1);
+
+	/* use the top of the partion for the environment */
+	*val = (info.start + info.size - 1) - len / info.blksz;
+
+	return 0;
+}
+
 static inline s64 mmc_offset(int copy)
 {
-	const char *propname = "u-boot,mmc-env-offset";
-	s64 defvalue = CONFIG_ENV_OFFSET;
+	const struct {
+		const char *offset_redund;
+		const char *partition;
+		const char *offset;
+	} dt_prop = {
+		.offset_redund = "u-boot,mmc-env-offset-redundant",
+		.partition = "u-boot,mmc-env-partition",
+		.offset = "u-boot,mmc-env-offset",
+	};
+	s64 val = 0, defvalue;
+	const char *propname;
+	const char *str;
+	int err;
+
+	/* look for the partition in mmc CONFIG_SYS_MMC_ENV_DEV */
+	str = fdtdec_get_config_string(gd->fdt_blob, dt_prop.partition);
+	if (str) {
+		/* try to place the environment at end of the partition */
+		err = mmc_offset_try_partition(str, &val);
+		if (!err)
+			return val;
+	}
+
+	defvalue = CONFIG_ENV_OFFSET;
+	propname = dt_prop.offset;
 
 #if defined(CONFIG_ENV_OFFSET_REDUND)
 	if (copy) {
-		propname = "u-boot,mmc-env-offset-redundant";
 		defvalue = CONFIG_ENV_OFFSET_REDUND;
+		propname = dt_prop.offset_redund;
 	}
 #endif
-
 	return fdtdec_get_config_int(gd->fdt_blob, propname, defvalue);
 }
 #else
@@ -102,19 +155,19 @@ static inline int mmc_set_env_part(struct mmc *mmc) {return 0; };
 static const char *init_mmc_for_env(struct mmc *mmc)
 {
 	if (!mmc)
-		return "!No MMC card found";
+		return "No MMC card found";
 
-#ifdef CONFIG_BLK
+#if CONFIG_IS_ENABLED(BLK)
 	struct udevice *dev;
 
 	if (blk_get_from_parent(mmc->dev, &dev))
-		return "!No block device";
+		return "No block device";
 #else
 	if (mmc_init(mmc))
-		return "!MMC init failed";
+		return "MMC init failed";
 #endif
 	if (mmc_set_env_part(mmc))
-		return "!MMC partition switch failed";
+		return "MMC partition switch failed";
 
 	return NULL;
 }
@@ -179,7 +232,6 @@ static int env_mmc_save(void)
 		goto fini;
 	}
 
-	puts("done\n");
 	ret = 0;
 
 #ifdef CONFIG_ENV_OFFSET_REDUND
@@ -220,6 +272,8 @@ static int env_mmc_load(void)
 	ALLOC_CACHE_ALIGN_BUFFER(env_t, tmp_env1, 1);
 	ALLOC_CACHE_ALIGN_BUFFER(env_t, tmp_env2, 1);
 
+	mmc_initialize(NULL);
+
 	mmc = find_mmc_device(dev);
 
 	errmsg = init_mmc_for_env(mmc);
@@ -237,33 +291,14 @@ static int env_mmc_load(void)
 	read1_fail = read_env(mmc, CONFIG_ENV_SIZE, offset1, tmp_env1);
 	read2_fail = read_env(mmc, CONFIG_ENV_SIZE, offset2, tmp_env2);
 
-	if (read1_fail && read2_fail)
-		puts("*** Error - No Valid Environment Area found\n");
-	else if (read1_fail || read2_fail)
-		puts("*** Warning - some problems detected "
-		     "reading environment; recovered successfully\n");
-
-	if (read1_fail && read2_fail) {
-		errmsg = "!bad CRC";
-		ret = -EIO;
-		goto fini;
-	} else if (!read1_fail && read2_fail) {
-		gd->env_valid = ENV_VALID;
-		env_import((char *)tmp_env1, 1);
-	} else if (read1_fail && !read2_fail) {
-		gd->env_valid = ENV_REDUND;
-		env_import((char *)tmp_env2, 1);
-	} else {
-		env_import_redund((char *)tmp_env1, (char *)tmp_env2);
-	}
-
-	ret = 0;
+	ret = env_import_redund((char *)tmp_env1, read1_fail, (char *)tmp_env2,
+				read2_fail);
 
 fini:
 	fini_mmc_for_env(mmc);
 err:
 	if (ret)
-		set_default_env(errmsg);
+		set_default_env(errmsg, 0);
 
 #endif
 	return ret;
@@ -298,14 +333,13 @@ static int env_mmc_load(void)
 		goto fini;
 	}
 
-	env_import(buf, 1);
-	ret = 0;
+	ret = env_import(buf, 1);
 
 fini:
 	fini_mmc_for_env(mmc);
 err:
 	if (ret)
-		set_default_env(errmsg);
+		set_default_env(errmsg, 0);
 #endif
 	return ret;
 }

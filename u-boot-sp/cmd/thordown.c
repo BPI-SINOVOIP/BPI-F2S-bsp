@@ -1,10 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * cmd_thordown.c -- USB TIZEN "THOR" Downloader gadget
  *
  * Copyright (C) 2013 Lukasz Majewski <l.majewski@samsung.com>
  * All rights reserved.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -31,9 +30,9 @@ int do_thor_down(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 		goto done;
 
 	int controller_index = simple_strtoul(usb_controller, NULL, 0);
-	ret = board_usb_init(controller_index, USB_INIT_DEVICE);
+	ret = usb_gadget_initialize(controller_index);
 	if (ret) {
-		pr_err("USB init failed: %d", ret);
+		pr_err("USB init failed: %d\n", ret);
 		ret = CMD_RET_FAILURE;
 		goto exit;
 	}
@@ -42,21 +41,21 @@ int do_thor_down(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 
 	ret = thor_init();
 	if (ret) {
-		pr_err("THOR DOWNLOAD failed: %d", ret);
+		pr_err("THOR DOWNLOAD failed: %d\n", ret);
 		ret = CMD_RET_FAILURE;
 		goto exit;
 	}
 
 	ret = thor_handle();
 	if (ret) {
-		pr_err("THOR failed: %d", ret);
+		pr_err("THOR failed: %d\n", ret);
 		ret = CMD_RET_FAILURE;
 		goto exit;
 	}
 
 exit:
 	g_dnl_unregister();
-	board_usb_cleanup(controller_index, USB_INIT_DEVICE);
+	usb_gadget_release(controller_index);
 done:
 	dfu_free_entities();
 
@@ -66,7 +65,7 @@ done:
 U_BOOT_CMD(thordown, CONFIG_SYS_MAXARGS, 1, do_thor_down,
 	   "TIZEN \"THOR\" downloader",
 	   "<USB_controller> <interface> <dev>\n"
-	   "  - device software upgrade via LTHOR TIZEN dowload\n"
+	   "  - device software upgrade via LTHOR TIZEN download\n"
 	   "    program via <USB_controller> on device <dev>,\n"
 	   "	attached to interface <interface>\n"
 );

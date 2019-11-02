@@ -1,8 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * (C) Copyright 2012 Samsung Electronics
  * Donghwa Lee <dh09.lee@samsung.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __ASM_ARM_ARCH_SYSTEM_H_
@@ -59,7 +58,7 @@ struct exynos5_sysreg {
 /* Move 0xd3 value to CPSR register to enable SVC mode */
 #define svc32_mode_en() __asm__ __volatile__				\
 			("@ I&F disable, Mode: 0x13 - SVC\n\t"		\
-			 "msr     cpsr_c, #0x13|0xC0\n\t" : : )
+			 "msr     cpsr_c, %0\n\t" : : "r"(0x13|0xC0))
 
 /* Set program counter with the given value */
 #define set_pc(x) __asm__ __volatile__ ("mov     pc, %0\n\t" : : "r"(x))

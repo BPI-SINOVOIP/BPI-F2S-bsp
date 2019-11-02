@@ -1,7 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (c) 2017 Fuzhou Rockchip Electronics Co., Ltd.
- *
- * SPDX-License-Identifier:     GPL-2.0+
  */
 
 /dts-v1/;
@@ -16,7 +15,7 @@
 
 	chosen {
 		stdout-path = &uart2;
-		u-boot,spl-boot-order = &sdhci, &sdmmc;
+		u-boot,spl-boot-order = "same-as-spl", &sdhci, &sdmmc;
 	};
 
 	backlight: backlight {

@@ -1,10 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Tests for the driver model regulator API
  *
  * Copyright (c) 2015 Samsung Electronics
  * Przemyslaw Marczak <p.marczak@samsung.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -22,11 +21,10 @@
 #include <power/sandbox_pmic.h>
 #include <test/ut.h>
 
-DECLARE_GLOBAL_DATA_PTR;
-
 enum {
 	BUCK1,
 	BUCK2,
+	BUCK3,
 	LDO1,
 	LDO2,
 	OUTPUT_COUNT,
@@ -42,6 +40,7 @@ static const char *regulator_names[OUTPUT_COUNT][OUTPUT_NAME_COUNT] = {
 	/* devname, platname */
 	{ SANDBOX_BUCK1_DEVNAME, SANDBOX_BUCK1_PLATNAME },
 	{ SANDBOX_BUCK2_DEVNAME, SANDBOX_BUCK2_PLATNAME },
+	{ SANDBOX_BUCK3_DEVNAME, SANDBOX_BUCK3_PLATNAME },
 	{ SANDBOX_LDO1_DEVNAME, SANDBOX_LDO1_PLATNAME},
 	{ SANDBOX_LDO2_DEVNAME, SANDBOX_LDO2_PLATNAME},
 };
@@ -175,6 +174,27 @@ static int dm_test_power_regulator_set_get_enable(struct unit_test_state *uts)
 	return 0;
 }
 DM_TEST(dm_test_power_regulator_set_get_enable, DM_TESTF_SCAN_FDT);
+
+/* Test regulator set and get enable if allowed method */
+static
+int dm_test_power_regulator_set_enable_if_allowed(struct unit_test_state *uts)
+{
+	const char *platname;
+	struct udevice *dev, *dev_autoset;
+	bool val_set = false;
+
+	/* Get BUCK1 - always on regulator */
+	platname = regulator_names[BUCK1][PLATNAME];
+	ut_assertok(regulator_autoset_by_name(platname, &dev_autoset));
+	ut_assertok(regulator_get_by_platname(platname, &dev));
+
+	/* Try disabling always-on regulator */
+	ut_assertok(regulator_set_enable_if_allowed(dev, val_set));
+	ut_asserteq(regulator_get_enable(dev), !val_set);
+
+	return 0;
+}
+DM_TEST(dm_test_power_regulator_set_enable_if_allowed, DM_TESTF_SCAN_FDT);
 
 /* Test regulator set and get mode method */
 static int dm_test_power_regulator_set_get_mode(struct unit_test_state *uts)

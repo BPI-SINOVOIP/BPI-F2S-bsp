@@ -112,6 +112,7 @@ source "arch/x86/cpu/braswell/Kconfig"
 source "arch/x86/cpu/broadwell/Kconfig"
 source "arch/x86/cpu/coreboot/Kconfig"
 source "arch/x86/cpu/ivybridge/Kconfig"
+source "arch/x86/cpu/efi/Kconfig"
 source "arch/x86/cpu/qemu/Kconfig"
 source "arch/x86/cpu/quark/Kconfig"
 source "arch/x86/cpu/queensbay/Kconfig"
@@ -152,6 +153,7 @@ config SMM_TSEG_SIZE
 config X86_RESET_VECTOR
 	bool
 	default n
+	select BINMAN
 
 # The following options control where the 16-bit and 32-bit init lies
 # If SPL is enabled then it normally holds this init code, and U-Boot proper
@@ -727,12 +729,27 @@ config PCIE_ECAM_SIZE
 	  maximum number of PCI buses as defined by the PCI specification.
 
 config I8259_PIC
-	bool
+	bool "Enable Intel 8259 compatible interrupt controller"
 	default y
 	help
 	  Intel 8259 ISA compatible chipset incorporates two 8259 (master and
 	  slave) interrupt controllers. Include this to have U-Boot set up
 	  the interrupt correctly.
+
+config APIC
+	bool "Enable Intel Advanced Programmable Interrupt Controller"
+	default y
+	help
+	  The (A)dvanced (P)rogrammable (I)nterrupt (C)ontroller is responsible
+	  for catching interrupts and distributing them to one or more CPU
+	  cores. In most cases there are some LAPICs (local) for each core and
+	  one I/O APIC. This conjunction is found on most modern x86 systems.
+
+config PINCTRL_ICH6
+	bool
+	help
+	  Intel ICH6 compatible chipset pinctrl driver. It needs to work
+	  together with the ICH6 compatible gpio driver.
 
 config I8254_TIMER
 	bool
@@ -764,7 +781,5 @@ config HIGH_TABLE_SIZE
 
 	  Increse it if the default size does not fit the board's needs.
 	  This is most likely due to a large ACPI DSDT table is used.
-
-source "arch/x86/lib/efi/Kconfig"
 
 endmenu

@@ -1,6 +1,0 @@
-config OTP_SUNPLUS
-	def_bool n
-	select Soc
-	help
-	  Support OTP.
-	  Say Y if you want to enable OTP function.

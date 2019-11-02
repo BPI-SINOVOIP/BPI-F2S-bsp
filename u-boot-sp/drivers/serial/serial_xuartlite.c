@@ -1,11 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2008 - 2015 Michal Simek <monstr@monstr.eu>
  * Clean driver and add xilinx constant from header file
  *
  * (C) Copyright 2004 Atmark Techno, Inc.
  * Yasushi SHOJI <yashi@atmark-techno.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <config.h>
@@ -14,8 +13,6 @@
 #include <asm/io.h>
 #include <linux/compiler.h>
 #include <serial.h>
-
-DECLARE_GLOBAL_DATA_PTR;
 
 #define SR_TX_FIFO_FULL		BIT(3) /* transmit FIFO full */
 #define SR_TX_FIFO_EMPTY	BIT(2) /* transmit FIFO empty */
@@ -112,7 +109,6 @@ U_BOOT_DRIVER(serial_uartlite) = {
 	.platdata_auto_alloc_size = sizeof(struct uartlite_platdata),
 	.probe = uartlite_serial_probe,
 	.ops	= &uartlite_serial_ops,
-	.flags = DM_FLAG_PRE_RELOC,
 };
 
 #ifdef CONFIG_DEBUG_UART_UARTLITE

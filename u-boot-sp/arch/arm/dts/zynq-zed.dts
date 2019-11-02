@@ -1,17 +1,14 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
- * Xilinx ZED board DTS
- *
  *  Copyright (C) 2011 - 2015 Xilinx
  *  Copyright (C) 2012 National Instruments Corp.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 /dts-v1/;
 #include "zynq-7000.dtsi"
 
 / {
-	model = "Zynq Zed Development Board";
-	compatible = "xlnx,zynq-zed", "xlnx,zynq-7000";
+	model = "Avnet ZedBoard board";
+	compatible = "avnet,zynq-zed", "xlnx,zynq-zed", "xlnx,zynq-7000";
 
 	aliases {
 		ethernet0 = &gem0;
@@ -47,12 +44,20 @@
 
 	ethernet_phy: ethernet-phy@0 {
 		reg = <0>;
+		device_type = "ethernet-phy";
 	};
 };
 
 &qspi {
 	u-boot,dm-pre-reloc;
 	status = "okay";
+	num-cs = <1>;
+	flash@0 {
+		compatible = "spansion,s25fl256s", "spi-flash";
+		reg = <0>;
+		spi-max-frequency = <30000000>;
+		m25p,fast-read;
+	};
 };
 
 &sdhci0 {

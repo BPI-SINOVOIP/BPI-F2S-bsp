@@ -1,7 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright 2007-2009,2010-2012 Freescale Semiconductor, Inc.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 /*
@@ -15,18 +14,12 @@
 
 #ifdef CONFIG_SDCARD
 #define CONFIG_RAMBOOT_SDCARD		1
-#define CONFIG_SYS_TEXT_BASE	0xf8f40000
 #define CONFIG_RESET_VECTOR_ADDRESS	0xf8fffffc
 #endif
 
 #ifdef CONFIG_SPIFLASH
 #define CONFIG_RAMBOOT_SPIFLASH		1
-#define CONFIG_SYS_TEXT_BASE	0xf8f40000
 #define CONFIG_RESET_VECTOR_ADDRESS	0xf8fffffc
-#endif
-
-#ifndef CONFIG_SYS_TEXT_BASE
-#define CONFIG_SYS_TEXT_BASE	0xeff40000
 #endif
 
 #ifndef	CONFIG_RESET_VECTOR_ADDRESS
@@ -47,7 +40,6 @@
 #define CONFIG_SYS_PCI_64BIT	1	/* enable 64-bit PCI resources */
 
 
-#define CONFIG_TSEC_ENET		/* tsec ethernet support */
 #define CONFIG_ENV_OVERWRITE
 
 #define CONFIG_SYS_CLK_FREQ	get_board_sys_clk() /* sysclk for MPC85xx */
@@ -69,7 +61,6 @@
 
 #define CONFIG_SYS_MEMTEST_START 0x00010000	/* skip exception vectors */
 #define CONFIG_SYS_MEMTEST_END   0x1f000000	/* skip u-boot at top of RAM */
-#define CONFIG_PANIC_HANG	/* do not reset board on panic */
 
 /*
  * Config the L2 Cache as L2 SRAM
@@ -92,7 +83,6 @@
 
 /* DDR Setup */
 #define CONFIG_VERY_BIG_RAM
-#undef CONFIG_FSL_DDR_INTERACTIVE
 #define CONFIG_SPD_EEPROM		/* Use SPD EEPROM for DDR setup */
 #define CONFIG_DDR_SPD
 
@@ -190,17 +180,12 @@
 
 #if defined(CONFIG_RAMBOOT_SDCARD) || defined(CONFIG_RAMBOOT_SPIFLASH)
 #define CONFIG_SYS_RAMBOOT
-#define CONFIG_SYS_EXTRA_ENV_RELOC
 #else
 #undef CONFIG_SYS_RAMBOOT
 #endif
 
-#define CONFIG_FLASH_CFI_DRIVER
-#define CONFIG_SYS_FLASH_CFI
 #define CONFIG_SYS_FLASH_EMPTY_INFO
 #define CONFIG_SYS_FLASH_AMD_CHECK_DQ7
-
-#define CONFIG_BOARD_EARLY_INIT_R	/* call board_early_init_r function */
 
 #define CONFIG_HWCONFIG			/* enable hwconfig */
 #define CONFIG_FSL_PIXIS	1	/* use common PIXIS code */
@@ -347,7 +332,6 @@
  * open - index 2
  * shorted - index 1
  */
-#define CONFIG_CONS_INDEX	1
 #define CONFIG_SYS_NS16550_SERIAL
 #define CONFIG_SYS_NS16550_REG_SIZE	1
 #define CONFIG_SYS_NS16550_CLK		get_bus_freq(0)
@@ -384,16 +368,6 @@
 #define CONFIG_SYS_I2C_EEPROM_ADDR	0x57
 #define CONFIG_SYS_I2C_EEPROM_ADDR_LEN	1
 #define CONFIG_SYS_EEPROM_BUS_NUM	1
-
-/*
- * eSPI - Enhanced SPI
- */
-#define CONFIG_HARD_SPI
-
-#if defined(CONFIG_SPI_FLASH)
-#define CONFIG_SF_DEFAULT_SPEED	10000000
-#define CONFIG_SF_DEFAULT_MODE	0
-#endif
 
 /*
  * General PCI
@@ -508,9 +482,6 @@
 #endif	/* CONFIG_PCI */
 
 /* SATA */
-#define CONFIG_LIBATA
-#define CONFIG_FSL_SATA
-
 #define CONFIG_SYS_SATA_MAX_DEVICE	2
 #define CONFIG_SATA1
 #define CONFIG_SYS_SATA1		CONFIG_SYS_MPC85xx_SATA1_ADDR
@@ -525,7 +496,6 @@
 
 #if defined(CONFIG_TSEC_ENET)
 
-#define CONFIG_MII		1	/* MII PHY management */
 #define CONFIG_MII_DEFAULT_TSEC	1	/* Allow unregistered phys */
 #define CONFIG_TSEC1	1
 #define CONFIG_TSEC1_NAME	"eTSEC1"
@@ -554,10 +524,6 @@
 
 #if defined(CONFIG_SYS_RAMBOOT)
 #if defined(CONFIG_RAMBOOT_SPIFLASH)
-#define CONFIG_ENV_SPI_BUS	0
-#define CONFIG_ENV_SPI_CS	0
-#define CONFIG_ENV_SPI_MAX_HZ	10000000
-#define CONFIG_ENV_SPI_MODE	0
 #define CONFIG_ENV_SIZE		0x2000	/* 8KB */
 #define CONFIG_ENV_OFFSET	0xF0000
 #define CONFIG_ENV_SECT_SIZE	0x10000
@@ -581,7 +547,6 @@
 #undef CONFIG_WATCHDOG			/* watchdog disabled */
 
 #ifdef CONFIG_MMC
-#define CONFIG_FSL_ESDHC
 #define CONFIG_SYS_FSL_ESDHC_ADDR	CONFIG_SYS_MPC85xx_ESDHC_ADDR
 #endif
 
@@ -599,9 +564,6 @@
 /*
  * Miscellaneous configurable options
  */
-#define CONFIG_SYS_LONGHELP			/* undef to save memory	*/
-#define CONFIG_CMDLINE_EDITING			/* Command-line editing */
-#define CONFIG_AUTO_COMPLETE			/* add autocompletion support */
 #define CONFIG_SYS_LOAD_ADDR	0x2000000	/* default load address */
 
 /*
@@ -630,7 +592,7 @@
 
 #define CONFIG_IPADDR		192.168.1.254
 
-#define CONFIG_HOSTNAME		unknown
+#define CONFIG_HOSTNAME		"unknown"
 #define CONFIG_ROOTPATH		"/opt/nfsroot"
 #define CONFIG_BOOTFILE		"uImage"
 #define CONFIG_UBOOTPATH	u-boot.bin /* U-Boot image on TFTP server */

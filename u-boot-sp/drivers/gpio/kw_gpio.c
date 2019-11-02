@@ -1,9 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * arch/arm/plat-orion/gpio.c
  *
  * Marvell Orion SoC GPIO handling.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 /*
@@ -14,7 +13,7 @@
  */
 
 #include <common.h>
-#include <asm/bitops.h>
+#include <linux/bitops.h>
 #include <asm/io.h>
 #include <asm/arch/soc.h>
 #include <asm/arch/gpio.h>

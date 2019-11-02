@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  *
  * Clock initialization for OMAP4
@@ -10,8 +11,6 @@
  * Based on previous work by:
  *	Santosh Shilimkar <santosh.shilimkar@ti.com>
  *	Rajendra Nayak <rnayak@ti.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 #include <common.h>
 #include <i2c.h>
@@ -910,6 +909,7 @@ void prcm_init(void)
 		enable_basic_uboot_clocks();
 }
 
+#if !defined(CONFIG_DM_I2C)
 void gpi2c_init(void)
 {
 	static int gpi2c = 1;
@@ -920,3 +920,4 @@ void gpi2c_init(void)
 		gpi2c = 0;
 	}
 }
+#endif

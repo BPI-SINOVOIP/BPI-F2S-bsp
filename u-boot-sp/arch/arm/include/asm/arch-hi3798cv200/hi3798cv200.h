@@ -1,8 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * (C) Copyright 2017 Linaro
  * Jorge Ramirez-Ortiz <jorge.ramirez-ortiz@linaro.org>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __HI3798cv200_H__
@@ -12,12 +11,16 @@
 #define REG_BASE_CRG			0xF8A22000
 
 /* DEVICES */
-#define REG_BASE_MCI			0xF9830000
 #define REG_BASE_UART0			0xF8B00000
+#define HIOTG_BASE_ADDR			0xF98C0000
 
 /* PERI control registers (4KB) */
 	/* USB2 PHY01 configuration register */
 #define PERI_CTRL_USB0			(REG_BASE_PERI_CTRL + 0x120)
+
+	/* USB2 controller configuration register */
+#define PERI_CTRL_USB3			(REG_BASE_PERI_CTRL + 0x12c)
+#define USB2_2P_CHIPID			(1 << 28)
 
 /* PERI CRG registers (4KB) */
 	/* USB2 CTRL0 clock and soft reset */

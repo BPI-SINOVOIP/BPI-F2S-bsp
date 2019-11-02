@@ -1,11 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2000-2010
  * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
  *
  * (C) Copyright 2001 Sysgo Real-Time Solutions, GmbH <www.elinos.com>
  * Andreas Heppel <aheppel@sysgo.de>
-
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 /* #define DEBUG */
@@ -45,16 +44,16 @@ DECLARE_GLOBAL_DATA_PTR;
 #define INITENV
 #endif
 
+#if defined(CONFIG_ENV_ADDR_REDUND) && defined(CMD_SAVEENV) || \
+	!defined(CONFIG_ENV_ADDR_REDUND) && defined(INITENV)
 #ifdef ENV_IS_EMBEDDED
-env_t *env_ptr = &environment;
-
-static __maybe_unused env_t *flash_addr = (env_t *)CONFIG_ENV_ADDR;
-
+static env_t *env_ptr = &environment;
 #else /* ! ENV_IS_EMBEDDED */
 
-env_t *env_ptr = (env_t *)CONFIG_ENV_ADDR;
-static __maybe_unused env_t *flash_addr = (env_t *)CONFIG_ENV_ADDR;
+static env_t *env_ptr = (env_t *)CONFIG_ENV_ADDR;
 #endif /* ENV_IS_EMBEDDED */
+#endif
+static __maybe_unused env_t *flash_addr = (env_t *)CONFIG_ENV_ADDR;
 
 /* CONFIG_ENV_ADDR is supposed to be on sector boundary */
 static ulong __maybe_unused end_addr =
@@ -351,9 +350,7 @@ static int env_flash_load(void)
 		     "reading environment; recovered successfully\n\n");
 #endif /* CONFIG_ENV_ADDR_REDUND */
 
-	env_import((char *)flash_addr, 1);
-
-	return 0;
+	return env_import((char *)flash_addr, 1);
 }
 #endif /* LOADENV */
 

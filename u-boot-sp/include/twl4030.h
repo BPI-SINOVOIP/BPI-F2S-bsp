@@ -1,8 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright (c) 2009 Wind River Systems, Inc.
  * Tom Rix <Tom.Rix at windriver.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  *
  * Derived from code on omapzoom, git://git.omapzoom.com/repo/u-boot.git
  *
@@ -649,6 +648,7 @@
  *   examples are TWL4030_PM_RECEIVER_VMMC1_DEV_GRP and
  *   TWL4030_LED_LEDEN.
  */
+#ifndef CONFIG_DM_I2C
 static inline int twl4030_i2c_write_u8(u8 chip_no, u8 reg, u8 val)
 {
 	return i2c_write(chip_no, reg, 1, &val, 1);
@@ -658,7 +658,10 @@ static inline int twl4030_i2c_read_u8(u8 chip_no, u8 reg, u8 *val)
 {
 	return i2c_read(chip_no, reg, 1, val, 1);
 }
-
+#else
+int twl4030_i2c_write_u8(u8 chip_no, u8 reg, u8 val);
+int twl4030_i2c_read_u8(u8 chip_no, u8 reg, u8 *val);
+#endif
 /*
  * Power
  */

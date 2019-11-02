@@ -1,14 +1,14 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * board.c
  *
  * Board functions for TI AM43XX based boards
  *
  * Copyright (C) 2013, Texas Instruments, Incorporated - http://www.ti.com/
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
+#include <environment.h>
 #include <i2c.h>
 #include <linux/errno.h>
 #include <spl.h>
@@ -43,6 +43,8 @@ static struct ctrl_dev *cdev = (struct ctrl_dev *)CTRL_DEVICE_BASE;
 #ifdef CONFIG_TI_I2C_BOARD_DETECT
 void do_board_detect(void)
 {
+	/* Ensure I2C is initialized for EEPROM access*/
+	gpi2c_init();
 	if (ti_i2c_eeprom_am_get(CONFIG_EEPROM_BUS_ADDRESS,
 				 CONFIG_EEPROM_CHIP_ADDRESS))
 		printf("ti_i2c_eeprom_init failed\n");
@@ -384,10 +386,15 @@ const struct dpll_params *get_dpll_per_params(void)
 
 void scale_vcores_generic(u32 m)
 {
-	int mpu_vdd;
+	int mpu_vdd, ddr_volt;
 
+#ifndef CONFIG_DM_I2C
 	if (i2c_probe(TPS65218_CHIP_PM))
 		return;
+#else
+	if (power_tps65218_init(0))
+		return;
+#endif
 
 	switch (m) {
 	case 1000:
@@ -423,9 +430,13 @@ void scale_vcores_generic(u32 m)
 		return;
 	}
 
+	if (board_is_eposevm())
+		ddr_volt = TPS65218_DCDC3_VOLT_SEL_1200MV;
+	else
+		ddr_volt = TPS65218_DCDC3_VOLT_SEL_1350MV;
+
 	/* Set DCDC3 (DDR) voltage */
-	if (tps65218_voltage_update(TPS65218_DCDC3,
-	    TPS65218_DCDC3_VOLT_SEL_1350MV)) {
+	if (tps65218_voltage_update(TPS65218_DCDC3, ddr_volt)) {
 		printf("%s failure\n", __func__);
 		return;
 	}
@@ -435,8 +446,13 @@ void scale_vcores_idk(u32 m)
 {
 	int mpu_vdd;
 
+#ifndef CONFIG_DM_I2C
 	if (i2c_probe(TPS62362_I2C_ADDR))
 		return;
+#else
+	if (power_tps62362_init(0))
+		return;
+#endif
 
 	switch (m) {
 	case 1000:
@@ -458,14 +474,12 @@ void scale_vcores_idk(u32 m)
 		puts("Unknown MPU clock, not scaling\n");
 		return;
 	}
-
 	/* Set VDD_MPU voltage */
 	if (tps62362_voltage_update(TPS62362_SET3, mpu_vdd)) {
 		printf("%s failure\n", __func__);
 		return;
 	}
 }
-
 void gpi2c_init(void)
 {
 	/* When needed to be invoked prior to BSS initialization */
@@ -473,8 +487,10 @@ void gpi2c_init(void)
 
 	if (first_time) {
 		enable_i2c0_pin_mux();
+#ifndef CONFIG_DM_I2C
 		i2c_init(CONFIG_SYS_OMAP24_I2C_SPEED,
 			 CONFIG_SYS_OMAP24_I2C_SLAVE);
+#endif
 		first_time = false;
 	}
 }
@@ -520,6 +536,62 @@ static void enable_vtt_regulator(void)
 	writel(temp, AM33XX_GPIO5_BASE + OMAP_GPIO_OE);
 }
 
+enum {
+	RTC_BOARD_EPOS = 1,
+	RTC_BOARD_EVM14,
+	RTC_BOARD_EVM12,
+	RTC_BOARD_GPEVM,
+	RTC_BOARD_SK,
+};
+
+/*
+ * In the rtc_only+DRR in self-refresh boot path we have the board type info
+ * in the rtc scratch pad register hence we bypass the costly i2c reads to
+ * eeprom and directly programthe board name string
+ */
+void rtc_only_update_board_type(u32 btype)
+{
+	const char *name = "";
+	const char *rev = "1.0";
+
+	switch (btype) {
+	case RTC_BOARD_EPOS:
+		name = "AM43EPOS";
+		break;
+	case RTC_BOARD_EVM14:
+		name = "AM43__GP";
+		rev = "1.4";
+		break;
+	case RTC_BOARD_EVM12:
+		name = "AM43__GP";
+		rev = "1.2";
+		break;
+	case RTC_BOARD_GPEVM:
+		name = "AM43__GP";
+		break;
+	case RTC_BOARD_SK:
+		name = "AM43__SK";
+		break;
+	}
+	ti_i2c_eeprom_am_set(name, rev);
+}
+
+u32 rtc_only_get_board_type(void)
+{
+	if (board_is_eposevm())
+		return RTC_BOARD_EPOS;
+	else if (board_is_evm_14_or_later())
+		return RTC_BOARD_EVM14;
+	else if (board_is_evm_12_or_later())
+		return RTC_BOARD_EVM12;
+	else if (board_is_gpevm())
+		return RTC_BOARD_GPEVM;
+	else if (board_is_sk())
+		return RTC_BOARD_SK;
+
+	return 0;
+}
+
 void sdram_init(void)
 {
 	/*
@@ -554,20 +626,32 @@ void sdram_init(void)
 /* setup board specific PMIC */
 int power_init_board(void)
 {
-	struct pmic *p;
-
+	int rc;
+#ifndef CONFIG_DM_I2C
+	struct pmic *p = NULL;
+#endif
 	if (board_is_idk()) {
-		power_tps62362_init(I2C_PMIC);
+		rc = power_tps62362_init(0);
+		if (rc)
+			goto done;
+#ifndef CONFIG_DM_I2C
 		p = pmic_get("TPS62362");
-		if (p && !pmic_probe(p))
-			puts("PMIC:  TPS62362\n");
+		if (!p || pmic_probe(p))
+			goto done;
+#endif
+		puts("PMIC:  TPS62362\n");
 	} else {
-		power_tps65218_init(I2C_PMIC);
+		rc = power_tps65218_init(0);
+		if (rc)
+			goto done;
+#ifndef CONFIG_DM_I2C
 		p = pmic_get("TPS65218_PMIC");
-		if (p && !pmic_probe(p))
-			puts("PMIC:  TPS65218\n");
+		if (!p || pmic_probe(p))
+			goto done;
+#endif
+		puts("PMIC:  TPS65218\n");
 	}
-
+done:
 	return 0;
 }
 
@@ -579,6 +663,11 @@ int board_init(void)
 
 	gd->bd->bi_boot_params = CONFIG_SYS_SDRAM_BASE + 0x100;
 	gpmc_init();
+
+	/*
+	 * Call this to initialize *ctrl again
+	 */
+	hw_data_init();
 
 	/* Clear all important bits for DSS errata that may need to be tweaked*/
 	mreqprio_0 = readl(&cdev->mreqprio_0) & MREQPRIO_0_SAB_INIT1_MASK &
@@ -616,6 +705,19 @@ int board_init(void)
 }
 
 #ifdef CONFIG_BOARD_LATE_INIT
+#if CONFIG_IS_ENABLED(DM_USB) && CONFIG_IS_ENABLED(OF_CONTROL)
+static int device_okay(const char *path)
+{
+	int node;
+
+	node = fdt_path_offset(gd->fdt_blob, path);
+	if (node < 0)
+		return 0;
+
+	return fdtdec_get_is_enabled(gd->fdt_blob, node);
+}
+#endif
+
 int board_late_init(void)
 {
 #ifdef CONFIG_ENV_VARS_UBOOT_RUNTIME_CONFIG
@@ -628,10 +730,18 @@ int board_late_init(void)
 	if (get_device_type() == HS_DEVICE)
 		env_set("boot_fit", "1");
 #endif
+
+#if CONFIG_IS_ENABLED(DM_USB) && CONFIG_IS_ENABLED(OF_CONTROL)
+	if (device_okay("/ocp/omap_dwc3@48380000"))
+		enable_usb_clocks(0);
+	if (device_okay("/ocp/omap_dwc3@483c0000"))
+		enable_usb_clocks(1);
+#endif
 	return 0;
 }
 #endif
 
+#if !CONFIG_IS_ENABLED(DM_USB_GADGET)
 #ifdef CONFIG_USB_DWC3
 static struct dwc3_device usb_otg_ss1 = {
 	.maximum_speed = USB_SPEED_HIGH,
@@ -682,7 +792,7 @@ int usb_gadget_handle_interrupts(int index)
 #endif /* CONFIG_USB_DWC3 */
 
 #if defined(CONFIG_USB_DWC3) || defined(CONFIG_USB_XHCI_OMAP)
-int omap_xhci_board_usb_init(int index, enum usb_init_type init)
+int board_usb_init(int index, enum usb_init_type init)
 {
 	enable_usb_clocks(index);
 #ifdef CONFIG_USB_DWC3
@@ -713,7 +823,7 @@ int omap_xhci_board_usb_init(int index, enum usb_init_type init)
 	return 0;
 }
 
-int omap_xhci_board_usb_cleanup(int index, enum usb_init_type init)
+int board_usb_cleanup(int index, enum usb_init_type init)
 {
 #ifdef CONFIG_USB_DWC3
 	switch (index) {
@@ -734,6 +844,7 @@ int omap_xhci_board_usb_cleanup(int index, enum usb_init_type init)
 	return 0;
 }
 #endif /* defined(CONFIG_USB_DWC3) || defined(CONFIG_USB_XHCI_OMAP) */
+#endif /* !CONFIG_IS_ENABLED(DM_USB_GADGET) */
 
 #ifdef CONFIG_DRIVER_TI_CPSW
 
@@ -847,10 +958,14 @@ int ft_board_setup(void *blob, bd_t *bd)
 }
 #endif
 
-#ifdef CONFIG_SPL_LOAD_FIT
+#if defined(CONFIG_SPL_LOAD_FIT) || defined(CONFIG_DTB_RESELECT)
 int board_fit_config_name_match(const char *name)
 {
-	if (board_is_evm() && !strcmp(name, "am437x-gp-evm"))
+	bool eeprom_read = board_ti_was_eeprom_read();
+
+	if (!strcmp(name, "am4372-generic") && !eeprom_read)
+		return 0;
+	else if (board_is_evm() && !strcmp(name, "am437x-gp-evm"))
 		return 0;
 	else if (board_is_sk() && !strcmp(name, "am437x-sk-evm"))
 		return 0;
@@ -860,6 +975,16 @@ int board_fit_config_name_match(const char *name)
 		return 0;
 	else
 		return -1;
+}
+#endif
+
+#ifdef CONFIG_DTB_RESELECT
+int embedded_dtb_select(void)
+{
+	do_board_detect();
+	fdtdec_setup();
+
+	return 0;
 }
 #endif
 

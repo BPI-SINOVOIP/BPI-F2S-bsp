@@ -15,8 +15,68 @@ config CC_OPTIMIZE_LIBS_FOR_SPEED
 
 	  If unsure, say N.
 
+config DYNAMIC_CRC_TABLE
+	bool "Enable Dynamic tables for CRC"
+	help
+	  Enable this option to calculate entries for CRC tables at runtime.
+	  This can be helpful when reducing the size of the build image
+
+config HAVE_ARCH_IOMAP
+	bool
+	help
+	  Enable this option if architecture provides io{read,write}{8,16,32}
+	  I/O accessor functions.
+
 config HAVE_PRIVATE_LIBGCC
 	bool
+
+config LIB_UUID
+	bool
+
+config PRINTF
+	bool
+	default y
+
+config SPL_PRINTF
+	bool
+	select SPL_SPRINTF
+	select SPL_STRTO if !USE_TINY_PRINTF
+
+config TPL_PRINTF
+	bool
+	select TPL_SPRINTF
+	select TPL_STRTO if !USE_TINY_PRINTF
+
+config SPRINTF
+	bool
+	default y
+
+config SPL_SPRINTF
+	bool
+
+config TPL_SPRINTF
+	bool
+
+config STRTO
+	bool
+	default y
+
+config SPL_STRTO
+	bool
+
+config TPL_STRTO
+	bool
+
+config IMAGE_SPARSE
+	bool
+
+config IMAGE_SPARSE_FILLBUF_SIZE
+	hex "Android sparse image CHUNK_TYPE_FILL buffer size"
+	default 0x80000
+	depends on IMAGE_SPARSE
+	help
+	  Set the size of the fill buffer used when processing CHUNK_TYPE_FILL
+	  chunks.
 
 config USE_PRIVATE_LIBGCC
 	bool "Use private libgcc"
@@ -45,6 +105,16 @@ config USE_TINY_PRINTF
 
 	  The supported format specifiers are %c, %s, %u/%d and %x.
 
+config PANIC_HANG
+	bool "Do not reset the system on fatal error"
+	help
+	  Define this option to stop the system in case of a fatal error,
+	  so that you have to reset it manually. This is probably NOT a good
+	  idea for an embedded system where you want the system to reboot
+	  automatically as fast as possible, but it may be useful during
+	  development since you can try to debug the conditions that lead to
+	  the situation.
+
 config REGEX
 	bool "Enable regular expression support"
 	default y if NET
@@ -54,10 +124,22 @@ config REGEX
 	  regex support to some commands, for example "env grep" and
 	  "setexpr".
 
-config LIB_RAND
-	bool "Pseudo-random library support "
+choice
+	prompt "Pseudo-random library support type"
+	depends on NET_RANDOM_ETHADDR || RANDOM_UUID || CMD_UUID
+	default LIB_RAND
 	help
-	  This library provides pseudo-random number generator functions.
+	  Select the library to provide pseudo-random number generator
+	  functions.  LIB_HW_RAND supports certain hardware engines that
+	  provide this functionality.  If in doubt, select LIB_RAND.
+
+config LIB_RAND
+	bool "Pseudo-random library support"
+
+config LIB_HW_RAND
+	bool "HW Engine for random libray support"
+
+endchoice
 
 config SPL_TINY_MEMSET
 	bool "Use a very small memset() in SPL"
@@ -65,7 +147,7 @@ config SPL_TINY_MEMSET
 	  The faster memset() is the arch-specific one (if available) enabled
 	  by CONFIG_USE_ARCH_MEMSET. If that is not enabled, we can still get
 	  better performance by writing a word at a time. But in very
-	  size-constrained envrionments even this may be too big. Enable this
+	  size-constrained environments even this may be too big. Enable this
 	  option to reduce code size slightly at the cost of some speed.
 
 config TPL_TINY_MEMSET
@@ -74,11 +156,14 @@ config TPL_TINY_MEMSET
 	  The faster memset() is the arch-specific one (if available) enabled
 	  by CONFIG_USE_ARCH_MEMSET. If that is not enabled, we can still get
 	  better performance by writing a word at a time. But in very
-	  size-constrained envrionments even this may be too big. Enable this
+	  size-constrained environments even this may be too big. Enable this
 	  option to reduce code size slightly at the cost of some speed.
 
 config RBTREE
 	bool
+
+config BITREVERSE
+	bool "Bit reverse library from Linux"
 
 source lib/dhry/Kconfig
 
@@ -105,6 +190,42 @@ config TPM
 	  command to interactive the TPM. Driver model support is provided
 	  for the low-level TPM interface, but only one TPM is supported at
 	  a time by the TPM library.
+
+config SPL_TPM
+	bool "Trusted Platform Module (TPM) Support in SPL"
+	depends on SPL_DM
+	help
+	  This enables support for TPMs which can be used to provide security
+	  features for your board. The TPM can be connected via LPC or I2C
+	  and a sandbox TPM is provided for testing purposes. Use the 'tpm'
+	  command to interactive the TPM. Driver model support is provided
+	  for the low-level TPM interface, but only one TPM is supported at
+	  a time by the TPM library.
+
+config TPL_TPM
+	bool "Trusted Platform Module (TPM) Support in TPL"
+	depends on TPL_DM
+	help
+	  This enables support for TPMs which can be used to provide security
+	  features for your board. The TPM can be connected via LPC or I2C
+	  and a sandbox TPM is provided for testing purposes. Use the 'tpm'
+	  command to interactive the TPM. Driver model support is provided
+	  for the low-level TPM interface, but only one TPM is supported at
+	  a time by the TPM library.
+
+endmenu
+
+menu "Android Verified Boot"
+
+config LIBAVB
+	bool "Android Verified Boot 2.0 support"
+	depends on ANDROID_BOOT_IMAGE
+	default n
+	help
+	  This enables support of Android Verified Boot 2.0 which can be used
+	  to assure the end user of the integrity of the software running on a
+	  device. Introduces such features as boot chain of trust, rollback
+	  protection etc.
 
 endmenu
 
@@ -180,6 +301,14 @@ config LZO
 	help
 	  This enables support for LZO compression algorithm.r
 
+config SPL_LZ4
+	bool "Enable LZ4 decompression support in SPL"
+	help
+	  This enables support for tge LZ4 decompression algorithm in SPL. LZ4
+	  is a lossless data compression algorithm that is focused on
+	  fast compression and decompression speed. It belongs to the LZ77
+	  family of byte-oriented compression schemes.
+
 config SPL_LZO
 	bool "Enable LZO decompression support in SPL"
 	help
@@ -206,6 +335,11 @@ config ERRNO_STR
 	  - if errno is null or positive number - a pointer to "Success" message
 	  - if errno is negative - a pointer to errno related message
 
+config HEXDUMP
+	bool "Enable hexdump"
+	help
+	  This enables functions for printing dumps of binary data.
+
 config OF_LIBFDT
 	bool "Enable the FDT library"
 	default y if OF_CONTROL
@@ -218,6 +352,8 @@ config OF_LIBFDT
 
 config OF_LIBFDT_OVERLAY
 	bool "Enable the FDT library overlay support"
+	depends on OF_LIBFDT
+	default y if ARCH_OMAP2PLUS || ARCH_KEYSTONE
 	help
 	  This enables the FDT library (libfdt) overlay support.
 
@@ -231,10 +367,20 @@ config SPL_OF_LIBFDT
 	  particular compatible nodes. The library operates on a flattened
 	  version of the device tree.
 
+config TPL_OF_LIBFDT
+	bool "Enable the FDT library for TPL"
+	default y if TPL_OF_CONTROL
+	help
+	  This enables the FDT library (libfdt). It provides functions for
+	  accessing binary device tree images in memory, such as adding and
+	  removing nodes and properties, scanning through the tree and finding
+	  particular compatible nodes. The library operates on a flattened
+	  version of the device tree.
+
 config FDT_FIXUP_PARTITIONS
 	bool "overwrite MTD partitions in DTS through defined in 'mtdparts'"
 	depends on OF_LIBFDT
-	default n
+	depends on CMD_MTDPARTS
 	help
 	  Allow overwriting defined partitions in the device tree blob
 	  using partition info defined in the 'mtdparts' environment
@@ -275,5 +421,6 @@ endmenu
 
 source lib/efi/Kconfig
 source lib/efi_loader/Kconfig
+source lib/optee/Kconfig
 
 endmenu

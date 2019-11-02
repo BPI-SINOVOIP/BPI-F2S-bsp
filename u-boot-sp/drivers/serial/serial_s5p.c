@@ -1,11 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2009 SAMSUNG Electronics
  * Minkyu Kang <mk7.kang@samsung.com>
  * Heungjun Kim <riverful.kim@samsung.com>
  *
  * based on drivers/serial/s3c64xx.c
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -212,7 +211,6 @@ U_BOOT_DRIVER(serial_s5p) = {
 	.platdata_auto_alloc_size = sizeof(struct s5p_serial_platdata),
 	.probe = s5p_serial_probe,
 	.ops	= &s5p_serial_ops,
-	.flags = DM_FLAG_PRE_RELOC,
 };
 #endif
 

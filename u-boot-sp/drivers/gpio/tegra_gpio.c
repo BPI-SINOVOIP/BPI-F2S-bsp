@@ -1,9 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * NVIDIA Tegra20 GPIO handling.
  *  (C) Copyright 2010-2012,2015
  *  NVIDIA Corporation <www.nvidia.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 /*
@@ -22,8 +21,6 @@
 #include <asm/gpio.h>
 #include <dm/device-internal.h>
 #include <dt-bindings/gpio/gpio.h>
-
-DECLARE_GLOBAL_DATA_PTR;
 
 static const int CONFIG_SFIO = 0;
 static const int CONFIG_GPIO = 1;
@@ -381,5 +378,4 @@ U_BOOT_DRIVER(gpio_tegra) = {
 	.probe = gpio_tegra_probe,
 	.priv_auto_alloc_size = sizeof(struct tegra_port_info),
 	.ops	= &gpio_tegra_ops,
-	.flags	= DM_FLAG_PRE_RELOC,
 };

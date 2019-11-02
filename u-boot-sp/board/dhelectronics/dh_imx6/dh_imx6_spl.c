@@ -1,9 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * DHCOM DH-iMX6 PDK SPL support
  *
  * Copyright (C) 2017 Marek Vasut <marex@denx.de>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -44,8 +43,6 @@
 #define USDHC_PAD_CTRL							\
 	(PAD_CTL_PUS_47K_UP | PAD_CTL_SPEED_LOW | PAD_CTL_DSE_80ohm |	\
 	 PAD_CTL_SRE_FAST | PAD_CTL_HYS)
-
-DECLARE_GLOBAL_DATA_PTR;
 
 static const struct mx6dq_iomux_ddr_regs dhcom6dq_ddr_ioregs = {
 	.dram_sdclk_0	= 0x00020030,
@@ -139,27 +136,97 @@ static const struct mx6sdl_iomux_grp_regs dhcom6sdl_grp_ioregs = {
 	.grp_b7ds	= 0x00000030,
 };
 
-static const struct mx6_mmdc_calibration dhcom_mmdc_calib = {
-	.p0_mpwldectrl0	= 0x001F001F,
-	.p0_mpwldectrl1	= 0x001F001F,
-	.p1_mpwldectrl0	= 0x00440044,
-	.p1_mpwldectrl1	= 0x00440044,
-	.p0_mpdgctrl0	= 0x434B0350,
-	.p0_mpdgctrl1	= 0x034C0359,
-	.p1_mpdgctrl0	= 0x434B0350,
-	.p1_mpdgctrl1	= 0x03650348,
-	.p0_mprddlctl	= 0x4436383B,
-	.p1_mprddlctl	= 0x39393341,
-	.p0_mpwrdlctl	= 0x35373933,
-	.p1_mpwrdlctl	= 0x48254A36,
+static const struct mx6_mmdc_calibration dhcom_mmdc_calib_4x4g_1066 = {
+	.p0_mpwldectrl0	= 0x00150019,
+	.p0_mpwldectrl1	= 0x001C000B,
+	.p1_mpwldectrl0	= 0x00020018,
+	.p1_mpwldectrl1	= 0x0002000C,
+	.p0_mpdgctrl0	= 0x43140320,
+	.p0_mpdgctrl1	= 0x03080304,
+	.p1_mpdgctrl0	= 0x43180320,
+	.p1_mpdgctrl1	= 0x03100254,
+	.p0_mprddlctl	= 0x4830383C,
+	.p1_mprddlctl	= 0x3836323E,
+	.p0_mpwrdlctl	= 0x3E444642,
+	.p1_mpwrdlctl	= 0x42344442,
 };
 
-static const struct mx6_ddr3_cfg dhcom_mem_ddr = {
+static const struct mx6_mmdc_calibration dhcom_mmdc_calib_2x4g_800 = {
+	.p0_mpwldectrl0	= 0x0040003C,
+	.p0_mpwldectrl1	= 0x0032003E,
+	.p0_mpdgctrl0	= 0x42350231,
+	.p0_mpdgctrl1	= 0x021A0218,
+	.p0_mprddlctl	= 0x4B4B4E49,
+	.p0_mpwrdlctl	= 0x3F3F3035,
+};
+
+static const struct mx6_mmdc_calibration dhcom_mmdc_calib_4x2g_1066 = {
+	.p0_mpwldectrl0	= 0x0011000E,
+	.p0_mpwldectrl1	= 0x000E001B,
+	.p1_mpwldectrl0	= 0x00190015,
+	.p1_mpwldectrl1	= 0x00070018,
+	.p0_mpdgctrl0	= 0x42720306,
+	.p0_mpdgctrl1	= 0x026F0266,
+	.p1_mpdgctrl0	= 0x4273030A,
+	.p1_mpdgctrl1	= 0x02740240,
+	.p0_mprddlctl	= 0x45393B3E,
+	.p1_mprddlctl	= 0x403A3747,
+	.p0_mpwrdlctl	= 0x40434541,
+	.p1_mpwrdlctl	= 0x473E4A3B,
+};
+
+static const struct mx6_mmdc_calibration dhcom_mmdc_calib_4x2g_800 = {
+	.p0_mpwldectrl0	= 0x003A003A,
+	.p0_mpwldectrl1	= 0x0030002F,
+	.p1_mpwldectrl0	= 0x002F0038,
+	.p1_mpwldectrl1	= 0x00270039,
+	.p0_mpdgctrl0	= 0x420F020F,
+	.p0_mpdgctrl1	= 0x01760175,
+	.p1_mpdgctrl0	= 0x41640171,
+	.p1_mpdgctrl1	= 0x015E0160,
+	.p0_mprddlctl	= 0x45464B4A,
+	.p1_mprddlctl	= 0x49484A46,
+	.p0_mpwrdlctl	= 0x40402E32,
+	.p1_mpwrdlctl	= 0x3A3A3231,
+};
+
+static const struct mx6_mmdc_calibration dhcom_mmdc_calib_2x2g_800 = {
+	.p0_mpwldectrl0	= 0x0040003C,
+	.p0_mpwldectrl1	= 0x0032003E,
+	.p0_mpdgctrl0	= 0x42350231,
+	.p0_mpdgctrl1	= 0x021A0218,
+	.p0_mprddlctl	= 0x4B4B4E49,
+	.p0_mpwrdlctl	= 0x3F3F3035,
+};
+
+/*
+ * 2 Gbit DDR3 memory
+ *   - NANYA #NT5CC128M16IP-DII
+ *   - NANYA #NT5CB128M16FP-DII
+ */
+static const struct mx6_ddr3_cfg dhcom_mem_ddr_2g = {
 	.mem_speed	= 1600,
-	.density	= 4,
-	.width		= 64,
+	.density	= 2,
+	.width		= 16,
 	.banks		= 8,
 	.rowaddr	= 14,
+	.coladdr	= 10,
+	.pagesz		= 2,
+	.trcd		= 1375,
+	.trcmin		= 5863,
+	.trasmin	= 3750,
+};
+
+/*
+ * 4 Gbit DDR3 memory
+ *   - Intelligent Memory #IM4G16D3EABG-125I
+ */
+static const struct mx6_ddr3_cfg dhcom_mem_ddr_4g = {
+	.mem_speed	= 1600,
+	.density	= 4,
+	.width		= 16,
+	.banks		= 8,
+	.rowaddr	= 15,
 	.coladdr	= 10,
 	.pagesz		= 2,
 	.trcd		= 1375,
@@ -167,13 +234,13 @@ static const struct mx6_ddr3_cfg dhcom_mem_ddr = {
 	.trasmin	= 3500,
 };
 
-static const struct mx6_ddr_sysinfo dhcom_ddr_info = {
+/* DDR3 64bit */
+static const struct mx6_ddr_sysinfo dhcom_ddr_64bit = {
 	/* width of data bus:0=16,1=32,2=64 */
 	.dsize		= 2,
-	/* config for full 4GB range so that get_mem_size() works */
-	.cs_density	= 32,	/* 32Gb per CS */
+	.cs_density	= 32,
 	.ncs		= 1,	/* single chip select */
-	.cs1_mirror	= 0,
+	.cs1_mirror	= 1,
 	.rtt_wr		= 1,	/* DDR3_RTT_60_OHM, RTT_Wr = RZQ/4 */
 	.rtt_nom	= 1,	/* DDR3_RTT_60_OHM, RTT_Nom = RZQ/4 */
 	.walat		= 1,	/* Write additional latency */
@@ -182,6 +249,27 @@ static const struct mx6_ddr_sysinfo dhcom_ddr_info = {
 	.bi_on		= 1,	/* Bank interleaving enabled */
 	.sde_to_rst	= 0x10,	/* 14 cycles, 200us (JEDEC default) */
 	.rst_to_cke	= 0x23,	/* 33 cycles, 500us (JEDEC default) */
+	.refsel		= 1,	/* Refresh cycles at 32KHz */
+	.refr		= 3,	/* 4 refresh commands per refresh cycle */
+};
+
+/* DDR3 32bit */
+static const struct mx6_ddr_sysinfo dhcom_ddr_32bit = {
+	/* width of data bus:0=16,1=32,2=64 */
+	.dsize		= 1,
+	.cs_density	= 32,
+	.ncs		= 1,	/* single chip select */
+	.cs1_mirror	= 1,
+	.rtt_wr		= 1,	/* DDR3_RTT_60_OHM, RTT_Wr = RZQ/4 */
+	.rtt_nom	= 1,	/* DDR3_RTT_60_OHM, RTT_Nom = RZQ/4 */
+	.walat		= 1,	/* Write additional latency */
+	.ralat		= 5,	/* Read additional latency */
+	.mif3_mode	= 3,	/* Command prediction working mode */
+	.bi_on		= 1,	/* Bank interleaving enabled */
+	.sde_to_rst	= 0x10,	/* 14 cycles, 200us (JEDEC default) */
+	.rst_to_cke	= 0x23,	/* 33 cycles, 500us (JEDEC default) */
+	.refsel		= 1,	/* Refresh cycles at 32KHz */
+	.refr		= 3,	/* 4 refresh commands per refresh cycle */
 };
 
 static void ccgr_init(void)
@@ -208,6 +296,45 @@ static void setup_iomux_boardid(void)
 {
 	/* HW code pins: Setup alternate function and configure pads */
 	SETUP_IOMUX_PADS(hwcode_pads);
+}
+
+/* DDR Code */
+static iomux_v3_cfg_t const ddrcode_pads[] = {
+	IOMUX_PADS(PAD_EIM_A16__GPIO2_IO22	| MUX_PAD_CTRL(GPIO_PAD_CTRL)),
+	IOMUX_PADS(PAD_EIM_A17__GPIO2_IO21	| MUX_PAD_CTRL(GPIO_PAD_CTRL)),
+};
+
+static void setup_iomux_ddrcode(void)
+{
+	/* ddr code pins */
+	SETUP_IOMUX_PADS(ddrcode_pads);
+}
+
+enum dhcom_ddr3_code {
+	DH_DDR3_SIZE_256MIB = 0x00,
+	DH_DDR3_SIZE_512MIB = 0x01,
+	DH_DDR3_SIZE_1GIB   = 0x02,
+	DH_DDR3_SIZE_2GIB   = 0x03
+};
+
+#define DDR3_CODE_BIT_0   IMX_GPIO_NR(2, 22)
+#define DDR3_CODE_BIT_1   IMX_GPIO_NR(2, 21)
+
+enum dhcom_ddr3_code dhcom_get_ddr3_code(void)
+{
+	enum dhcom_ddr3_code ddr3_code;
+
+	gpio_request(DDR3_CODE_BIT_0, "DDR3_CODE_BIT_0");
+	gpio_request(DDR3_CODE_BIT_1, "DDR3_CODE_BIT_1");
+
+	gpio_direction_input(DDR3_CODE_BIT_0);
+	gpio_direction_input(DDR3_CODE_BIT_1);
+
+	/* 256MB = 0b00; 512MB = 0b01; 1GB = 0b10; 2GB = 0b11 */
+	ddr3_code = (!!gpio_get_value(DDR3_CODE_BIT_1) << 1)
+	     | (!!gpio_get_value(DDR3_CODE_BIT_0));
+
+	return ddr3_code;
 }
 
 /* GPIO */
@@ -355,6 +482,81 @@ static void setup_iomux_usb(void)
 	SETUP_IOMUX_PADS(usb_pads);
 }
 
+
+/* DRAM */
+static void dhcom_spl_dram_init(void)
+{
+	enum dhcom_ddr3_code ddr3_code = dhcom_get_ddr3_code();
+
+	if (is_mx6dq()) {
+		mx6dq_dram_iocfg(64, &dhcom6dq_ddr_ioregs,
+					&dhcom6dq_grp_ioregs);
+		switch (ddr3_code) {
+		default:
+			printf("imx6qd: unsupported ddr3 code %d\n", ddr3_code);
+			printf("        choosing 1024 MB\n");
+			/* fall through */
+		case DH_DDR3_SIZE_1GIB:
+			mx6_dram_cfg(&dhcom_ddr_64bit,
+				     &dhcom_mmdc_calib_4x2g_1066,
+				     &dhcom_mem_ddr_2g);
+			break;
+		case DH_DDR3_SIZE_2GIB:
+			mx6_dram_cfg(&dhcom_ddr_64bit,
+				     &dhcom_mmdc_calib_4x4g_1066,
+				     &dhcom_mem_ddr_4g);
+			break;
+		}
+
+		/* Perform DDR DRAM calibration */
+		udelay(100);
+		mmdc_do_dqs_calibration(&dhcom_ddr_64bit);
+
+	} else if (is_cpu_type(MXC_CPU_MX6DL)) {
+		mx6sdl_dram_iocfg(64, &dhcom6sdl_ddr_ioregs,
+					  &dhcom6sdl_grp_ioregs);
+		switch (ddr3_code) {
+		default:
+			printf("imx6dl: unsupported ddr3 code %d\n", ddr3_code);
+			printf("        choosing 1024 MB\n");
+			/* fall through */
+		case DH_DDR3_SIZE_1GIB:
+			mx6_dram_cfg(&dhcom_ddr_64bit,
+				     &dhcom_mmdc_calib_4x2g_800,
+				     &dhcom_mem_ddr_2g);
+			break;
+		}
+
+		/* Perform DDR DRAM calibration */
+		udelay(100);
+		mmdc_do_dqs_calibration(&dhcom_ddr_64bit);
+
+	} else if (is_cpu_type(MXC_CPU_MX6SOLO)) {
+		mx6sdl_dram_iocfg(32, &dhcom6sdl_ddr_ioregs,
+					  &dhcom6sdl_grp_ioregs);
+		switch (ddr3_code) {
+		default:
+			printf("imx6s: unsupported ddr3 code %d\n", ddr3_code);
+			printf("       choosing 512 MB\n");
+			/* fall through */
+		case DH_DDR3_SIZE_512MIB:
+			mx6_dram_cfg(&dhcom_ddr_32bit,
+				     &dhcom_mmdc_calib_2x2g_800,
+				     &dhcom_mem_ddr_2g);
+			break;
+		case DH_DDR3_SIZE_1GIB:
+			mx6_dram_cfg(&dhcom_ddr_32bit,
+				     &dhcom_mmdc_calib_2x4g_800,
+				     &dhcom_mem_ddr_4g);
+			break;
+		}
+
+		/* Perform DDR DRAM calibration */
+		udelay(100);
+		mmdc_do_dqs_calibration(&dhcom_ddr_32bit);
+	}
+}
+
 void board_init_f(ulong dummy)
 {
 	/* setup AIPS and disable watchdog */
@@ -367,6 +569,7 @@ void board_init_f(ulong dummy)
 	timer_init();
 
 	setup_iomux_boardid();
+	setup_iomux_ddrcode();
 	setup_iomux_gpio();
 	setup_iomux_enet();
 	setup_iomux_sd();
@@ -377,19 +580,8 @@ void board_init_f(ulong dummy)
 	/* UART clocks enabled and gd valid - init serial console */
 	preloader_console_init();
 
-	/* Start the DDR DRAM */
-	if (is_mx6dq())
-		mx6dq_dram_iocfg(dhcom_mem_ddr.width, &dhcom6dq_ddr_ioregs,
-				 &dhcom6dq_grp_ioregs);
-	else
-		mx6sdl_dram_iocfg(dhcom_mem_ddr.width, &dhcom6sdl_ddr_ioregs,
-				  &dhcom6sdl_grp_ioregs);
-	mx6_dram_cfg(&dhcom_ddr_info, &dhcom_mmdc_calib, &dhcom_mem_ddr);
-
-	/* Perform DDR DRAM calibration */
-	udelay(100);
-	mmdc_do_write_level_calibration(&dhcom_ddr_info);
-	mmdc_do_dqs_calibration(&dhcom_ddr_info);
+	/* DDR3 initialization */
+	dhcom_spl_dram_init();
 
 	/* Clear the BSS. */
 	memset(__bss_start, 0, __bss_end - __bss_start);

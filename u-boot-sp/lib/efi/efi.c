@@ -1,7 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (c) 2015 Google, Inc
- *
- * SPDX-License-Identifier:	GPL-2.0+
  *
  * EFI information obtained here:
  * http://wiki.phoenix.com/wiki/index.php/EFI_BOOT_SERVICES
@@ -16,8 +15,6 @@
 #include <linux/types.h>
 #include <efi.h>
 #include <efi_api.h>
-
-DECLARE_GLOBAL_DATA_PTR;
 
 /*
  * Unfortunately we cannot access any code outside what is built especially
@@ -72,7 +69,7 @@ int efi_init(struct efi_priv *priv, const char *banner, efi_handle_t image,
 	efi_putc(priv, ' ');
 
 	ret = boot->open_protocol(priv->parent_image, &loaded_image_guid,
-				  (void **)&loaded_image, &priv->parent_image,
+				  (void **)&loaded_image, priv->parent_image,
 				  NULL, EFI_OPEN_PROTOCOL_GET_PROTOCOL);
 	if (ret) {
 		efi_puts(priv, "Failed to get loaded image protocol\n");

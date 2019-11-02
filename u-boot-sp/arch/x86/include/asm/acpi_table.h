@@ -1,11 +1,13 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Based on acpi.c from coreboot
  *
  * Copyright (C) 2015, Saket Sinha <saket.sinha89@gmail.com>
  * Copyright (C) 2016, Bin Meng <bmeng.cn@gmail.com>
- *
- * SPDX-License-Identifier: GPL-2.0+
  */
+
+#ifndef __ASM_ACPI_TABLE_H__
+#define __ASM_ACPI_TABLE_H__
 
 #define RSDP_SIG		"RSD PTR "	/* RSDP pointer signature */
 #define OEM_ID			"U-BOOT"	/* U-Boot */
@@ -301,6 +303,57 @@ struct acpi_mcfg_mmconfig {
 /* ACPI global NVS structure */
 struct acpi_global_nvs;
 
+/* DBG2 definitions are partially used for SPCR interface_type */
+
+/* Types for port_type field */
+
+#define ACPI_DBG2_SERIAL_PORT		0x8000
+#define ACPI_DBG2_1394_PORT		0x8001
+#define ACPI_DBG2_USB_PORT		0x8002
+#define ACPI_DBG2_NET_PORT		0x8003
+
+/* Subtypes for port_subtype field */
+
+#define ACPI_DBG2_16550_COMPATIBLE	0x0000
+#define ACPI_DBG2_16550_SUBSET		0x0001
+#define ACPI_DBG2_ARM_PL011		0x0003
+#define ACPI_DBG2_ARM_SBSA_32BIT	0x000D
+#define ACPI_DBG2_ARM_SBSA_GENERIC	0x000E
+#define ACPI_DBG2_ARM_DCC		0x000F
+#define ACPI_DBG2_BCM2835		0x0010
+
+#define ACPI_DBG2_1394_STANDARD		0x0000
+
+#define ACPI_DBG2_USB_XHCI		0x0000
+#define ACPI_DBG2_USB_EHCI		0x0001
+
+#define ACPI_DBG2_UNKNOWN		0x00FF
+
+/* SPCR (Serial Port Console Redirection table) */
+struct __packed acpi_spcr {
+	struct acpi_table_header header;
+	u8 interface_type;
+	u8 reserved[3];
+	struct acpi_gen_regaddr serial_port;
+	u8 interrupt_type;
+	u8 pc_interrupt;
+	u32 interrupt;		/* Global system interrupt */
+	u8 baud_rate;
+	u8 parity;
+	u8 stop_bits;
+	u8 flow_control;
+	u8 terminal_type;
+	u8 reserved1;
+	u16 pci_device_id;	/* Must be 0xffff if not PCI device */
+	u16 pci_vendor_id;	/* Must be 0xffff if not PCI device */
+	u8 pci_bus;
+	u8 pci_device;
+	u8 pci_function;
+	u32 pci_flags;
+	u8 pci_segment;
+	u32 reserved2;
+};
+
 /* These can be used by the target port */
 
 void acpi_fill_header(struct acpi_table_header *header, char *signature);
@@ -318,32 +371,15 @@ int acpi_create_mcfg_mmconfig(struct acpi_mcfg_mmconfig *mmconfig, u32 base,
 			      u16 seg_nr, u8 start, u8 end);
 u32 acpi_fill_mcfg(u32 current);
 void acpi_create_gnvs(struct acpi_global_nvs *gnvs);
-/**
- * enter_acpi_mode() - enter into ACPI mode
- *
- * This programs the ACPI-defined PM1_CNT register to enable SCI interrupt
- * so that the whole system swiches to ACPI mode.
- *
- * @pm1_cnt:	PM1_CNT register I/O address
- */
-void enter_acpi_mode(int pm1_cnt);
 ulong write_acpi_tables(ulong start);
 
 /**
- * acpi_find_fadt() - find ACPI FADT table in the sytem memory
+ * acpi_get_rsdp_addr() - get ACPI RSDP table address
  *
- * This routine parses the ACPI table to locate the ACPI FADT table.
+ * This routine returns the ACPI RSDP table address in the system memory.
  *
- * @return:	a pointer to the ACPI FADT table in the system memory
+ * @return:	ACPI RSDP table address
  */
-struct acpi_fadt *acpi_find_fadt(void);
+ulong acpi_get_rsdp_addr(void);
 
-/**
- * acpi_find_wakeup_vector() - find OS installed wake up vector address
- *
- * This routine parses the ACPI table to locate the wake up vector installed
- * by the OS previously.
- *
- * @return:	wake up vector address installed by the OS
- */
-void *acpi_find_wakeup_vector(struct acpi_fadt *);
+#endif /* __ASM_ACPI_TABLE_H__ */

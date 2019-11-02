@@ -1,7 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright 2017 NXP
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 #include <common.h>
 #include <phy.h>
@@ -94,7 +93,7 @@ void fsl_rgmii_init(void)
 	u32 ec;
 
 #ifdef CONFIG_SYS_FSL_EC1
-	ec = gur_in32(&gur->rcwsr[FSL_CHASSIS3_EC1_REGSR - 1])
+	ec = gur_in32(&gur->rcwsr[FSL_CHASSIS3_EC1_REGSR])
 		& FSL_CHASSIS3_RCWSR25_EC1_PRTCL_MASK;
 	ec >>= FSL_CHASSIS3_RCWSR25_EC1_PRTCL_SHIFT;
 
@@ -103,7 +102,7 @@ void fsl_rgmii_init(void)
 #endif
 
 #ifdef CONFIG_SYS_FSL_EC2
-	ec = gur_in32(&gur->rcwsr[FSL_CHASSIS3_EC2_REGSR - 1])
+	ec = gur_in32(&gur->rcwsr[FSL_CHASSIS3_EC2_REGSR])
 		& FSL_CHASSIS3_RCWSR25_EC2_PRTCL_MASK;
 	ec >>= FSL_CHASSIS3_RCWSR25_EC2_PRTCL_SHIFT;
 

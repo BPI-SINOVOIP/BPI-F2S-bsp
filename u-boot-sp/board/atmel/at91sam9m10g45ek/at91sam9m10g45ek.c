@@ -1,9 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2007-2008
  * Stelian Pop <stelian@popies.net>
  * Lead Tech Design <www.leadtechdesign.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -16,7 +15,7 @@
 #include <asm/arch/gpio.h>
 #include <asm/arch/clk.h>
 #include <lcd.h>
-#include <linux/mtd/nand.h>
+#include <linux/mtd/rawnand.h>
 #include <atmel_lcdc.h>
 #include <asm/mach-types.h>
 

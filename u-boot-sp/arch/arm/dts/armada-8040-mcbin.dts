@@ -1,8 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (C) 2016 Marvell International Ltd.
- *
- * SPDX-License-Identifier:	GPL-2.0
- * https://spdx.org/licenses
  */
 
 #include "armada-8040.dtsi" /* include SoC device tree */
@@ -134,7 +132,7 @@
 	num-lanes = <4>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&cpm_pcie_reset_pins>;
-	marvell,reset-gpio = <&cpm_gpio1 20 GPIO_ACTIVE_HIGH>; /* GPIO[52] */
+	marvell,reset-gpio = <&cpm_gpio1 20 GPIO_ACTIVE_LOW>; /* GPIO[52] */
 	status = "okay";
 };
 
@@ -154,6 +152,12 @@
 
 &cpm_sata0 {
 	status = "okay";
+};
+
+&cpm_mdio {
+	ge_phy: ethernet-phy@0 {
+		reg = <0>;
+	};
 };
 
 &cpm_comphy {
@@ -197,6 +201,16 @@
 
 &cps_utmi0 {
 	status = "okay";
+};
+
+&cps_ethernet {
+	status = "okay";
+};
+
+&cps_eth1 {
+	status = "okay";
+	phy = <&ge_phy>;
+	phy-mode = "sgmii";
 };
 
 &cps_pinctl {

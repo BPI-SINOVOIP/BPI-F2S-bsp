@@ -1,11 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2012 Freescale Semiconductor, Inc.
  * Author: Fabio Estevam <fabio.estevam@freescale.com>
  *
  * Copyright (C) 2013, 2014 TQ Systems (ported SabreSD to TQMa6x)
  * Author: Markus Niebel <markus.niebel@tq-group.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <asm/arch/clock.h>
@@ -20,7 +19,7 @@
 #include <asm/mach-imx/spi.h>
 #include <common.h>
 #include <fsl_esdhc.h>
-#include <libfdt.h>
+#include <linux/libfdt.h>
 #include <i2c.h>
 #include <mmc.h>
 #include <power/pfuze100_pmic.h>
@@ -156,11 +155,13 @@ __weak void tqma6_iomuxc_spi(void)
 					 ARRAY_SIZE(tqma6_ecspi1_pads));
 }
 
+#if defined(CONFIG_SF_DEFAULT_BUS) && defined(CONFIG_SF_DEFAULT_CS)
 int board_spi_cs_gpio(unsigned bus, unsigned cs)
 {
 	return ((bus == CONFIG_SF_DEFAULT_BUS) &&
 		(cs == CONFIG_SF_DEFAULT_CS)) ? TQMA6_SF_CS_GPIO : -1;
 }
+#endif
 
 static struct i2c_pads_info tqma6_i2c3_pads = {
 	/* I2C3: on board LM75, M24C64,  */

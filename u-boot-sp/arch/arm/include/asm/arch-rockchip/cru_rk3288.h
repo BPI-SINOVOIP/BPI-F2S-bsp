@@ -1,10 +1,9 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * (C) Copyright 2015 Google, Inc
  *
  * (C) Copyright 2008-2014 Rockchip Electronics
  * Peter, Software Engineering, <superpeter.cai@gmail.com>.
- *
- * SPDX-License-Identifier:     GPL-2.0+
  */
 #ifndef _ASM_ARCH_CRU_RK3288_H
 #define _ASM_ARCH_CRU_RK3288_H
@@ -74,6 +73,14 @@ enum {
 
 	MMC0_DIV_SHIFT		= 0,
 	MMC0_DIV_MASK		= 0x3f << MMC0_DIV_SHIFT,
+};
+
+/* CRU_CLKSEL8_CON */
+enum {
+	I2S0_FRAC_DENOM_SHIFT	= 0,
+	I2S0_FRAC_DENOM_MASK	= 0xffff << I2S0_FRAC_DENOM_SHIFT,
+	I2S0_FRAC_NUMER_SHIFT	= 16,
+	I2S0_FRAC_NUMER_MASK	= 0xffffu << I2S0_FRAC_NUMER_SHIFT,
 };
 
 /* CRU_CLKSEL12_CON */

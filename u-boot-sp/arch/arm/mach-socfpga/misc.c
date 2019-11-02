@@ -1,14 +1,13 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  *  Copyright (C) 2012-2017 Altera Corporation <www.altera.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
 #include <asm/io.h>
 #include <errno.h>
 #include <fdtdec.h>
-#include <libfdt.h>
+#include <linux/libfdt.h>
 #include <altera.h>
 #include <miiphy.h>
 #include <netdev.h>
@@ -23,8 +22,10 @@
 
 DECLARE_GLOBAL_DATA_PTR;
 
+#ifdef CONFIG_SYS_L2_PL310
 static const struct pl310_regs *const pl310 =
 	(struct pl310_regs *)CONFIG_SYS_PL310_BASE;
+#endif
 
 struct bsel bsel_str[] = {
 	{ "rsvd", "Reserved", },
@@ -39,7 +40,9 @@ struct bsel bsel_str[] = {
 
 int dram_init(void)
 {
-	gd->ram_size = get_ram_size((long *)PHYS_SDRAM_1, PHYS_SDRAM_1_SIZE);
+	if (fdtdec_setup_mem_size_base() != 0)
+		return -EINVAL;
+
 	return 0;
 }
 
@@ -53,10 +56,14 @@ void enable_caches(void)
 #endif
 }
 
+#ifdef CONFIG_SYS_L2_PL310
 void v7_outer_cache_enable(void)
 {
 	/* Disable the L2 cache */
 	clrbits_le32(&pl310->pl310_ctrl, L2X0_CTRL_EN);
+
+	writel(0x0, &pl310->pl310_tag_latency_ctrl);
+	writel(0x10, &pl310->pl310_data_latency_ctrl);
 
 	/* enable BRESP, instruction and data prefetch, full line of zeroes */
 	setbits_le32(&pl310->pl310_aux_ctrl,
@@ -73,6 +80,7 @@ void v7_outer_cache_disable(void)
 	/* Disable the L2 cache */
 	clrbits_le32(&pl310->pl310_ctrl, L2X0_CTRL_EN);
 }
+#endif
 
 #if defined(CONFIG_SYS_CONSOLE_IS_IN_ENV) && \
 defined(CONFIG_SYS_CONSOLE_OVERWRITE_ROUTINE)
@@ -83,33 +91,11 @@ int overwrite_console(void)
 #endif
 
 #ifdef CONFIG_FPGA
-/*
- * FPGA programming support for SoC FPGA Cyclone V
- */
-static Altera_desc altera_fpga[] = {
-	{
-		/* Family */
-		Altera_SoCFPGA,
-		/* Interface type */
-		fast_passive_parallel,
-		/* No limitation as additional data will be ignored */
-		-1,
-		/* No device function table */
-		NULL,
-		/* Base interface address specified in driver */
-		NULL,
-		/* No cookie implementation */
-		0
-	},
-};
-
 /* add device descriptor to FPGA device table */
-void socfpga_fpga_add(void)
+void socfpga_fpga_add(void *fpga_desc)
 {
-	int i;
 	fpga_init();
-	for (i = 0; i < ARRAY_SIZE(altera_fpga); i++)
-		fpga_add(fpga_altera, &altera_fpga[i]);
+	fpga_add(fpga_altera, fpga_desc);
 }
 #endif
 
@@ -136,3 +122,34 @@ int arch_cpu_init(void)
 
 	return 0;
 }
+
+#ifndef CONFIG_SPL_BUILD
+static int do_bridge(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
+{
+	if (argc != 2)
+		return CMD_RET_USAGE;
+
+	argv++;
+
+	switch (*argv[0]) {
+	case 'e':	/* Enable */
+		do_bridge_reset(1);
+		break;
+	case 'd':	/* Disable */
+		do_bridge_reset(0);
+		break;
+	default:
+		return CMD_RET_USAGE;
+	}
+
+	return 0;
+}
+
+U_BOOT_CMD(bridge, 2, 1, do_bridge,
+	   "SoCFPGA HPS FPGA bridge control",
+	   "enable  - Enable HPS-to-FPGA, FPGA-to-HPS, LWHPS-to-FPGA bridges\n"
+	   "bridge disable - Enable HPS-to-FPGA, FPGA-to-HPS, LWHPS-to-FPGA bridges\n"
+	   ""
+);
+
+#endif

@@ -1,7 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * (C) Copyright 2014
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef _FIT_COMMON_H_
@@ -11,6 +10,14 @@
 #include "mkimage.h"
 #include <image.h>
 
+/**
+ * Verify the format of FIT header pointed to by ptr
+ *
+ * @ptr: image header to be verified
+ * @image_size: size of while image
+ * @params: mkimage parameters
+ * @return 0 if OK, -1 on error
+ */
 int fit_verify_header(unsigned char *ptr, int image_size,
 			struct image_tool_params *params);
 

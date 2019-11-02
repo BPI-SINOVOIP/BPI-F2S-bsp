@@ -1,7 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright (c) 2013 Google, Inc
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __SANDBOX_SDL_H
@@ -55,12 +54,12 @@ int sandbox_sdl_scan_keys(int key[], int max_keys);
 int sandbox_sdl_key_pressed(int keycode);
 
 /**
- * sandbox_sdl_sound_start() - start playing a sound
+ * sandbox_sdl_sound_play() - Play a sound
  *
- * @frequency:	Frequency of sounds in Hertz
- * @return 0 if OK, -ENODEV if no sound is available
+ * @data:	Data to play (typically 16-bit)
+ * @count:	Number of bytes in data
  */
-int sandbox_sdl_sound_start(uint frequency);
+int sandbox_sdl_sound_play(const void *data, uint count);
 
 /**
  * sandbox_sdl_sound_stop() - stop playing a sound
@@ -72,9 +71,11 @@ int sandbox_sdl_sound_stop(void);
 /**
  * sandbox_sdl_sound_init() - set up the sound system
  *
+ * @rate:	Sample rate to use
+ * @channels:	Number of channels to use (1=mono, 2=stereo)
  * @return 0 if OK, -ENODEV if no sound is available
  */
-int sandbox_sdl_sound_init(void);
+int sandbox_sdl_sound_init(int rate, int channels);
 
 #else
 static inline int sandbox_sdl_init_display(int width, int height,
@@ -103,12 +104,17 @@ static inline int sandbox_sdl_sound_start(uint frequency)
 	return -ENODEV;
 }
 
+int sandbox_sdl_sound_play(const void *data, uint count)
+{
+	return -ENODEV;
+}
+
 static inline int sandbox_sdl_sound_stop(void)
 {
 	return -ENODEV;
 }
 
-static inline int sandbox_sdl_sound_init(void)
+int sandbox_sdl_sound_init(int rate, int channels)
 {
 	return -ENODEV;
 }

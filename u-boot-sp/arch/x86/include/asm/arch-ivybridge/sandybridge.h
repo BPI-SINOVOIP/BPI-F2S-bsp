@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * Copyright (c) 2014 Google, Inc
  *
@@ -5,8 +6,6 @@
  *
  * Copyright (C) 2007-2008 coresystems GmbH
  * Copyright (C) 2011 Google Inc.
- *
- * SPDX-License-Identifier:	GPL-2.0
  */
 
 #ifndef _ACH_ASM_SANDYBRIDGE_H
@@ -43,6 +42,9 @@
 #define DEFAULT_RCBABASE	0xfed1c000
 /* 4 KB per PCIe device */
 #define DEFAULT_PCIEXBAR	CONFIG_PCIE_ECAM_BASE
+
+#define IOMMU_BASE1		0xfed90000ULL
+#define IOMMU_BASE2		0xfed91000ULL
 
 /* Device 0:0.0 PCI configuration space (Host Bridge) */
 #define EPBAR		0x40

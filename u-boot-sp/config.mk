@@ -1,9 +1,7 @@
+# SPDX-License-Identifier: GPL-2.0+
 #
 # (C) Copyright 2000-2013
 # Wolfgang Denk, DENX Software Engineering, wd@denx.de.
-#
-# SPDX-License-Identifier:	GPL-2.0+
-#
 #########################################################################
 
 # This file is included from ./Makefile and spl/Makefile.
@@ -17,6 +15,7 @@ PLATFORM_CPPFLAGS :=
 PLATFORM_LDFLAGS :=
 LDFLAGS :=
 LDFLAGS_FINAL :=
+LDFLAGS_STANDALONE :=
 OBJCOPYFLAGS :=
 # clear VENDOR for tcsh
 VENDOR :=
@@ -64,11 +63,6 @@ ifdef FTRACE
 PLATFORM_CPPFLAGS += -finstrument-functions -DFTRACE
 endif
 
-# Allow use of stdint.h if available
-ifneq ($(USE_STDINT),)
-PLATFORM_CPPFLAGS += -DCONFIG_USE_STDINT
-endif
-
 #########################################################################
 
 RELFLAGS := $(PLATFORM_RELFLAGS)
@@ -82,4 +76,5 @@ LDFLAGS_FINAL += -Bstatic
 export PLATFORM_CPPFLAGS
 export RELFLAGS
 export LDFLAGS_FINAL
+export LDFLAGS_STANDALONE
 export CONFIG_STANDALONE_LOAD_ADDR

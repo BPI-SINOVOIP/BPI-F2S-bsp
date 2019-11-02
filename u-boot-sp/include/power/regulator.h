@@ -1,8 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  *  Copyright (C) 2014-2015 Samsung Electronics
  *  Przemyslaw Marczak <p.marczak@samsung.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef _INCLUDE_REGULATOR_H_
@@ -151,6 +150,7 @@ enum regulator_flag {
  * @always_on* - bool type, true or false
  * @boot_on*   - bool type, true or false
  * TODO(sjg@chromium.org): Consider putting the above two into @flags
+ * @ramp_delay - Time to settle down after voltage change (unit: uV/us)
  * @flags:     - flags value (see REGULATOR_FLAG_...)
  * @name**     - fdt regulator name - should be taken from the device tree
  * ctrl_reg:   - Control register offset used to enable/disable regulator
@@ -170,6 +170,7 @@ struct dm_regulator_uclass_platdata {
 	int max_uV;
 	int min_uA;
 	int max_uA;
+	unsigned int ramp_delay;
 	bool always_on;
 	bool boot_on;
 	const char *name;
@@ -303,6 +304,17 @@ int regulator_get_enable(struct udevice *dev);
  * @return - 0 on success or -errno val if fails
  */
 int regulator_set_enable(struct udevice *dev, bool enable);
+
+/**
+ * regulator_set_enable_if_allowed: set regulator enable state if allowed by
+ *					regulator
+ *
+ * @dev    - pointer to the regulator device
+ * @enable - set true or false
+ * @return - 0 on success or if enabling is not supported
+ *	     -errno val if fails.
+ */
+int regulator_set_enable_if_allowed(struct udevice *dev, bool enable);
 
 /**
  * regulator_get_mode: get active operation mode id of a given regulator

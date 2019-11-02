@@ -1,9 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Google Veyron Jerry Rev 3+ board device tree source
  *
  * Copyright 2014 Google, Inc
- *
- * SPDX-License-Identifier:	GPL-2.0
  */
 
 /dts-v1/;
@@ -52,6 +51,18 @@
 		regulator-name = "backlight_regulator";
 		vin-supply = <&vcc33_sys>;
 		startup-delay-us = <15000>;
+	};
+
+	sound {
+		compatible = "rockchip,audio-max98090-jerry";
+
+		cpu {
+			sound-dai = <&i2s 0>;
+		};
+
+		codec {
+			sound-dai = <&max98090 0>;
+		};
 	};
 };
 

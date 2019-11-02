@@ -1,11 +1,13 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright 2014 Freescale Semiconductor, Inc.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __DDR_H__
 #define __DDR_H__
+
+void erratum_a008850_post(void);
+
 struct board_specific_parameters {
 	u32 n_ranks;
 	u32 datarate_mhz_high;

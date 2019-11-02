@@ -1,7 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright 2013 Stefan Roese <sr@denx.de>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -9,6 +8,8 @@
 #include <linux/errno.h>
 #include <asm/io.h>
 #include <asm/mach-imx/regs-common.h>
+
+DECLARE_GLOBAL_DATA_PTR;
 
 /* 1 second delay should be plenty of time for block reset. */
 #define	RESET_MAX_TIMEOUT	1000000
@@ -71,4 +72,34 @@ int mxs_reset_block(struct mxs_register_32 *reg)
 		return 1;
 
 	return 0;
+}
+
+static ulong get_sp(void)
+{
+	ulong ret;
+
+	asm("mov %0, sp" : "=r"(ret) : );
+	return ret;
+}
+
+void board_lmb_reserve(struct lmb *lmb)
+{
+	ulong sp, bank_end;
+	int bank;
+
+	sp = get_sp();
+	debug("## Current stack ends at 0x%08lx ", sp);
+
+	/* adjust sp by 16K to be safe */
+	sp -= 4096 << 2;
+	for (bank = 0; bank < CONFIG_NR_DRAM_BANKS; bank++) {
+		if (sp < gd->bd->bi_dram[bank].start)
+			continue;
+		bank_end = gd->bd->bi_dram[bank].start +
+			gd->bd->bi_dram[bank].size;
+		if (sp >= bank_end)
+			continue;
+		lmb_reserve(lmb, sp, bank_end - sp);
+		break;
+	}
 }

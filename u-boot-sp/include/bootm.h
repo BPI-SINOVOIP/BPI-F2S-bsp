@@ -1,8 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * (C) Copyright 2000-2009
  * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef _BOOTM_H
@@ -36,6 +35,8 @@ typedef int boot_os_fn(int flag, int argc, char * const argv[],
 			bootm_headers_t *images);
 
 extern boot_os_fn do_bootm_linux;
+extern boot_os_fn do_bootm_vxworks;
+
 int do_bootelf(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[]);
 void lynxkdi_boot(image_header_t *hdr);
 
@@ -72,5 +73,18 @@ void arch_preboot_os(void);
 int bootm_decomp_image(int comp, ulong load, ulong image_start, int type,
 		       void *load_buf, void *image_buf, ulong image_len,
 		       uint unc_len, ulong *load_end);
+
+/*
+ * boards should define this to disable devices when EFI exits from boot
+ * services.
+ *
+ * TODO(sjg@chromium.org>): Update this to use driver model's device_remove().
+ */
+void board_quiesce_devices(void);
+
+/**
+ * switch_to_non_secure_mode() - switch to non-secure mode
+ */
+void switch_to_non_secure_mode(void);
 
 #endif

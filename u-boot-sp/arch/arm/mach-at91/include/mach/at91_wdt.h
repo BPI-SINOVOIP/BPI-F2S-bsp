@@ -1,14 +1,13 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * [origin: Linux kernel arch/arm/mach-at91/include/mach/at91_wdt.h]
  *
  * Copyright (C) 2008 Jean-Christophe PLAGNIOL-VILLARD <plagnioj@jcrosoft.com>
  * Copyright (C) 2007 Andrew Victor
- * Copyright (C) 2007 Atmel Corporation.
+ * Copyright (C) 2018 Microchip Technology Inc.
  *
  * Watchdog Timer (WDT) - System peripherals regsters.
  * Based on AT91SAM9261 datasheet revision D.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef AT91_WDT_H
@@ -28,9 +27,13 @@ typedef struct at91_wdt {
 
 #endif
 
+/* Watchdog Control Register */
+#define AT91_WDT_CR			0x00
 #define AT91_WDT_CR_WDRSTT		1
 #define AT91_WDT_CR_KEY			0xa5000000	/* KEY Password */
 
+/* Watchdog Mode Register*/
+#define AT91_WDT_MR			0X04
 #define AT91_WDT_MR_WDV(x)		(x & 0xfff)
 #define AT91_WDT_MR_WDFIEN		0x00001000
 #define AT91_WDT_MR_WDRSTEN		0x00002000

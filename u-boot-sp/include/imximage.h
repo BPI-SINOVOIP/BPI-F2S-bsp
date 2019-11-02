@@ -1,8 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * (C) Copyright 2009
  * Stefano Babic, DENX Software Engineering, sbabic@denx.de.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef _IMXIMAGE_H_
@@ -13,6 +12,9 @@
 #define MAX_HW_CFG_SIZE_V1 60  /* Max number of registers imx can set for v1 */
 #define APP_CODE_BARKER	0xB1
 #define DCD_BARKER	0xB17219E9
+
+/* Specify the offset of the IVT in the IMX header as expected by BootROM */
+#define BOOTROM_IVT_HDR_OFFSET	0xC00
 
 /*
  * NOTE: This file must be kept in sync with arch/arm/include/asm/\
@@ -31,6 +33,7 @@
 #define FLASH_OFFSET_NOR	0x1000
 #define FLASH_OFFSET_SATA	FLASH_OFFSET_STANDARD
 #define FLASH_OFFSET_QSPI	0x1000
+#define FLASH_OFFSET_FLEXSPI	0x1000
 
 /* Initial Load Region Size */
 #define FLASH_LOADSIZE_UNDEFINED	0xFFFFFFFF
@@ -46,6 +49,7 @@
 /* Command tags and parameters */
 #define IVT_HEADER_TAG			0xD1
 #define IVT_VERSION			0x40
+#define IVT_VERSION_V3			0x41
 #define DCD_HEADER_TAG			0xD2
 #define DCD_VERSION			0x40
 #define DCD_WRITE_DATA_COMMAND_TAG	0xCC
@@ -56,6 +60,7 @@
 #define DCD_CHECK_BITS_SET_PARAM	0x14
 #define DCD_CHECK_BITS_CLR_PARAM	0x04
 
+#ifndef __ASSEMBLY__
 enum imximage_cmd {
 	CMD_INVALID,
 	CMD_IMAGE_VERSION,
@@ -68,6 +73,12 @@ enum imximage_cmd {
 	CMD_CHECK_BITS_CLR,
 	CMD_CSF,
 	CMD_PLUGIN,
+	/* Follwoing on i.MX8MQ/MM */
+	CMD_FIT,
+	CMD_SIGNED_HDMI,
+	CMD_LOADER,
+	CMD_SECOND_LOADER,
+	CMD_DDR_FW,
 };
 
 enum imximage_fld_types {
@@ -81,7 +92,8 @@ enum imximage_fld_types {
 enum imximage_version {
 	IMXIMAGE_VER_INVALID = -1,
 	IMXIMAGE_V1 = 1,
-	IMXIMAGE_V2
+	IMXIMAGE_V2,
+	IMXIMAGE_V3
 };
 
 typedef struct {
@@ -174,6 +186,12 @@ typedef struct {
 	} data;
 } imx_header_v2_t;
 
+typedef struct {
+	flash_header_v2_t fhdr;
+	boot_data_t boot_data;
+	uint32_t padding[5];
+} imx_header_v3_t;
+
 /* The header must be aligned to 4k on MX53 for NAND boot */
 struct imx_header {
 	union {
@@ -197,4 +215,5 @@ typedef void (*set_dcd_rst_t)(struct imx_header *imxhdr,
 typedef void (*set_imx_hdr_t)(struct imx_header *imxhdr, uint32_t dcd_len,
 		uint32_t entry_point, uint32_t flash_offset);
 
+#endif /* __ASSEMBLY__ */
 #endif /* _IMXIMAGE_H_ */

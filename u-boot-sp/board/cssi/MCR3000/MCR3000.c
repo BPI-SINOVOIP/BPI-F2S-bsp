@@ -1,11 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2010-2017 CS Systemes d'Information
  * Florent Trinh Thai <florent.trinh-thai@c-s.fr>
  * Christophe Leroy <christophe.leroy@c-s.fr>
  *
  * Board specific routines for the MCR3000 board
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -13,8 +12,12 @@
 #include <mpc8xx.h>
 #include <fdt_support.h>
 #include <asm/io.h>
+#include <dm/uclass.h>
+#include <wdt.h>
 
 DECLARE_GLOBAL_DATA_PTR;
+
+#define SDRAM_MAX_SIZE			(32 * 1024 * 1024)
 
 static const uint cs1_dram_table_66[] = {
 	/* DRAM - single read. (offset 0 in upm RAM) */
@@ -139,6 +142,20 @@ int board_early_init_f(void)
 	setbits_be32(&immr->im_cpm.cp_pbdir, 0x00020000); /* PROGFPGA output */
 	udelay(1);				/* Wait more than 300ns */
 	setbits_be32(&immr->im_cpm.cp_pbdat, 0x00020000); /* PROGFPGA up */
+
+	return 0;
+}
+
+int board_early_init_r(void)
+{
+	struct udevice *watchdog_dev = NULL;
+
+	if (uclass_get_device(UCLASS_WDT, 0, &watchdog_dev)) {
+		puts("Cannot find watchdog!\n");
+	} else {
+		puts("Enabling watchdog.\n");
+		wdt_start(watchdog_dev, 0xffff, 0);
+	}
 
 	return 0;
 }

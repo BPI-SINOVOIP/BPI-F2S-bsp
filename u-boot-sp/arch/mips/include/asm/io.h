@@ -1,11 +1,10 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * Copyright (C) 1994, 1995 Waldorf GmbH
  * Copyright (C) 1994 - 2000, 06 Ralf Baechle
  * Copyright (C) 1999, 2000 Silicon Graphics, Inc.
  * Copyright (C) 2004, 2005  MIPS Technologies, Inc.  All rights reserved.
  *	Author: Maciej W. Rozycki <macro@mips.com>
- *
- * SPDX-License-Identifier:	GPL-2.0
  */
 #ifndef _ASM_IO_H
 #define _ASM_IO_H
@@ -547,6 +546,28 @@ __BUILD_CLRSETBITS(bwlq, sfx, end, type)
 
 #define __to_cpu(v)		(v)
 #define cpu_to__(v)		(v)
+
+#define out_arch(type, endian, a, v)	__raw_write##type(cpu_to_##endian(v),a)
+#define in_arch(type, endian, a)	endian##_to_cpu(__raw_read##type(a))
+
+#define out_le64(a, v)	out_arch(q, le64, a, v)
+#define out_le32(a, v)	out_arch(l, le32, a, v)
+#define out_le16(a, v)	out_arch(w, le16, a, v)
+
+#define in_le64(a)	in_arch(q, le64, a)
+#define in_le32(a)	in_arch(l, le32, a)
+#define in_le16(a)	in_arch(w, le16, a)
+
+#define out_be64(a, v)	out_arch(q, be64, a, v)
+#define out_be32(a, v)	out_arch(l, be32, a, v)
+#define out_be16(a, v)	out_arch(w, be16, a, v)
+
+#define in_be64(a)	in_arch(q, be64, a)
+#define in_be32(a)	in_arch(l, be32, a)
+#define in_be16(a)	in_arch(w, be16, a)
+
+#define out_8(a, v)	__raw_writeb(v, a)
+#define in_8(a)		__raw_readb(a)
 
 BUILD_CLRSETBITS(b, 8, _, u8)
 BUILD_CLRSETBITS(w, le16, le16, u16)

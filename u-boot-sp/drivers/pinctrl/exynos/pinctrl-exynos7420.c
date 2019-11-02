@@ -1,9 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Exynos7420 pinctrl driver.
  * Copyright (C) 2016 Samsung Electronics
  * Thomas Abraham <thomas.ab@samsung.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -15,8 +14,6 @@
 #include <fdtdec.h>
 #include <asm/arch/pinmux.h>
 #include "pinctrl-exynos.h"
-
-DECLARE_GLOBAL_DATA_PTR;
 
 #define	GPD1_OFFSET	0xc0
 
@@ -116,5 +113,4 @@ U_BOOT_DRIVER(pinctrl_exynos7420) = {
 	.priv_auto_alloc_size = sizeof(struct exynos_pinctrl_priv),
 	.ops		= &exynos7420_pinctrl_ops,
 	.probe		= exynos_pinctrl_probe,
-	.flags		= DM_FLAG_PRE_RELOC
 };

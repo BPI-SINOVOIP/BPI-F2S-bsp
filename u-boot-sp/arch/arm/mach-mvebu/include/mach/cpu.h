@@ -1,9 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * (C) Copyright 2009
  * Marvell Semiconductor <www.marvell.com>
  * Written-by: Prafulla Wadaskar <prafulla@marvell.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef _MVEBU_CPU_H
@@ -69,10 +68,12 @@ enum {
 	MVEBU_SOC_UNKNOWN,
 };
 
+#define MVEBU_SDRAM_SIZE_MAX	0xc0000000
+
 /*
  * Default Device Address MAP BAR values
  */
-#define MBUS_PCI_MEM_BASE	0xE8000000
+#define MBUS_PCI_MEM_BASE	MVEBU_SDRAM_SIZE_MAX
 #define MBUS_PCI_MEM_SIZE	(128 << 20)
 #define MBUS_PCI_IO_BASE	0xF1100000
 #define MBUS_PCI_IO_SIZE	(64 << 10)
@@ -156,18 +157,6 @@ int serdes_phy_config(void);
  * drivers/ddr/marvell
  */
 int ddr3_init(void);
-
-struct mvebu_lcd_info {
-	u32 fb_base;
-	int x_res;
-	int y_res;
-	int x_fp;		/* frontporch */
-	int y_fp;
-	int x_bp;		/* backporch */
-	int y_bp;
-};
-
-int mvebu_lcd_register_init(struct mvebu_lcd_info *lcd_info);
 
 /*
  * get_ref_clk

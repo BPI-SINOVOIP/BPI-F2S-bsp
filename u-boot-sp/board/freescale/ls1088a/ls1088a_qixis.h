@@ -1,7 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright 2017 NXP
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __LS1088AQDS_QIXIS_H__
@@ -35,5 +34,11 @@
 #define BRDCFG4_EMISEL_SHIFT		5
 #define BRDCFG9_SFPTX_MASK		0x10
 #define BRDCFG9_SFPTX_SHIFT		4
+
+/* Definitions of QIXIS Registers for LS1088ARDB */
+
+/* BRDCFG5 */
+#define BRDCFG5_SPISDHC_MASK		0x0C
+#define BRDCFG5_FORCE_SD		0x08
 
 #endif

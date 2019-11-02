@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2011 - 2012 Samsung Electronics
  * EXT4 filesystem implementation in Uboot by
@@ -17,8 +18,6 @@
  * Copyright (C) 2003, 2004  Free Software Foundation, Inc.
  *
  * ext4write : Based on generic ext4 protocol.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 
@@ -865,6 +864,12 @@ int ext4fs_write(const char *fname, unsigned char *buffer,
 		printf("error in File System init\n");
 		return -1;
 	}
+
+	if (le32_to_cpu(fs->sb->feature_ro_compat) & EXT4_FEATURE_RO_COMPAT_METADATA_CSUM) {
+		printf("Unsupported feature metadata_csum found, not writing.\n");
+		return -1;
+	}
+
 	inodes_per_block = fs->blksz / fs->inodesz;
 	parent_inodeno = ext4fs_get_parent_inode_num(fname, filename, F_FILE);
 	if (parent_inodeno == -1)

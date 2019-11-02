@@ -1,9 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (c) 2012, NVIDIA CORPORATION.  All rights reserved.
  *
  * Inspired by cmd_ext_common.c, cmd_fat.c.
- *
- * SPDX-License-Identifier:	GPL-2.0
  */
 
 #include <common.h>
@@ -27,8 +26,10 @@ U_BOOT_CMD(
 static int do_load_wrapper(cmd_tbl_t *cmdtp, int flag, int argc,
 				char * const argv[])
 {
+#ifdef CONFIG_CMD_BOOTEFI
 	efi_set_bootdev(argv[1], (argc > 2) ? argv[2] : "",
 			(argc > 4) ? argv[4] : "");
+#endif
 	return do_load(cmdtp, flag, argc, argv, FS_TYPE_ANY);
 }
 

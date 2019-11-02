@@ -1,16 +1,16 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright 2015 Toradex, Inc.
  *
  * Based on vf610twr:
  * Copyright 2013 Freescale Semiconductor, Inc.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <asm/io.h>
 #include <asm/arch/imx-regs.h>
 #include <asm/arch/iomux-vf610.h>
 #include <asm/arch/ddrmc-vf610.h>
+#include "ddrmc-vf610-calibration.h"
 
 void ddrmc_setup_iomux(const iomux_v3_cfg_t *pads, int pads_count)
 {
@@ -62,6 +62,8 @@ void ddrmc_setup_iomux(const iomux_v3_cfg_t *pads, int pads_count)
 		VF610_PAD_DDR_WE__DDR_WE_B,
 		VF610_PAD_DDR_ODT1__DDR_ODT_0,
 		VF610_PAD_DDR_ODT0__DDR_ODT_1,
+		VF610_PAD_DDR_DDRBYTE1__DDR_DDRBYTE1,
+		VF610_PAD_DDR_DDRBYTE2__DDR_DDRBYTE2,
 		VF610_PAD_DDR_RESETB,
 	};
 
@@ -189,7 +191,6 @@ void ddrmc_ctrl_init_ddr3(struct ddr3_jedec_timings const *timings,
 		   DDRMC_CR77_SWAP_EN, &ddrmr->cr[77]);
 	writel(DDRMC_CR78_Q_FULLNESS(timings->q_fullness) |
 		   DDRMC_CR78_BUR_ON_FLY_BIT(12), &ddrmr->cr[78]);
-	writel(DDRMC_CR79_CTLUPD_AREF(0), &ddrmr->cr[79]);
 
 	writel(DDRMC_CR82_INT_MASK, &ddrmr->cr[82]);
 
@@ -232,6 +233,11 @@ void ddrmc_ctrl_init_ddr3(struct ddr3_jedec_timings const *timings,
 	/* all inits done, start the DDR controller */
 	writel(DDRMC_CR00_DRAM_CLASS_DDR3 | DDRMC_CR00_START, &ddrmr->cr[0]);
 
-	while (!(readl(&ddrmr->cr[80]) && 0x100))
+	while (!(readl(&ddrmr->cr[80]) & DDRMC_CR80_MC_INIT_COMPLETE))
 		udelay(10);
+	writel(DDRMC_CR80_MC_INIT_COMPLETE, &ddrmr->cr[81]);
+
+#ifdef CONFIG_DDRMC_VF610_CALIBRATION
+	ddrmc_calibration(ddrmr);
+#endif
 }

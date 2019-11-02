@@ -1,7 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright 2014, Freescale Semiconductor
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef _ASM_ARMV7_LS102XA_CONFIG_
@@ -80,8 +79,6 @@
 
 /* SATA */
 #define AHCI_BASE_ADDR				(CONFIG_SYS_IMMR + 0x02200000)
-#define CONFIG_LIBATA
-#define CONFIG_SCSI_AHCI
 #define CONFIG_SCSI_AHCI_PLAT
 #define CONFIG_SYS_SCSI_MAX_SCSI_ID		1
 #define CONFIG_SYS_SCSI_MAX_LUN		1

@@ -1,9 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2001-2015
  * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
  * Joe Hershberger, National Instruments
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -292,7 +291,6 @@ int eth_initialize(void)
 	return num_devices;
 }
 
-#ifdef CONFIG_MCAST_TFTP
 /* Multicast.
  * mcast_addr: multicast ipaddr from which multicast Mac is made
  * join: 1=join, 0=leave.
@@ -311,39 +309,12 @@ int eth_mcast_join(struct in_addr mcast_ip, int join)
 	return eth_current->mcast(eth_current, mcast_mac, join);
 }
 
-/* the 'way' for ethernet-CRC-32. Spliced in from Linux lib/crc32.c
- * and this is the ethernet-crc method needed for TSEC -- and perhaps
- * some other adapter -- hash tables
- */
-#define CRCPOLY_LE 0xedb88320
-u32 ether_crc(size_t len, unsigned char const *p)
-{
-	int i;
-	u32 crc;
-	crc = ~0;
-	while (len--) {
-		crc ^= *p++;
-		for (i = 0; i < 8; i++)
-			crc = (crc >> 1) ^ ((crc & 1) ? CRCPOLY_LE : 0);
-	}
-	/* an reverse the bits, cuz of way they arrive -- last-first */
-	crc = (crc >> 16) | (crc << 16);
-	crc = (crc >> 8 & 0x00ff00ff) | (crc << 8 & 0xff00ff00);
-	crc = (crc >> 4 & 0x0f0f0f0f) | (crc << 4 & 0xf0f0f0f0);
-	crc = (crc >> 2 & 0x33333333) | (crc << 2 & 0xcccccccc);
-	crc = (crc >> 1 & 0x55555555) | (crc << 1 & 0xaaaaaaaa);
-	return crc;
-}
-
-#endif
-
-
 int eth_init(void)
 {
 	struct eth_device *old_current;
-	printf("eth_init legacy.\n");
+
 	if (!eth_current) {
-		printf("No ethernet found.\n");
+		puts("No ethernet found.\n");
 		return -ENODEV;
 	}
 
@@ -353,14 +324,14 @@ int eth_init(void)
 
 		if (eth_current->init(eth_current, gd->bd) >= 0) {
 			eth_current->state = ETH_STATE_ACTIVE;
-			printf("eth_init legacy 1.\n");
+
 			return 0;
 		}
 		debug("FAIL\n");
 
 		eth_try_another(0);
 	} while (old_current != eth_current);
-	printf("eth_init legacy 2.\n");
+
 	return -ETIMEDOUT;
 }
 

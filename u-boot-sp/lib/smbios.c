@@ -1,12 +1,12 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2015, Bin Meng <bmeng.cn@gmail.com>
  *
  * Adapted from coreboot src/arch/x86/smbios.c
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
+#include <mapmem.h>
 #include <smbios.h>
 #include <tables_csum.h>
 #include <version.h>
@@ -15,8 +15,6 @@
 #include <dm.h>
 #include <dm/uclass-internal.h>
 #endif
-
-DECLARE_GLOBAL_DATA_PTR;
 
 /**
  * smbios_add_string() - add a string to the string area
@@ -75,9 +73,10 @@ static int smbios_string_table_len(char *start)
 
 static int smbios_write_type0(ulong *current, int handle)
 {
-	struct smbios_type0 *t = (struct smbios_type0 *)*current;
+	struct smbios_type0 *t;
 	int len = sizeof(struct smbios_type0);
 
+	t = map_sysmem(*current, len);
 	memset(t, 0, sizeof(struct smbios_type0));
 	fill_smbios_header(t, SMBIOS_BIOS_INFORMATION, len, handle);
 	t->vendor = smbios_add_string(t->eos, "U-Boot");
@@ -104,36 +103,40 @@ static int smbios_write_type0(ulong *current, int handle)
 
 	len = t->length + smbios_string_table_len(t->eos);
 	*current += len;
+	unmap_sysmem(t);
 
 	return len;
 }
 
 static int smbios_write_type1(ulong *current, int handle)
 {
-	struct smbios_type1 *t = (struct smbios_type1 *)*current;
+	struct smbios_type1 *t;
 	int len = sizeof(struct smbios_type1);
 	char *serial_str = env_get("serial#");
 
+	t = map_sysmem(*current, len);
 	memset(t, 0, sizeof(struct smbios_type1));
 	fill_smbios_header(t, SMBIOS_SYSTEM_INFORMATION, len, handle);
 	t->manufacturer = smbios_add_string(t->eos, CONFIG_SMBIOS_MANUFACTURER);
 	t->product_name = smbios_add_string(t->eos, CONFIG_SMBIOS_PRODUCT_NAME);
 	if (serial_str) {
-		strncpy((char*)t->uuid, serial_str, sizeof(t->uuid));
+		strncpy((char *)t->uuid, serial_str, sizeof(t->uuid));
 		t->serial_number = smbios_add_string(t->eos, serial_str);
 	}
 
 	len = t->length + smbios_string_table_len(t->eos);
 	*current += len;
+	unmap_sysmem(t);
 
 	return len;
 }
 
 static int smbios_write_type2(ulong *current, int handle)
 {
-	struct smbios_type2 *t = (struct smbios_type2 *)*current;
+	struct smbios_type2 *t;
 	int len = sizeof(struct smbios_type2);
 
+	t = map_sysmem(*current, len);
 	memset(t, 0, sizeof(struct smbios_type2));
 	fill_smbios_header(t, SMBIOS_BOARD_INFORMATION, len, handle);
 	t->manufacturer = smbios_add_string(t->eos, CONFIG_SMBIOS_MANUFACTURER);
@@ -143,15 +146,17 @@ static int smbios_write_type2(ulong *current, int handle)
 
 	len = t->length + smbios_string_table_len(t->eos);
 	*current += len;
+	unmap_sysmem(t);
 
 	return len;
 }
 
 static int smbios_write_type3(ulong *current, int handle)
 {
-	struct smbios_type3 *t = (struct smbios_type3 *)*current;
+	struct smbios_type3 *t;
 	int len = sizeof(struct smbios_type3);
 
+	t = map_sysmem(*current, len);
 	memset(t, 0, sizeof(struct smbios_type3));
 	fill_smbios_header(t, SMBIOS_SYSTEM_ENCLOSURE, len, handle);
 	t->manufacturer = smbios_add_string(t->eos, CONFIG_SMBIOS_MANUFACTURER);
@@ -163,6 +168,7 @@ static int smbios_write_type3(ulong *current, int handle)
 
 	len = t->length + smbios_string_table_len(t->eos);
 	*current += len;
+	unmap_sysmem(t);
 
 	return len;
 }
@@ -201,9 +207,10 @@ static void smbios_write_type4_dm(struct smbios_type4 *t)
 
 static int smbios_write_type4(ulong *current, int handle)
 {
-	struct smbios_type4 *t = (struct smbios_type4 *)*current;
+	struct smbios_type4 *t;
 	int len = sizeof(struct smbios_type4);
 
+	t = map_sysmem(*current, len);
 	memset(t, 0, sizeof(struct smbios_type4));
 	fill_smbios_header(t, SMBIOS_PROCESSOR_INFORMATION, len, handle);
 	t->processor_type = SMBIOS_PROCESSOR_TYPE_CENTRAL;
@@ -217,32 +224,37 @@ static int smbios_write_type4(ulong *current, int handle)
 
 	len = t->length + smbios_string_table_len(t->eos);
 	*current += len;
+	unmap_sysmem(t);
 
 	return len;
 }
 
 static int smbios_write_type32(ulong *current, int handle)
 {
-	struct smbios_type32 *t = (struct smbios_type32 *)*current;
+	struct smbios_type32 *t;
 	int len = sizeof(struct smbios_type32);
 
+	t = map_sysmem(*current, len);
 	memset(t, 0, sizeof(struct smbios_type32));
 	fill_smbios_header(t, SMBIOS_SYSTEM_BOOT_INFORMATION, len, handle);
 
 	*current += len;
+	unmap_sysmem(t);
 
 	return len;
 }
 
 static int smbios_write_type127(ulong *current, int handle)
 {
-	struct smbios_type127 *t = (struct smbios_type127 *)*current;
+	struct smbios_type127 *t;
 	int len = sizeof(struct smbios_type127);
 
+	t = map_sysmem(*current, len);
 	memset(t, 0, sizeof(struct smbios_type127));
 	fill_smbios_header(t, SMBIOS_END_OF_TABLE, len, handle);
 
 	*current += len;
+	unmap_sysmem(t);
 
 	return len;
 }
@@ -260,6 +272,7 @@ static smbios_write_type smbios_write_funcs[] = {
 ulong write_smbios_table(ulong addr)
 {
 	struct smbios_entry *se;
+	ulong table_addr;
 	ulong tables;
 	int len = 0;
 	int max_struct_size = 0;
@@ -271,7 +284,7 @@ ulong write_smbios_table(ulong addr)
 	/* 16 byte align the table address */
 	addr = ALIGN(addr, 16);
 
-	se = (struct smbios_entry *)(uintptr_t)addr;
+	se = map_sysmem(addr, sizeof(struct smbios_entry));
 	memset(se, 0, sizeof(struct smbios_entry));
 
 	addr += sizeof(struct smbios_entry);
@@ -281,6 +294,7 @@ ulong write_smbios_table(ulong addr)
 	/* populate minimum required tables */
 	for (i = 0; i < ARRAY_SIZE(smbios_write_funcs); i++) {
 		int tmp = smbios_write_funcs[i]((ulong *)&addr, handle++);
+
 		max_struct_size = max(max_struct_size, tmp);
 		len += tmp;
 	}
@@ -292,7 +306,24 @@ ulong write_smbios_table(ulong addr)
 	se->max_struct_size = max_struct_size;
 	memcpy(se->intermediate_anchor, "_DMI_", 5);
 	se->struct_table_length = len;
-	se->struct_table_address = tables;
+
+	/*
+	 * We must use a pointer here so things work correctly on sandbox. The
+	 * user of this table is not aware of the mapping of addresses to
+	 * sandbox's DRAM buffer.
+	 */
+	table_addr = (ulong)map_sysmem(tables, 0);
+	if (sizeof(table_addr) > sizeof(u32) && table_addr > (ulong)UINT_MAX) {
+		/*
+		 * We need to put this >32-bit pointer into the table but the
+		 * field is only 32 bits wide.
+		 */
+		printf("WARNING: SMBIOS table_address overflow %llx\n",
+		       (unsigned long long)table_addr);
+		table_addr = 0;
+	}
+	se->struct_table_address = table_addr;
+
 	se->struct_count = handle;
 
 	/* calculate checksums */
@@ -300,6 +331,7 @@ ulong write_smbios_table(ulong addr)
 	isize = sizeof(struct smbios_entry) - SMBIOS_INTERMEDIATE_OFFSET;
 	se->intermediate_checksum = table_compute_checksum(istart, isize);
 	se->checksum = table_compute_checksum(se, sizeof(struct smbios_entry));
+	unmap_sysmem(se);
 
 	return addr;
 }

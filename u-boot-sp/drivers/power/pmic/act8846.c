@@ -1,19 +1,16 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2015 Google, Inc
  * Written by Simon Glass <sjg@chromium.org>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
 #include <dm.h>
 #include <errno.h>
 #include <fdtdec.h>
-#include <libfdt.h>
+#include <linux/libfdt.h>
 #include <power/act8846_pmic.h>
 #include <power/pmic.h>
-
-DECLARE_GLOBAL_DATA_PTR;
 
 static const struct pmic_child_info pmic_children_info[] = {
 	{ .prefix = "REG", .driver = "act8846_reg"},
@@ -53,7 +50,7 @@ static int act8846_bind(struct udevice *dev)
 
 	regulators_node = dev_read_subnode(dev, "regulators");
 	if (!ofnode_valid(regulators_node)) {
-		debug("%s: %s regulators subnode not found!", __func__,
+		debug("%s: %s regulators subnode not found!\n", __func__,
 		      dev->name);
 		return -ENXIO;
 	}

@@ -1,15 +1,15 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Allwinner DE2 display driver
  *
  * (C) Copyright 2017 Jernej Skrabec <jernej.skrabec@siol.net>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
 #include <display.h>
 #include <dm.h>
 #include <edid.h>
+#include <efi_loader.h>
 #include <fdtdec.h>
 #include <fdt_support.h>
 #include <video.h>
@@ -222,6 +222,13 @@ static int sunxi_de2_init(struct udevice *dev, ulong fbbase,
 	uc_priv->bpix = l2bpp;
 	debug("fb=%lx, size=%d %d\n", fbbase, uc_priv->xsize, uc_priv->ysize);
 
+#ifdef CONFIG_EFI_LOADER
+	efi_add_memory_map(fbbase,
+			   ALIGN(timing.hactive.typ * timing.vactive.typ *
+			   (1 << l2bpp) / 8, EFI_PAGE_SIZE) >> EFI_PAGE_SHIFT,
+			   EFI_RESERVED_MEMORY_TYPE, false);
+#endif
+
 	return 0;
 }
 
@@ -319,7 +326,7 @@ U_BOOT_DEVICE(sunxi_de2) = {
 #if defined(CONFIG_OF_BOARD_SETUP) && defined(CONFIG_VIDEO_DT_SIMPLEFB)
 int sunxi_simplefb_setup(void *blob)
 {
-	struct udevice *de2, *hdmi;
+	struct udevice *de2, *hdmi, *lcd;
 	struct video_priv *de2_priv;
 	struct video_uc_platdata *de2_plat;
 	int mux;
@@ -340,6 +347,9 @@ int sunxi_simplefb_setup(void *blob)
 	if (ret) {
 		debug("DE2 not present\n");
 		return 0;
+	} else if (!device_active(de2)) {
+		debug("DE2 present but not probed\n");
+		return 0;
 	}
 
 	ret = uclass_find_device_by_name(UCLASS_DISPLAY,
@@ -354,6 +364,15 @@ int sunxi_simplefb_setup(void *blob)
 	} else {
 		debug("HDMI present but not probed\n");
 	}
+
+	ret = uclass_find_device_by_name(UCLASS_DISPLAY,
+					 "sunxi_lcd", &lcd);
+	if (ret)
+		debug("LCD not present\n");
+	else if (device_active(lcd))
+		pipeline = "mixer0-lcd0";
+	else
+		debug("LCD present but not probed\n");
 
 	if (!pipeline) {
 		debug("No active display present\n");

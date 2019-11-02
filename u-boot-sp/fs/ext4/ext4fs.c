@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2011 - 2012 Samsung Electronics
  * EXT4 filesystem implementation in Uboot by
@@ -17,8 +18,6 @@
  * Copyright (C) 2003, 2004  Free Software Foundation, Inc.
  *
  * ext4write : Based on generic ext4 protocol.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -63,6 +62,9 @@ int ext4fs_read_file(struct ext2fs_node *node, loff_t pos,
 	lbaint_t delayed_next = 0;
 	char *delayed_buf = NULL;
 	short status;
+
+	if (blocksize <= 0)
+		return -1;
 
 	/* Adjust len so it we can't read past the end of the file. */
 	if (len + pos > filesize)
@@ -127,6 +129,7 @@ int ext4fs_read_file(struct ext2fs_node *node, loff_t pos,
 					(blockend >> log2blksz);
 			}
 		} else {
+			int n;
 			if (previous_block_number != -1) {
 				/* spill */
 				status = ext4fs_devread(delayed_start,
@@ -137,7 +140,11 @@ int ext4fs_read_file(struct ext2fs_node *node, loff_t pos,
 					return -1;
 				previous_block_number = -1;
 			}
-			memset(buf, 0, blocksize - skipfirst);
+			/* Zero no more than `len' bytes. */
+			n = blocksize - skipfirst;
+			if (n > len)
+				n = len;
+			memset(buf, 0, n);
 		}
 		buf += blocksize - skipfirst;
 	}
@@ -157,7 +164,7 @@ int ext4fs_read_file(struct ext2fs_node *node, loff_t pos,
 
 int ext4fs_ls(const char *dirname)
 {
-	struct ext2fs_node *dirnode;
+	struct ext2fs_node *dirnode = NULL;
 	int status;
 
 	if (dirname == NULL)
@@ -167,7 +174,8 @@ int ext4fs_ls(const char *dirname)
 				  FILETYPE_DIRECTORY);
 	if (status != 1) {
 		printf("** Can not find directory. **\n");
-		ext4fs_free_node(dirnode, &ext4fs_root->diropen);
+		if (dirnode)
+			ext4fs_free_node(dirnode, &ext4fs_root->diropen);
 		return 1;
 	}
 

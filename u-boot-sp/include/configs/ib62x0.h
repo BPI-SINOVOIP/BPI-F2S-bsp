@@ -1,9 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright (C) 2011-2012
  * Gerald Kerma <dreagle@doukki.net>
  * Luka Perkov <luka@openwrt.org>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef _CONFIG_IB62x0_H
@@ -16,9 +15,6 @@
 #define CONFIG_KW88F6281		/* SOC Name */
 #define CONFIG_SKIP_LOWLEVEL_INIT	/* disable board lowlevel_init */
 
-/* Add target to build it automatically upon "make" */
-#define CONFIG_BUILD_TARGET     "u-boot.kwb"
-
 /*
  * Compression configuration
  */
@@ -27,7 +23,6 @@
 /*
  * Commands configuration
  */
-#define CONFIG_SYS_MVFS
 
 /*
  * mv-common.h should be defined after CMD configs since it used them

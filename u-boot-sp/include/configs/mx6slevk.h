@@ -1,9 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright 2013 Freescale Semiconductor, Inc.
  *
  * Configuration settings for the Freescale i.MX6SL EVK board.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __CONFIG_H
@@ -34,7 +33,6 @@
 #define CONFIG_SYS_I2C_SPEED		  100000
 
 #define CONFIG_FEC_MXC
-#define CONFIG_MII
 #define IMX_FEC_BASE			ENET_BASE_ADDR
 #define CONFIG_FEC_XCV_TYPE		RMII
 #define CONFIG_FEC_MXC_PHYADDR		0
@@ -121,7 +119,6 @@
 #define CONFIG_SYS_MEMTEST_END		(CONFIG_SYS_MEMTEST_START + SZ_512M)
 
 /* Physical Memory Map */
-#define CONFIG_NR_DRAM_BANKS		1
 #define PHYS_SDRAM			MMDC0_ARB_BASE_ADDR
 
 #define CONFIG_SYS_SDRAM_BASE		PHYS_SDRAM
@@ -139,20 +136,8 @@
 #if defined CONFIG_SPI_BOOT
 #define CONFIG_ENV_OFFSET               (768 * 1024)
 #define CONFIG_ENV_SECT_SIZE            (64 * 1024)
-#define CONFIG_ENV_SPI_BUS              CONFIG_SF_DEFAULT_BUS
-#define CONFIG_ENV_SPI_CS               CONFIG_SF_DEFAULT_CS
-#define CONFIG_ENV_SPI_MODE             CONFIG_SF_DEFAULT_MODE
-#define CONFIG_ENV_SPI_MAX_HZ           CONFIG_SF_DEFAULT_SPEED
 #else
 #define CONFIG_ENV_OFFSET		(8 * SZ_64K)
-#endif
-
-#ifdef CONFIG_CMD_SF
-#define CONFIG_MXC_SPI
-#define CONFIG_SF_DEFAULT_BUS		0
-#define CONFIG_SF_DEFAULT_CS		0
-#define CONFIG_SF_DEFAULT_SPEED		20000000
-#define CONFIG_SF_DEFAULT_MODE		SPI_MODE_0
 #endif
 
 /* USB Configs */

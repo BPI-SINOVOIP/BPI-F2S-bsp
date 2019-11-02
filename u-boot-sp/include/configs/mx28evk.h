@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * (C) Copyright 2011 Freescale Semiconductor, Inc.
  * Author: Fabio Estevam <fabio.estevam@freescale.com>
@@ -5,18 +6,14 @@
  * Based on m28evk.h:
  * Copyright (C) 2011 Marek Vasut <marek.vasut@gmail.com>
  * on behalf of DENX Software Engineering GmbH
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 #ifndef __CONFIGS_MX28EVK_H__
 #define __CONFIGS_MX28EVK_H__
 
 /* System configurations */
-#define CONFIG_MX28				/* i.MX28 SoC */
 #define CONFIG_MACH_TYPE	MACH_TYPE_MX28EVK
 
 /* Memory configuration */
-#define CONFIG_NR_DRAM_BANKS		1		/* 1 bank of DRAM */
 #define PHYS_SDRAM_1			0x40000000	/* Base address */
 #define PHYS_SDRAM_1_SIZE		0x40000000	/* Max 1 GB RAM */
 #define CONFIG_SYS_SDRAM_BASE		PHYS_SDRAM_1
@@ -45,27 +42,20 @@
 		(CONFIG_ENV_OFFSET + CONFIG_ENV_RANGE)
 #endif
 
-/* Environemnt is in SPI flash */
+/* Environment is in SPI flash */
 #if defined(CONFIG_CMD_SF) && defined(CONFIG_ENV_IS_IN_SPI_FLASH)
 #define CONFIG_SYS_REDUNDAND_ENVIRONMENT
 #define CONFIG_ENV_OFFSET		0x40000		/* 256K */
 #define CONFIG_ENV_OFFSET_REDUND	(CONFIG_ENV_OFFSET + CONFIG_ENV_SIZE)
 #define CONFIG_ENV_SECT_SIZE		0x1000
-#define CONFIG_ENV_SPI_CS		0
-#define CONFIG_ENV_SPI_BUS		2
-#define CONFIG_ENV_SPI_MAX_HZ		24000000
-#define CONFIG_ENV_SPI_MODE		SPI_MODE_0
 #endif
 
 /* UBI and NAND partitioning */
-#ifdef CONFIG_CMD_NAND
-#define CONFIG_MTD_DEVICE
-#define CONFIG_MTD_PARTITIONS
-#endif
 
 /* FEC Ethernet on SoC */
 #ifdef	CONFIG_CMD_NET
 #define CONFIG_FEC_MXC
+#define CONFIG_FEC_MXC_MDIO_BASE MXS_ENET0_BASE
 #define CONFIG_MX28_FEC_MAC_IN_OCOTP
 #endif
 
@@ -78,22 +68,6 @@
 #ifdef	CONFIG_CMD_USB
 #define CONFIG_EHCI_MXS_PORT1
 #define CONFIG_USB_MAX_CONTROLLER_COUNT	1
-#endif
-
-/* SPI */
-#ifdef CONFIG_CMD_SPI
-#define CONFIG_DEFAULT_SPI_BUS		2
-#define CONFIG_DEFAULT_SPI_MODE		SPI_MODE_0
-
-/* SPI Flash */
-#ifdef CONFIG_CMD_SF
-#define CONFIG_SF_DEFAULT_BUS		2
-#define CONFIG_SF_DEFAULT_CS		0
-/* this may vary and depends on the installed chip */
-#define CONFIG_SF_DEFAULT_MODE		SPI_MODE_0
-#define CONFIG_SF_DEFAULT_SPEED		24000000
-#endif
-
 #endif
 
 /* Framebuffer support */

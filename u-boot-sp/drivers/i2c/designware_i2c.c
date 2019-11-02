@@ -1,14 +1,14 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2009
  * Vipin Kumar, ST Micoelectronics, vipin.kumar@st.com.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
 #include <dm.h>
 #include <i2c.h>
 #include <pci.h>
+#include <reset.h>
 #include <asm/io.h>
 #include "designware_i2c.h"
 
@@ -34,17 +34,20 @@ static struct dw_scl_sda_cfg byt_config = {
 struct dw_i2c {
 	struct i2c_regs *regs;
 	struct dw_scl_sda_cfg *scl_sda_cfg;
+	struct reset_ctl reset_ctl;
 };
 
 #ifdef CONFIG_SYS_I2C_DW_ENABLE_STATUS_UNSUPPORTED
-static void dw_i2c_enable(struct i2c_regs *i2c_base, bool enable)
+static int  dw_i2c_enable(struct i2c_regs *i2c_base, bool enable)
 {
 	u32 ena = enable ? IC_ENABLE_0B : 0;
 
 	writel(ena, &i2c_base->ic_enable);
+
+	return 0;
 }
 #else
-static void dw_i2c_enable(struct i2c_regs *i2c_base, bool enable)
+static int dw_i2c_enable(struct i2c_regs *i2c_base, bool enable)
 {
 	u32 ena = enable ? IC_ENABLE_0B : 0;
 	int timeout = 100;
@@ -52,7 +55,7 @@ static void dw_i2c_enable(struct i2c_regs *i2c_base, bool enable)
 	do {
 		writel(ena, &i2c_base->ic_enable);
 		if ((readl(&i2c_base->ic_enable_status) & IC_ENABLE_0B) == ena)
-			return;
+			return 0;
 
 		/*
 		 * Wait 10 times the signaling period of the highest I2C
@@ -61,8 +64,9 @@ static void dw_i2c_enable(struct i2c_regs *i2c_base, bool enable)
 		 */
 		udelay(25);
 	} while (timeout--);
-
 	printf("timeout in %sabling I2C adapter\n", enable ? "en" : "dis");
+
+	return -ETIMEDOUT;
 }
 #endif
 
@@ -369,10 +373,14 @@ static int __dw_i2c_write(struct i2c_regs *i2c_base, u8 dev, uint addr,
  *
  * Initialization function.
  */
-static void __dw_i2c_init(struct i2c_regs *i2c_base, int speed, int slaveaddr)
+static int __dw_i2c_init(struct i2c_regs *i2c_base, int speed, int slaveaddr)
 {
+	int ret;
+
 	/* Disable i2c */
-	dw_i2c_enable(i2c_base, false);
+	ret = dw_i2c_enable(i2c_base, false);
+	if (ret)
+		return ret;
 
 	writel(IC_CON_SD | IC_CON_RE | IC_CON_SPD_FS | IC_CON_MM,
 	       &i2c_base->ic_con);
@@ -385,7 +393,11 @@ static void __dw_i2c_init(struct i2c_regs *i2c_base, int speed, int slaveaddr)
 #endif
 
 	/* Enable i2c */
-	dw_i2c_enable(i2c_base, true);
+	ret = dw_i2c_enable(i2c_base, true);
+	if (ret)
+		return ret;
+
+	return 0;
 }
 
 #ifndef CONFIG_DM_I2C
@@ -534,6 +546,7 @@ static int designware_i2c_probe_chip(struct udevice *bus, uint chip_addr,
 static int designware_i2c_probe(struct udevice *bus)
 {
 	struct dw_i2c *priv = dev_get_priv(bus);
+	int ret;
 
 	if (device_is_on_pci_bus(bus)) {
 #ifdef CONFIG_DM_PCI
@@ -549,9 +562,14 @@ static int designware_i2c_probe(struct udevice *bus)
 		priv->regs = (struct i2c_regs *)devfdt_get_addr_ptr(bus);
 	}
 
-	__dw_i2c_init(priv->regs, 0, 0);
+	ret = reset_get_by_name(bus, "i2c", &priv->reset_ctl);
+	if (ret)
+		pr_info("reset_get_by_name() failed: %d\n", ret);
 
-	return 0;
+	if (&priv->reset_ctl)
+		reset_deassert(&priv->reset_ctl);
+
+	return __dw_i2c_init(priv->regs, 0, 0);
 }
 
 static int designware_i2c_bind(struct udevice *dev)

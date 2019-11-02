@@ -1,7 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (c) 2016, NVIDIA CORPORATION.
- *
- * SPDX-License-Identifier: GPL-2.0
  */
 
 #include <common.h>
@@ -86,6 +85,12 @@ static int tegra186_bpmp_i2c_xfer(struct udevice *dev, struct i2c_msg *msg,
 	return 0;
 }
 
+static int tegra186_bpmp_probe_chip(struct udevice *bus, uint chip_addr,
+				    uint chip_flags)
+{
+	return 0;
+}
+
 static int tegra186_bpmp_i2c_probe(struct udevice *dev)
 {
 	struct tegra186_bpmp_i2c *priv = dev_get_priv(dev);
@@ -102,6 +107,7 @@ static int tegra186_bpmp_i2c_probe(struct udevice *dev)
 
 static const struct dm_i2c_ops tegra186_bpmp_i2c_ops = {
 	.xfer = tegra186_bpmp_i2c_xfer,
+	.probe_chip = tegra186_bpmp_probe_chip,
 };
 
 static const struct udevice_id tegra186_bpmp_i2c_ids[] = {

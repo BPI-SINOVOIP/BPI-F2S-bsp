@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * (C) Copyright 2014 Albert ARIBAUD <albert.u.boot@aribaud.net>
  *
@@ -14,11 +15,9 @@
  * (C) Copyright 2010
  * Texas Instruments, <www.ti.com>
  *	Aneesh V <aneesh@ti.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
-MEMORY { .nor : ORIGIN = CONFIG_SPL_TEXT_BASE,\
-		LENGTH = CONFIG_SPL_MAX_SIZE }
+MEMORY { .nor : ORIGIN = IMAGE_TEXT_BASE,\
+		LENGTH = IMAGE_MAX_SIZE }
 MEMORY { .bss : ORIGIN = CONFIG_SPL_BSS_START_ADDR, \
 		LENGTH = CONFIG_SPL_BSS_MAX_SIZE }
 

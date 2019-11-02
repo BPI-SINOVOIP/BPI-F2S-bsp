@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * bur_comon.h
  *
@@ -5,8 +6,6 @@
  *
  * Copyright (C) 2013 Hannes Schmelzer <oe5hpm@oevsv.at>
  * Bernecker & Rainer Industrieelektronik GmbH - http://www.br-automation.com
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef _BUR_COMMON_H_
@@ -16,7 +15,7 @@
 
 int load_lcdtiming(struct am335x_lcdpanel *panel);
 void br_summaryscreen(void);
-void pmicsetup(u32 mpupll);
+void pmicsetup(u32 mpupll, unsigned int bus);
 void enable_uart0_pin_mux(void);
 void enable_i2c_pin_mux(void);
 void enable_board_pin_mux(void);

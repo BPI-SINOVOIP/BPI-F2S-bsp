@@ -1,9 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * am43xx_evm.h
  *
  * Copyright (C) 2013 Texas Instruments Incorporated - http://www.ti.com/
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __CONFIG_AM43XX_EVM_H
@@ -28,8 +27,10 @@
 #define CONFIG_SYS_I2C_EEPROM_ADDR_LEN	2
 
 /* Power */
+#ifndef CONFIG_DM_I2C
 #define CONFIG_POWER
 #define CONFIG_POWER_I2C
+#endif
 #define CONFIG_POWER_TPS65218
 #define CONFIG_POWER_TPS62362
 
@@ -62,8 +63,6 @@
 /* Always 64 KiB env size */
 #define CONFIG_ENV_SIZE			(64 << 10)
 
-#define CONFIG_ENV_VARS_UBOOT_RUNTIME_CONFIG
-
 /* Clock Defines */
 #define V_OSCK				24000000  /* Clock output from T2 */
 #define V_SCLK				(V_OSCK)
@@ -77,11 +76,10 @@
 #define CONFIG_SYS_USB_FAT_BOOT_PARTITION		1
 #define CONFIG_USB_XHCI_OMAP
 
-#define CONFIG_OMAP_USB_PHY
 #define CONFIG_AM437X_USB2PHY2_HOST
 #endif
 
-#if defined(CONFIG_SPL_BUILD) && !defined(CONFIG_SPL_USBETH_SUPPORT)
+#if defined(CONFIG_SPL_BUILD) && !defined(CONFIG_SPL_USB_ETHER)
 #undef CONFIG_USB_DWC3_PHY_OMAP
 #undef CONFIG_USB_DWC3_OMAP
 #undef CONFIG_USB_DWC3
@@ -116,11 +114,7 @@
 #endif
 
 #ifdef CONFIG_QSPI_BOOT
-#ifndef CONFIG_SYS_TEXT_BASE
-#define CONFIG_SYS_TEXT_BASE		CONFIG_ISW_ENTRY_ADDR
-#endif
 #define CONFIG_SYS_REDUNDAND_ENVIRONMENT
-#define CONFIG_ENV_SPI_MAX_HZ           CONFIG_SF_DEFAULT_SPEED
 #define CONFIG_ENV_SECT_SIZE           (64 << 10) /* 64 KB sectors */
 #define CONFIG_ENV_OFFSET              0x110000
 #define CONFIG_ENV_OFFSET_REDUND       0x120000
@@ -129,8 +123,6 @@
 /* SPI */
 #define CONFIG_TI_SPI_MMAP
 #define CONFIG_QSPI_SEL_GPIO                   48
-#define CONFIG_SF_DEFAULT_SPEED                48000000
-#define CONFIG_SF_DEFAULT_MODE                 SPI_MODE_3
 #define CONFIG_QSPI_QUAD_SUPPORT
 #define CONFIG_TI_EDMA3
 
@@ -218,17 +210,12 @@
 
 #ifndef CONFIG_SPL_BUILD
 /* CPSW Ethernet */
-#define CONFIG_MII
 #define CONFIG_BOOTP_DEFAULT
-#define CONFIG_BOOTP_DNS
 #define CONFIG_BOOTP_DNS2
 #define CONFIG_BOOTP_SEND_HOSTNAME
-#define CONFIG_BOOTP_GATEWAY
-#define CONFIG_BOOTP_SUBNETMASK
 #define CONFIG_NET_RETRY_COUNT		10
 #endif
 
-#define CONFIG_DRIVER_TI_CPSW
 #define PHY_ANEG_TIMEOUT	8000 /* PHY needs longer aneg time at 1G */
 
 #define CONFIG_SYS_RX_ETH_BUFFER	64

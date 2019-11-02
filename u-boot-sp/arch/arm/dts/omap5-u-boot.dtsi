@@ -12,11 +12,24 @@
 		tick-timer = &timer2;
 	};
 
+	aliases {
+		usb0 = &usb1;
+		usb1 = &usb2;
+	};
+
 	ocp {
 		u-boot,dm-spl;
 
+		ocp2scp@4a080000 {
+			compatible = "ti,omap-ocp2scp", "simple-bus";
+		};
+
 		ocp2scp@4a090000 {
 			compatible = "ti,omap-ocp2scp", "simple-bus";
+		};
+
+		bandgap@4a0021e0 {
+			u-boot,dm-spl;
 		};
 	};
 };
@@ -85,5 +98,9 @@
 };
 
 &gpio7 {
+	u-boot,dm-spl;
+};
+
+&i2c1 {
 	u-boot,dm-spl;
 };

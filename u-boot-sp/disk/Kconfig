@@ -4,6 +4,10 @@ menu "Partition Types"
 config PARTITIONS
 	bool "Enable Partition Labels (disklabels) support"
 	default y
+	select SPL_SPRINTF if SPL
+	select TPL_SPRINTF if TPL
+	select SPL_STRTO if SPL
+	select TPL_STRTO if TPL
 	help
 	  Partition Labels (disklabels) Supported:
 	  Zero or more of the following:
@@ -53,7 +57,6 @@ config ISO_PARTITION
 config SPL_ISO_PARTITION
 	bool "Enable ISO partition table for SPL"
 	depends on SPL && PARTITIONS
-	default y if ISO_PARTITION
 
 config AMIGA_PARTITION
 	bool "Enable AMIGA partition table"
@@ -72,11 +75,26 @@ config EFI_PARTITION
 	depends on PARTITIONS
 	default y if DISTRO_DEFAULTS
 	default y if TEGRA
+	select LIB_UUID
 	help
 	  Say Y here if you would like to use device under U-Boot which
 	  were partitioned using EFI GPT.
 	  common when EFI is the bootloader.  Note 2TB partition limit;
 	  see disk/part_efi.c
+
+config EFI_PARTITION_ENTRIES_NUMBERS
+	int "Number of the EFI partition entries"
+	depends on EFI_PARTITION
+	default 56 if ARCH_SUNXI
+	default 128
+	help
+	  Specify the number of partition entries in the GPT. This is
+	  meant to allow less than the standard specifies for devices
+	  that might need to place their first-stage bootloader in the
+	  middle of a regular GPT.
+
+	  If unsure, leave at 128 entries, which is the standard
+	  number.
 
 config EFI_PARTITION_ENTRIES_OFF
         int "Offset (in bytes) of the EFI partition entries"
@@ -101,6 +119,7 @@ config PARTITION_UUIDS
 	depends on PARTITIONS
 	default y if DISTRO_DEFAULTS
 	default y if EFI_PARTITION
+	select LIB_UUID
 	help
 	  Activate the configuration of UUID for partition
 

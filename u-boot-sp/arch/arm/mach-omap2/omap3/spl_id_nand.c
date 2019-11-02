@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2011
  * Texas Instruments, <www.ti.com>
@@ -8,13 +9,11 @@
  * Initial Code from:
  *     Richard Woodruff <r-woodruff2@ti.com>
  *     Jian Zhang <jzhang@ti.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
 #include <jffs2/load_kernel.h>
-#include <linux/mtd/nand.h>
+#include <linux/mtd/rawnand.h>
 #include <linux/mtd/omap_gpmc.h>
 #include <asm/io.h>
 #include <asm/arch/sys_proto.h>

@@ -1,7 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2016 Stefan Roese <sr@denx.de>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -95,7 +94,7 @@ int board_xhci_config(void)
 	return 0;
 }
 
-int board_xhci_enable(void)
+int board_xhci_enable(fdt_addr_t base)
 {
 	struct udevice *dev;
 	int ret;

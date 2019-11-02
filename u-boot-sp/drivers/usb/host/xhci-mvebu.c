@@ -1,9 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2015 Marvell International Ltd.
  *
  * MVEBU USB HOST xHCI Controller
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -14,8 +13,6 @@
 #include <asm/gpio.h>
 
 #include "xhci.h"
-
-DECLARE_GLOBAL_DATA_PTR;
 
 struct mvebu_xhci_platdata {
 	fdt_addr_t hcd_base;
@@ -35,7 +32,7 @@ struct mvebu_xhci {
  * Dummy implementation that can be overwritten by a board
  * specific function
  */
-__weak int board_xhci_enable(void)
+__weak int board_xhci_enable(fdt_addr_t base)
 {
 	return 0;
 }
@@ -62,7 +59,7 @@ static int xhci_usb_probe(struct udevice *dev)
 	}
 
 	/* Enable USB xHCI (VBUS, reset etc) in board specific code */
-	board_xhci_enable();
+	board_xhci_enable(devfdt_get_addr_index(dev, 1));
 
 	return xhci_register(dev, ctx->hcd, hcor);
 }
@@ -85,6 +82,7 @@ static int xhci_usb_ofdata_to_platdata(struct udevice *dev)
 
 static const struct udevice_id xhci_usb_ids[] = {
 	{ .compatible = "marvell,armada3700-xhci" },
+	{ .compatible = "marvell,armada-380-xhci" },
 	{ .compatible = "marvell,armada-8k-xhci" },
 	{ }
 };

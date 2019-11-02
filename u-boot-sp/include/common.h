@@ -1,8 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * (C) Copyright 2000-2009
  * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __COMMON_H_
@@ -14,9 +13,6 @@ typedef unsigned char		uchar;
 typedef volatile unsigned long	vu_long;
 typedef volatile unsigned short vu_short;
 typedef volatile unsigned char	vu_char;
-
-/* Allow sharing constants with type modifiers between C and assembly. */
-#define _AC(X, Y)       (X##Y)
 
 #include <config.h>
 #include <errno.h>
@@ -38,58 +34,11 @@ typedef volatile unsigned char	vu_char;
 #include <flash.h>
 #include <image.h>
 
-/* Bring in printf format macros if inttypes.h is included */
-#define __STDC_FORMAT_MACROS
-
 #ifdef __LP64__
 #define CONFIG_SYS_SUPPORT_64BIT_DATA
 #endif
 
-#ifdef DEBUG
-#define _DEBUG	1
-#else
-#define _DEBUG	0
-#endif
-
-#ifdef CONFIG_SPL_BUILD
-#define _SPL_BUILD	1
-#else
-#define _SPL_BUILD	0
-#endif
-
-/*
- * Output a debug text when condition "cond" is met. The "cond" should be
- * computed by a preprocessor in the best case, allowing for the best
- * optimization.
- */
-#define debug_cond(cond, fmt, args...)			\
-	do {						\
-		if (cond)				\
-			printf(pr_fmt(fmt), ##args);	\
-	} while (0)
-
-/* Show a message if DEBUG is defined in a file */
-#define debug(fmt, args...)			\
-	debug_cond(_DEBUG, fmt, ##args)
-
-/* Show a message if not in SPL */
-#define warn_non_spl(fmt, args...)			\
-	debug_cond(!_SPL_BUILD, fmt, ##args)
-
-/*
- * An assertion is run-time check done in debug mode only. If DEBUG is not
- * defined then it is skipped. If DEBUG is defined and the assertion fails,
- * then it calls panic*( which may or may not reset/halt U-Boot (see
- * CONFIG_PANIC_HANG), It is hoped that all failing assertions are found
- * before release, and after release it is hoped that they don't matter. But
- * in any case these failing assertions cannot be fixed with a reset (which
- * may just do the same assertion again).
- */
-void __assert_fail(const char *assertion, const char *file, unsigned line,
-		   const char *function);
-#define assert(x) \
-	({ if (!(x) && _DEBUG) \
-		__assert_fail(#x, __FILE__, __LINE__, __func__); })
+#include <log.h>
 
 typedef void (interrupt_handler_t)(void *);
 
@@ -106,31 +55,19 @@ typedef void (interrupt_handler_t)(void *);
 #define	TOTAL_MALLOC_LEN	CONFIG_SYS_MALLOC_LEN
 #endif
 
+/* startup functions, used in:
+ * common/board_f.c
+ * common/init/board_init.c
+ * common/board_r.c
+ * common/board_info.c
+ */
+#include <init.h>
+
 /*
  * Function Prototypes
  */
-int dram_init(void);
-
-/**
- * dram_init_banksize() - Set up DRAM bank sizes
- *
- * This can be implemented by boards to set up the DRAM bank information in
- * gd->bd->bi_dram(). It is called just before relocation, after dram_init()
- * is called.
- *
- * If this is not provided, a default implementation will try to set up a
- * single bank. It will do this if CONFIG_NR_DRAM_BANKS and
- * CONFIG_SYS_SDRAM_BASE are set. The bank will have a start address of
- * CONFIG_SYS_SDRAM_BASE and the size will be determined by a call to
- * get_effective_memsize().
- *
- * @return 0 if OK, -ve on error
- */
-int dram_init_banksize(void);
-
 void	hang		(void) __attribute__ ((noreturn));
 
-int	timer_init(void);
 int	cpu_init(void);
 
 #include <display_options.h>
@@ -153,104 +90,11 @@ int run_command_repeatable(const char *cmd, int flag);
  */
 int run_command_list(const char *cmd, int len, int flag);
 
-/* arch/$(ARCH)/lib/board.c */
-void board_init_f(ulong);
-void board_init_r(gd_t *, ulong) __attribute__ ((noreturn));
-
-/**
- * ulong board_init_f_alloc_reserve - allocate reserved area
- *
- * This function is called by each architecture very early in the start-up
- * code to allow the C runtime to reserve space on the stack for writable
- * 'globals' such as GD and the malloc arena.
- *
- * @top:	top of the reserve area, growing down.
- * @return:	bottom of reserved area
- */
-ulong board_init_f_alloc_reserve(ulong top);
-
-/**
- * board_init_f_init_reserve - initialize the reserved area(s)
- *
- * This function is called once the C runtime has allocated the reserved
- * area on the stack. It must initialize the GD at the base of that area.
- *
- * @base:	top from which reservation was done
- */
-void board_init_f_init_reserve(ulong base);
-
-/**
- * arch_setup_gd() - Set up the global_data pointer
- *
- * This pointer is special in some architectures and cannot easily be assigned
- * to. For example on x86 it is implemented by adding a specific record to its
- * Global Descriptor Table! So we we provide a function to carry out this task.
- * For most architectures this can simply be:
- *
- *    gd = gd_ptr;
- *
- * @gd_ptr:	Pointer to global data
- */
-void arch_setup_gd(gd_t *gd_ptr);
-
-int checkboard(void);
-int show_board_info(void);
 int checkflash(void);
 int checkdram(void);
-int last_stage_init(void);
-extern ulong monitor_flash_len;
-int mac_read_from_eeprom(void);
 extern u8 __dtb_dt_begin[];	/* embedded device tree blob */
-int set_cpu_clk_info(void);
+extern u8 __dtb_dt_spl_begin[];	/* embedded device tree blob for SPL/TPL */
 int mdm_init(void);
-int print_cpuinfo(void);
-int update_flash_size(int flash_size);
-int arch_early_init_r(void);
-
-/*
- * setup_board_extra() - Fill in extra details in the bd_t structure
- *
- * @return 0 if OK, -ve on error
- */
-int setup_board_extra(void);
-
-/**
- * arch_fsp_init() - perform firmware support package init
- *
- * Where U-Boot relies on binary blobs to handle part of the system init, this
- * function can be used to set up the blobs. This is used on some Intel
- * platforms.
- */
-int arch_fsp_init(void);
-
-/**
- * arch_cpu_init_dm() - init CPU after driver model is available
- *
- * This is called immediately after driver model is available before
- * relocation. This is similar to arch_cpu_init() but is able to reference
- * devices
- *
- * @return 0 if OK, -ve on error
- */
-int arch_cpu_init_dm(void);
-
-/**
- * Reserve all necessary stacks
- *
- * This is used in generic board init sequence in common/board_f.c. Each
- * architecture could provide this function to tailor the required stacks.
- *
- * On entry gd->start_addr_sp is pointing to the suggested top of the stack.
- * The callee ensures gd->start_add_sp is 16-byte aligned, so architectures
- * require only this can leave it untouched.
- *
- * On exit gd->start_addr_sp and gd->irq_sp should be set to the respective
- * positions of the stack. The stack pointer(s) will be set to this later.
- * gd->irq_sp is only required, if the architecture needs it.
- *
- * @return 0 if no error
- */
-__weak int arch_reserve_stacks(void);
 
 /**
  * Show the DRAM size in a board-specific way
@@ -262,6 +106,17 @@ __weak int arch_reserve_stacks(void);
 void board_show_dram(phys_size_t size);
 
 /**
+ * Get the uppermost pointer that is valid to access
+ *
+ * Some systems may not map all of their address space. This function allows
+ * boards to indicate what their highest support pointer value is for DRAM
+ * access.
+ *
+ * @param total_size	Size of U-Boot (unused?)
+ */
+ulong board_get_usable_ram_top(ulong total_size);
+
+/**
  * arch_fixup_fdt() - Write arch-specific information to fdt
  *
  * Defined in arch/$(ARCH)/lib/bootm-fdt.c
@@ -271,7 +126,6 @@ void board_show_dram(phys_size_t size);
  */
 int arch_fixup_fdt(void *blob);
 
-int reserve_mmu(void);
 /* common/flash.c */
 void flash_perror (int);
 
@@ -394,19 +248,12 @@ static inline int env_set_addr(const char *varname, const void *addr)
 }
 
 #ifdef CONFIG_AUTO_COMPLETE
-int env_complete(char *var, int maxv, char *cmdv[], int maxsz, char *buf);
+int env_complete(char *var, int maxv, char *cmdv[], int maxsz, char *buf,
+		 bool dollar_comp);
 #endif
 int get_env_id (void);
 
-void	pci_init      (void);
 void	pci_init_board(void);
-
-#if defined(CONFIG_DTB_RESELECT)
-int	embedded_dtb_select(void);
-#endif
-
-int	misc_init_f   (void);
-int	misc_init_r   (void);
 
 /* common/exports.c */
 void	jumptable_init(void);
@@ -437,23 +284,8 @@ int  eeprom_write (unsigned dev_addr, unsigned offset, uchar *buffer, unsigned c
 #define eeprom_write(dev_addr, offset, buffer, cnt) ((void)-ENOSYS)
 #endif
 
-/*
- * Set this up regardless of board
- * type, to prevent errors.
- */
-#if defined(CONFIG_SPI) || !defined(CONFIG_SYS_I2C_EEPROM_ADDR)
-# define CONFIG_SYS_DEF_EEPROM_ADDR 0
-#else
-#if !defined(CONFIG_ENV_EEPROM_IS_ON_I2C)
+#if !defined(CONFIG_ENV_EEPROM_IS_ON_I2C) && defined(CONFIG_SYS_I2C_EEPROM_ADDR)
 # define CONFIG_SYS_DEF_EEPROM_ADDR CONFIG_SYS_I2C_EEPROM_ADDR
-#endif
-#endif /* CONFIG_SPI || !defined(CONFIG_SYS_I2C_EEPROM_ADDR) */
-
-#if defined(CONFIG_SPI)
-extern void spi_init_f (void);
-extern void spi_init_r (void);
-extern ssize_t spi_read	 (uchar *, int, uchar *, int);
-extern ssize_t spi_write (uchar *, int, uchar *, int);
 #endif
 
 /* $(BOARD)/$(BOARD).c */
@@ -462,7 +294,6 @@ int board_fix_fdt (void *rw_fdt_blob); /* manipulate the U-Boot fdt before its r
 int board_late_init (void);
 int board_postclk_init (void); /* after clocks/timebase, before env/serial */
 int board_early_init_r (void);
-void board_poweroff (void);
 
 #if defined(CONFIG_SYS_DRAM_TEST)
 int testdram(void);
@@ -504,16 +335,6 @@ u32	cpu_mask      (void);
 u32	cpu_dsp_mask(void);
 int	is_core_valid (unsigned int);
 
-/**
- * arch_cpu_init() - basic cpu-dependent setup for an architecture
- *
- * This is called after early malloc is available. It should handle any
- * CPU- or SoC- specific init needed to continue the init sequence. See
- * board_f.c for where it is called. If this is not provided, a default
- * version (which does nothing) will be used.
- */
-int arch_cpu_init(void);
-
 void s_init(void);
 
 int	checkcpu      (void);
@@ -543,8 +364,6 @@ int	get_clocks (void);
 ulong	get_bus_freq  (ulong);
 int get_serial_clock(void);
 
-int	cpu_init_r    (void);
-
 /* $(CPU)/interrupts.c */
 int	interrupt_init	   (void);
 void	timer_interrupt	   (struct pt_regs *);
@@ -567,7 +386,6 @@ uint	dpram_alloc(uint size);
 uint	dpram_alloc_align(uint size,uint align);
 void	bootcount_store (ulong);
 ulong	bootcount_load (void);
-#define BOOTCOUNT_MAGIC		0xB001C041
 
 /* $(CPU)/.../<eth> */
 void mii_init (void);
@@ -716,34 +534,23 @@ void show_activity(int arg);
 
 /* Multicore arch functions */
 #ifdef CONFIG_MP
-int cpu_status(int nr);
-int cpu_reset(int nr);
-int cpu_disable(int nr);
-int cpu_release(int nr, int argc, char * const argv[]);
+int cpu_status(u32 nr);
+int cpu_reset(u32 nr);
+int cpu_disable(u32 nr);
+int cpu_release(u32 nr, int argc, char * const argv[]);
 #endif
 
 #else	/* __ASSEMBLY__ */
 
-/* Drop a C type modifier (like in 3UL) for constants used in assembly. */
-#define _AC(X, Y)       X
-
 #endif	/* __ASSEMBLY__ */
 
 /* Put only stuff here that the assembler can digest */
-
-/* Declare an unsigned long constant digestable both by C and an assembler. */
-#define UL(x)           _AC(x, UL)
 
 #ifdef CONFIG_POST
 #define CONFIG_HAS_POST
 #ifndef CONFIG_POST_ALT_LIST
 #define CONFIG_POST_STD_LIST
 #endif
-#endif
-
-#ifdef CONFIG_INIT_CRITICAL
-#error CONFIG_INIT_CRITICAL is deprecated!
-#error Read section CONFIG_SKIP_LOWLEVEL_INIT in README.
 #endif
 
 #define ROUND(a,b)		(((a) + (b) - 1) & ~((b) - 1))

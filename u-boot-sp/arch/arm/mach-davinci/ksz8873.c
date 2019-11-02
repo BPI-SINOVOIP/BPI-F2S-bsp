@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Micrel KSZ8873 PHY Driver for TI DaVinci
  * (TMS320DM644x) based boards.
@@ -11,8 +12,6 @@
  * Copyright (C) 2007 Sergey Kubushyn <ksi@koi8.net>
  *
  * --------------------------------------------------------
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -20,7 +19,7 @@
 #include <net.h>
 #include <asm/arch/emac_defs.h>
 #include <asm/io.h>
-#include "../../../drivers/net/davinci_emac.h"
+#include "../../../drivers/net/ti/davinci_emac.h"
 
 int ksz8873_is_phy_connected(int phy_addr)
 {

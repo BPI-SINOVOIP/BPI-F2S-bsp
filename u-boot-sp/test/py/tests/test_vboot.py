@@ -1,6 +1,5 @@
-# Copyright (c) 2016, Google Inc.
-#
 # SPDX-License-Identifier:	GPL-2.0+
+# Copyright (c) 2016, Google Inc.
 #
 # U-Boot Verified Boot Test
 
@@ -27,6 +26,7 @@ Tests run with both SHA1 and SHA256 hashing.
 
 import pytest
 import sys
+import struct
 import u_boot_utils as util
 
 @pytest.mark.boardspec('sandbox')
@@ -74,7 +74,7 @@ def test_vboot(u_boot_console):
         cons.restart_uboot()
         with cons.log.section('Verified boot %s %s' % (sha_algo, test_type)):
             output = cons.run_command_list(
-                ['sb load hostfs - 100 %stest.fit' % tmpdir,
+                ['host load hostfs - 100 %stest.fit' % tmpdir,
                 'fdt addr 100',
                 'bootm 100'])
         assert(expect_string in ''.join(output))
@@ -106,7 +106,27 @@ def test_vboot(u_boot_console):
         util.run_and_log(cons, [mkimage, '-F', '-k', tmpdir, '-K', dtb,
                                 '-r', fit])
 
-    def test_with_algo(sha_algo):
+    def replace_fit_totalsize(size):
+        """Replace FIT header's totalsize with something greater.
+
+        The totalsize must be less than or equal to FIT_SIGNATURE_MAX_SIZE.
+        If the size is greater, the signature verification should return false.
+
+        Args:
+            size: The new totalsize of the header
+
+        Returns:
+            prev_size: The previous totalsize read from the header
+        """
+        total_size = 0
+        with open(fit, 'r+b') as handle:
+            handle.seek(4)
+            total_size = handle.read(4)
+            handle.seek(4)
+            handle.write(struct.pack(">I", size))
+        return struct.unpack(">I", total_size)[0]
+
+    def test_with_algo(sha_algo, padding):
         """Test verified boot with the given hash algorithm.
 
         This is the main part of the test code. The same procedure is followed
@@ -124,7 +144,7 @@ def test_vboot(u_boot_console):
 
         # Build the FIT, but don't sign anything yet
         cons.log.action('%s: Test FIT with signed images' % sha_algo)
-        make_fit('sign-images-%s.its' % sha_algo)
+        make_fit('sign-images-%s%s.its' % (sha_algo , padding))
         run_bootm(sha_algo, 'unsigned images', 'dev-', True)
 
         # Sign images with our dev keys
@@ -135,7 +155,7 @@ def test_vboot(u_boot_console):
         dtc('sandbox-u-boot.dts')
 
         cons.log.action('%s: Test FIT with signed configuration' % sha_algo)
-        make_fit('sign-configs-%s.its' % sha_algo)
+        make_fit('sign-configs-%s%s.its' % (sha_algo , padding))
         run_bootm(sha_algo, 'unsigned config', '%s+ OK' % sha_algo, True)
 
         # Sign images with our dev keys
@@ -146,6 +166,18 @@ def test_vboot(u_boot_console):
 
         util.run_and_log(cons, [fit_check_sign, '-f', fit, '-k', tmpdir,
                                 '-k', dtb])
+
+        # Replace header bytes
+        bcfg = u_boot_console.config.buildconfig
+        max_size = int(bcfg.get('config_fit_signature_max_size', 0x10000000), 0)
+        existing_size = replace_fit_totalsize(max_size + 1)
+        run_bootm(sha_algo, 'Signed config with bad hash', 'Bad Data Hash', False)
+        cons.log.action('%s: Check overflowed FIT header totalsize' % sha_algo)
+
+        # Replace with existing header bytes
+        replace_fit_totalsize(existing_size)
+        run_bootm(sha_algo, 'signed config', 'dev+', True)
+        cons.log.action('%s: Check default FIT header totalsize' % sha_algo)
 
         # Increment the first byte of the signature, which should cause failure
         sig = util.run_and_log(cons, 'fdtget -t bx %s %s value' %
@@ -172,14 +204,14 @@ def test_vboot(u_boot_console):
     fit_check_sign = cons.config.build_dir + '/tools/fit_check_sign'
     dtc_args = '-I dts -O dtb -i %s' % tmpdir
     dtb = '%ssandbox-u-boot.dtb' % tmpdir
-    sig_node = '/configurations/conf@1/signature@1'
+    sig_node = '/configurations/conf-1/signature'
 
     # Create an RSA key pair
     public_exponent = 65537
     util.run_and_log(cons, 'openssl genpkey -algorithm RSA -out %sdev.key '
                      '-pkeyopt rsa_keygen_bits:2048 '
-                     '-pkeyopt rsa_keygen_pubexp:%d '
-                     '2>/dev/null'  % (tmpdir, public_exponent))
+                     '-pkeyopt rsa_keygen_pubexp:%d' %
+                     (tmpdir, public_exponent))
 
     # Create a certificate containing the public key
     util.run_and_log(cons, 'openssl req -batch -new -x509 -key %sdev.key -out '
@@ -194,8 +226,10 @@ def test_vboot(u_boot_console):
         # afterwards.
         old_dtb = cons.config.dtb
         cons.config.dtb = dtb
-        test_with_algo('sha1')
-        test_with_algo('sha256')
+        test_with_algo('sha1','')
+        test_with_algo('sha1','-pss')
+        test_with_algo('sha256','')
+        test_with_algo('sha256','-pss')
     finally:
         # Go back to the original U-Boot with the correct dtb.
         cons.config.dtb = old_dtb

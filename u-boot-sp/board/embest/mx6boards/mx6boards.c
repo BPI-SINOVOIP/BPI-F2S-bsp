@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2014 Eukréa Electromatique
  * Author: Eric Bénard <eric@eukrea.com>
@@ -9,8 +10,6 @@
  * and on hummingboard.c which is :
  * Copyright (C) 2013 SolidRun ltd.
  * Copyright (C) 2013 Jon Nettleton <jon.nettleton@gmail.com>.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <asm/arch/clock.h>
@@ -609,3 +608,51 @@ int checkboard(void)
 
 	return 0;
 }
+
+#ifdef CONFIG_SPL_BUILD
+#include <spl.h>
+
+void board_init_f(ulong dummy)
+{
+	u32 cputype = cpu_type(get_cpu_rev());
+
+	switch (cputype) {
+	case MXC_CPU_MX6SOLO:
+		board_type = BOARD_IS_RIOTBOARD;
+		break;
+	case MXC_CPU_MX6D:
+		board_type = BOARD_IS_MARSBOARD;
+		break;
+	}
+	arch_cpu_init();
+
+	/* setup GP timer */
+	timer_init();
+
+#ifdef CONFIG_SPL_SERIAL_SUPPORT
+	setup_iomux_uart();
+	preloader_console_init();
+#endif
+}
+
+void board_boot_order(u32 *spl_boot_list)
+{
+	spl_boot_list[0] = BOOT_DEVICE_MMC1;
+}
+
+/*
+ * In order to jump to standard u-boot shell, you have to connect pin 5 of J13
+ * to pin 3 (ground).
+ */
+int spl_start_uboot(void)
+{
+	int gpio_key = IMX_GPIO_NR(4, 16);
+
+	gpio_direction_input(gpio_key);
+	if (gpio_get_value(gpio_key) == 0)
+		return 1;
+	else
+		return 0;
+}
+
+#endif

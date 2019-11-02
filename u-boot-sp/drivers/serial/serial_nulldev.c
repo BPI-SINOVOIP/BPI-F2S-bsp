@@ -1,7 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (c) 2015 National Instruments
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -16,6 +15,11 @@ static int nulldev_serial_setbrg(struct udevice *dev, int baudrate)
 static int nulldev_serial_getc(struct udevice *dev)
 {
 	return -EAGAIN;
+}
+
+static int nulldev_serial_pending(struct udevice *dev, bool input)
+{
+	return 0;
 }
 
 static int nulldev_serial_input(struct udevice *dev)
@@ -36,6 +40,7 @@ static const struct udevice_id nulldev_serial_ids[] = {
 
 const struct dm_serial_ops nulldev_serial_ops = {
 	.putc = nulldev_serial_putc,
+	.pending = nulldev_serial_pending,
 	.getc = nulldev_serial_getc,
 	.setbrg = nulldev_serial_setbrg,
 };

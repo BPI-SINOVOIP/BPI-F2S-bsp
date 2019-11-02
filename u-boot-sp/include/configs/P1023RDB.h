@@ -1,18 +1,13 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright 2013 Freescale Semiconductor, Inc.
  *
  * Authors:  Roy Zang <tie-fei.zang@freescale.com>
  *	     Chunhe Lan <Chunhe.Lan@freescale.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __CONFIG_H
 #define __CONFIG_H
-
-#ifndef CONFIG_SYS_TEXT_BASE
-#define CONFIG_SYS_TEXT_BASE	0xeff40000
-#endif
 
 #ifndef CONFIG_SYS_MONITOR_BASE
 #define CONFIG_SYS_MONITOR_BASE	CONFIG_SYS_TEXT_BASE	/* start of monitor */
@@ -23,7 +18,6 @@
 #endif
 
 /* High Level Configuration Options */
-#define CONFIG_MP		/* support multiple processors */
 
 #define CONFIG_PCI_INDIRECT_BRIDGE     /* indirect PCI bridge support */
 #define CONFIG_PCIE1		/* PCIE controller 1 (slot 1) */
@@ -52,8 +46,6 @@ extern unsigned long get_clock_freq(void);
 #define CONFIG_SYS_MEMTEST_START	0x01000000	/* memtest works on */
 #define CONFIG_SYS_MEMTEST_END		0x02000000
 
-#define CONFIG_PANIC_HANG	/* do not reset board on panic */
-
 /* Implement conversion of addresses in the LBC */
 #define CONFIG_SYS_LBC_LBCR		0x00000000
 #define CONFIG_SYS_LBC_LCRR		LCRR_CLKDIV_8
@@ -67,7 +59,6 @@ extern unsigned long get_clock_freq(void);
 #define CONFIG_CHIP_SELECTS_PER_CTRL	1
 
 #define CONFIG_DDR_SPD
-#define CONFIG_FSL_DDR_INTERACTIVE
 #define CONFIG_SYS_SDRAM_SIZE		512u	/* DDR is 512M */
 #define CONFIG_SYS_SPD_BUS_NUM          0
 #define SPD_EEPROM_ADDRESS              0x50
@@ -100,15 +91,11 @@ extern unsigned long get_clock_freq(void);
 				| BR_PS_16 | BR_V)
 #define CONFIG_FLASH_OR_PRELIM	0xfc000ff7
 
-#define CONFIG_FLASH_CFI_DRIVER
-#define CONFIG_SYS_FLASH_CFI
 #define CONFIG_SYS_FLASH_EMPTY_INFO
 #define CONFIG_SYS_MAX_FLASH_BANKS	1	/* number of banks */
 #define CONFIG_SYS_MAX_FLASH_SECT	512	/* sectors per device */
 #define CONFIG_SYS_FLASH_ERASE_TOUT	60000	/* Flash Erase Timeout (ms) */
 #define CONFIG_SYS_FLASH_WRITE_TOUT	500	/* Flash Write Timeout (ms) */
-
-#define CONFIG_BOARD_EARLY_INIT_R	/* call board_early_init_r function */
 
 #define CONFIG_SYS_INIT_RAM_LOCK
 #define CONFIG_SYS_INIT_RAM_ADDR	0xffd00000	/* Initial L1 address */
@@ -149,7 +136,6 @@ extern unsigned long get_clock_freq(void);
 #define CONFIG_SYS_OR1_PRELIM	CONFIG_SYS_NAND_OR_PRELIM /* NAND Options */
 
 /* Serial Port */
-#define CONFIG_CONS_INDEX		1
 #undef	CONFIG_SERIAL_SOFTWARE_FIFO
 #define CONFIG_SYS_NS16550_SERIAL
 #define CONFIG_SYS_NS16550_REG_SIZE	1
@@ -250,8 +236,6 @@ extern unsigned long get_clock_freq(void);
 /*
  * Miscellaneous configurable options
  */
-#define CONFIG_SYS_LONGHELP			/* undef to save memory	*/
-#define CONFIG_CMDLINE_EDITING		/* Command-line editing */
 #define CONFIG_SYS_LOAD_ADDR	0x2000000	/* default load address */
 
 /*
@@ -272,7 +256,6 @@ extern unsigned long get_clock_freq(void);
 #define CONFIG_LOADADDR		1000000
 
 /* Qman/Bman */
-#define CONFIG_SYS_DPAA_QBMAN		/* support Q/Bman */
 #define CONFIG_SYS_QMAN_MEM_BASE	0xff000000
 #define CONFIG_SYS_QMAN_MEM_PHYS	CONFIG_SYS_QMAN_MEM_BASE
 #define CONFIG_SYS_QMAN_MEM_SIZE	0x00200000
@@ -316,7 +299,6 @@ extern unsigned long get_clock_freq(void);
 #define CONFIG_SYS_FM1_DTSEC2_PHY_ADDR	0x2
 
 #define CONFIG_SYS_TBIPA_VALUE	8
-#define CONFIG_MII		/* MII PHY management */
 #define CONFIG_ETHPRIME		"FM1@DTSEC1"
 #endif
 

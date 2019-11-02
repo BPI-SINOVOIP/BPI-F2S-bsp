@@ -1,7 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2014-2016 Stefan Roese <sr@denx.de>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -262,6 +261,9 @@ int print_cpuinfo(void)
 		case MV_88F68XX_A0_ID:
 			puts("A0");
 			break;
+		case MV_88F68XX_B0_ID:
+			puts("B0");
+			break;
 		default:
 			printf("?? (%x)", revid);
 			break;
@@ -281,10 +283,8 @@ int print_cpuinfo(void)
  * and sets the correct windows sizes and base addresses accordingly.
  *
  * These values are set in the scratch registers by the Marvell
- * DDR3 training code, which is executed by the BootROM before the
- * main payload (U-Boot) is executed. This training code is currently
- * only available in the Marvell U-Boot version. It needs to be
- * ported to mainline U-Boot SPL at some point.
+ * DDR3 training code, which is executed by the SPL before the
+ * main payload (U-Boot) is executed.
  */
 static void update_sdram_window_sizes(void)
 {
@@ -551,6 +551,47 @@ void scsi_init(void)
 	ahci_mvebu_mbus_config((void __iomem *)MVEBU_SATA0_BASE);
 	ahci_mvebu_regret_option((void __iomem *)MVEBU_SATA0_BASE);
 	ahci_init((void __iomem *)MVEBU_SATA0_BASE);
+}
+#endif
+
+#ifdef CONFIG_USB_XHCI_MVEBU
+#define USB3_MAX_WINDOWS        4
+#define USB3_WIN_CTRL(w)        (0x0 + ((w) * 8))
+#define USB3_WIN_BASE(w)        (0x4 + ((w) * 8))
+
+static void xhci_mvebu_mbus_config(void __iomem *base,
+			const struct mbus_dram_target_info *dram)
+{
+	int i;
+
+	for (i = 0; i < USB3_MAX_WINDOWS; i++) {
+		writel(0, base + USB3_WIN_CTRL(i));
+		writel(0, base + USB3_WIN_BASE(i));
+	}
+
+	for (i = 0; i < dram->num_cs; i++) {
+		const struct mbus_dram_window *cs = dram->cs + i;
+
+		/* Write size, attributes and target id to control register */
+		writel(((cs->size - 1) & 0xffff0000) | (cs->mbus_attr << 8) |
+			(dram->mbus_dram_target_id << 4) | 1,
+			base + USB3_WIN_CTRL(i));
+
+		/* Write base address to base register */
+		writel((cs->base & 0xffff0000), base + USB3_WIN_BASE(i));
+	}
+}
+
+int board_xhci_enable(fdt_addr_t base)
+{
+	const struct mbus_dram_target_info *dram;
+
+	printf("MVEBU XHCI INIT controller @ 0x%lx\n", base);
+
+	dram = mvebu_mbus_dram_info();
+	xhci_mvebu_mbus_config((void __iomem *)base, dram);
+
+	return 0;
 }
 #endif
 

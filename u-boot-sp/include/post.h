@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * (C) Copyright 2002
  * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
@@ -5,8 +6,6 @@
  * (C) Copyright 2010
  * Michael Zaidman, Kodak, michael.zaidman@kodak.com
  * post_word_{load|store} cleanup.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 #ifndef _POST_H
 #define _POST_H
@@ -15,7 +14,7 @@
 #include <common.h>
 #include <asm/io.h>
 
-#if defined(CONFIG_POST) || defined(CONFIG_LOGBUFFER)
+#if defined(CONFIG_POST)
 
 #ifndef CONFIG_POST_EXTERNAL_WORD_FUNCS
 #ifdef CONFIG_SYS_POST_WORD_ADDR
@@ -58,7 +57,7 @@ extern ulong post_word_load(void);
 extern void post_word_store(ulong value);
 
 #endif /* CONFIG_POST_EXTERNAL_WORD_FUNCS */
-#endif /* defined (CONFIG_POST) || defined(CONFIG_LOGBUFFER) */
+#endif /* defined (CONFIG_POST) */
 #endif /* __ASSEMBLY__ */
 
 #ifdef CONFIG_POST

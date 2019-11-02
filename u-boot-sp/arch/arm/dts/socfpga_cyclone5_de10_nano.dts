@@ -1,9 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2017, Intel Corporation
  *
  * based on socfpga_cyclone5_de0_nano_soc.dts
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include "socfpga_cyclone5.dtsi"
@@ -14,6 +13,7 @@
 
 	chosen {
 		bootargs = "console=ttyS0,115200";
+		stdout-path = "serial0:115200n8";
 	};
 
 	aliases {
@@ -58,6 +58,18 @@
 	status = "okay";
 };
 
+&porta {
+	bank-name = "porta";
+};
+
+&portb {
+	bank-name = "portb";
+};
+
+&portc {
+	bank-name = "portc";
+};
+
 &mmc0 {
 	status = "okay";
 	u-boot,dm-pre-reloc;
@@ -65,4 +77,12 @@
 
 &usb1 {
 	status = "okay";
+};
+
+&uart0 {
+	u-boot,dm-pre-reloc;
+};
+
+&watchdog0 {
+	status = "disabled";
 };

@@ -1,8 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * (C) Copyright 2002
  * Daniel Engström, Omicron Ceti AB, daniel@omicron.se.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 /* i8254.h Intel 8254 PIT registers */
@@ -35,5 +34,23 @@
 
 /* The clock frequency of the i8253/i8254 PIT */
 #define PIT_TICK_RATE	1193182
+
+/**
+ * i8254_enable_beep() - Start a beep using the PCAT timer
+ *
+ * This starts beeping using the legacy i8254 timer. The beep may be silenced
+ * after a delay with i8254_disable_beep().
+ *
+ * @frequency_hz: Frequency of beep in Hz
+ * @return 0 if OK, -EINVAL if frequency_hz is 0
+ */
+int i8254_enable_beep(uint frequency_hz);
+
+/**
+ * i8254_disable_beep() - Disable the bepper
+ *
+ * This stops any existing beep
+ */
+void i8254_disable_beep(void);
 
 #endif /* _ASMI386_I8954_H_ */

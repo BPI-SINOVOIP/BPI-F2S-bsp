@@ -1,10 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * composite.c - infrastructure for Composite USB Gadgets
  *
  * Copyright (C) 2006-2008 David Brownell
  * U-Boot porting: Lukasz Majewski <l.majewski@samsung.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 #undef DEBUG
 
@@ -165,7 +164,7 @@ static int config_buf(struct usb_configuration *config,
 	int				len = USB_BUFSIZ - USB_DT_CONFIG_SIZE;
 	void				*next = buf + USB_DT_CONFIG_SIZE;
 	struct usb_descriptor_header    **descriptors;
-	struct usb_config_descriptor	*c = buf;
+	struct usb_config_descriptor	*c;
 	int				status;
 	struct usb_function		*f;
 
@@ -379,7 +378,7 @@ static int set_config(struct usb_composite_dev *cdev,
 			ep = (struct usb_endpoint_descriptor *)*descriptors;
 			addr = ((ep->bEndpointAddress & 0x80) >> 3)
 			     |	(ep->bEndpointAddress & 0x0f);
-			__set_bit(addr, f->endpoints);
+			generic_set_bit(addr, f->endpoints);
 		}
 
 		result = f->set_alt(f, tmp, 0);
@@ -736,8 +735,21 @@ composite_setup(struct usb_gadget *gadget, const struct usb_ctrlrequest *ctrl)
 		case USB_DT_DEVICE:
 			cdev->desc.bNumConfigurations =
 				count_configs(cdev, USB_DT_DEVICE);
-			cdev->desc.bMaxPacketSize0 =
-				cdev->gadget->ep0->maxpacket;
+
+			/*
+			 * If the speed is Super speed, then the supported
+			 * max packet size is 512 and it should be sent as
+			 * exponent of 2. So, 9(2^9=512) should be filled in
+			 * bMaxPacketSize0. Also fill USB version as 3.0
+			 * if speed is Super speed.
+			 */
+			if (cdev->gadget->speed == USB_SPEED_SUPER) {
+				cdev->desc.bMaxPacketSize0 = 9;
+				cdev->desc.bcdUSB = cpu_to_le16(0x0300);
+			} else {
+				cdev->desc.bMaxPacketSize0 =
+					cdev->gadget->ep0->maxpacket;
+			}
 			value = min(w_length, (u16) sizeof cdev->desc);
 			memcpy(req->buf, &cdev->desc, value);
 			break;
@@ -838,6 +850,9 @@ unknown:
 			ctrl->bRequestType, ctrl->bRequest,
 			w_value, w_index, w_length);
 
+		if (!cdev->config)
+			goto done;
+
 		/*
 		 * functions always handle their interfaces and endpoints...
 		 * punt other recipients (other, WUSB, ...) to the current
@@ -882,7 +897,7 @@ unknown:
 			value = f->setup(f, ctrl);
 		else {
 			c = cdev->config;
-			if (c && c->setup)
+			if (c->setup)
 				value = c->setup(c, ctrl);
 		}
 

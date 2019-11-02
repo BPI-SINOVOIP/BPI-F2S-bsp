@@ -1,10 +1,9 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * LayerScape Internal Memory Map
  *
- * Copyright (C) 2017 NXP Semiconductors
+ * Copyright 2017-2019 NXP
  * Copyright 2014 Freescale Semiconductor, Inc.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __ARCH_FSL_LSCH3_IMMAP_H_
@@ -16,13 +15,19 @@
 #define CONFIG_SYS_FSL_DDR3_ADDR		0x08210000
 #define CONFIG_SYS_FSL_GUTS_ADDR		(CONFIG_SYS_IMMR + 0x00E00000)
 #define CONFIG_SYS_FSL_PMU_ADDR			(CONFIG_SYS_IMMR + 0x00E30000)
+#ifdef CONFIG_ARCH_LX2160A
+#define CONFIG_SYS_FSL_RST_ADDR			(CONFIG_SYS_IMMR + 0x00e88180)
+#else
 #define CONFIG_SYS_FSL_RST_ADDR			(CONFIG_SYS_IMMR + 0x00E60000)
+#endif
 #define CONFIG_SYS_FSL_CH3_CLK_GRPA_ADDR	(CONFIG_SYS_IMMR + 0x00300000)
 #define CONFIG_SYS_FSL_CH3_CLK_GRPB_ADDR	(CONFIG_SYS_IMMR + 0x00310000)
 #define CONFIG_SYS_FSL_CH3_CLK_CTRL_ADDR	(CONFIG_SYS_IMMR + 0x00370000)
 #define SYS_FSL_QSPI_ADDR			(CONFIG_SYS_IMMR + 0x010c0000)
 #define CONFIG_SYS_FSL_ESDHC_ADDR		(CONFIG_SYS_IMMR + 0x01140000)
+#ifndef CONFIG_NXP_LSCH3_2
 #define CONFIG_SYS_IFC_ADDR			(CONFIG_SYS_IMMR + 0x01240000)
+#endif
 #define CONFIG_SYS_NS16550_COM1			(CONFIG_SYS_IMMR + 0x011C0500)
 #define CONFIG_SYS_NS16550_COM2			(CONFIG_SYS_IMMR + 0x011C0600)
 #define SYS_FSL_LS2080A_LS2085A_TIMER_ADDR	0x023d0000
@@ -46,6 +51,12 @@
 #define I2C2_BASE_ADDR				(CONFIG_SYS_IMMR + 0x01010000)
 #define I2C3_BASE_ADDR				(CONFIG_SYS_IMMR + 0x01020000)
 #define I2C4_BASE_ADDR				(CONFIG_SYS_IMMR + 0x01030000)
+#ifdef CONFIG_NXP_LSCH3_2
+#define I2C5_BASE_ADDR				(CONFIG_SYS_IMMR + 0x01040000)
+#define I2C6_BASE_ADDR				(CONFIG_SYS_IMMR + 0x01050000)
+#define I2C7_BASE_ADDR				(CONFIG_SYS_IMMR + 0x01060000)
+#define I2C8_BASE_ADDR				(CONFIG_SYS_IMMR + 0x01070000)
+#endif
 #define GPIO4_BASE_ADDR				(CONFIG_SYS_IMMR + 0x01330000)
 #define GPIO4_GPDIR_ADDR			(GPIO4_BASE_ADDR + 0x0)
 #define GPIO4_GPDAT_ADDR			(GPIO4_BASE_ADDR + 0x8)
@@ -82,6 +93,55 @@
 	(CONFIG_SYS_IMMR + CONFIG_SYS_FSL_SEC_OFFSET)
 #define CONFIG_SYS_FSL_JR0_ADDR \
 	(CONFIG_SYS_IMMR + CONFIG_SYS_FSL_JR0_OFFSET)
+
+#ifdef CONFIG_TFABOOT
+#ifdef CONFIG_NXP_LSCH3_2
+/* RCW_SRC field in Power-On Reset Control Register 1 */
+#define RCW_SRC_MASK			0x07800000
+#define RCW_SRC_BIT			23
+
+/* CFG_RCW_SRC[3:0] */
+#define RCW_SRC_TYPE_MASK		0x8
+#define RCW_SRC_ADDR_OFFSET_8MB		0x800000
+
+/* RCW SRC HARDCODED */
+#define RCW_SRC_HARDCODED_VAL		0x0	/* 0x00 - 0x07 */
+
+#define RCW_SRC_SDHC1_VAL		0x8	/* 0x8 */
+#define RCW_SRC_SDHC2_VAL		0x9	/* 0x9 */
+#define RCW_SRC_I2C1_VAL		0xa	/* 0xa */
+#define RCW_SRC_RESERVED_UART_VAL	0xb	/* 0xb */
+#define RCW_SRC_FLEXSPI_NAND2K_VAL	0xc	/* 0xc */
+#define RCW_SRC_FLEXSPI_NAND4K_VAL	0xd	/* 0xd */
+#define RCW_SRC_RESERVED_1_VAL		0xe	/* 0xe */
+#define RCW_SRC_FLEXSPI_NOR_24B		0xf	/* 0xf */
+#else
+#define RCW_SRC_MASK			(0xFF800000)
+#define RCW_SRC_BIT			23
+/* CFG_RCW_SRC[6:0] */
+#define RCW_SRC_TYPE_MASK               (0x70)
+
+/* RCW SRC HARDCODED */
+#define RCW_SRC_HARDCODED_VAL           (0x10)     /* 0x10 - 0x1f */
+/* Hardcoded will also have CFG_RCW_SRC[7] as 1.   0x90 - 0x9f */
+
+/* RCW SRC NOR */
+#define RCW_SRC_NOR_VAL                 (0x20)
+#define NOR_TYPE_MASK                   (0x10)
+#define NOR_16B_VAL                     (0x0)       /* 0x20 - 0x2f */
+#define NOR_32B_VAL                     (0x10)       /* 0x30 - 0x3f */
+
+/* RCW SRC Serial Flash
+ * 1. SERIAL NOR (QSPI)
+ * 2. OTHERS (SD/MMC, SPI, I2C1
+ */
+#define RCW_SRC_SERIAL_MASK             (0x7F)
+#define RCW_SRC_QSPI_VAL                (0x62)     /* 0x62 */
+#define RCW_SRC_SD_CARD_VAL             (0x40)     /* 0x40 */
+#define RCW_SRC_EMMC_VAL                (0x41)     /* 0x41 */
+#define RCW_SRC_I2C1_VAL                (0x49)     /* 0x49 */
+#endif
+#endif
 
 /* Security Monitor */
 #define CONFIG_SYS_SEC_MON_ADDR		(CONFIG_SYS_IMMR + 0x00e90000)
@@ -201,10 +261,15 @@ struct ccsr_gur {
 	u32	gpporcr3;
 	u32	gpporcr4;
 	u8	res_030[0x60-0x30];
-#define FSL_CHASSIS3_DCFG_FUSESR_VID_SHIFT	2
 #define FSL_CHASSIS3_DCFG_FUSESR_VID_MASK	0x1F
-#define FSL_CHASSIS3_DCFG_FUSESR_ALTVID_SHIFT	7
 #define FSL_CHASSIS3_DCFG_FUSESR_ALTVID_MASK	0x1F
+#if defined(CONFIG_ARCH_LS1088A)
+#define FSL_CHASSIS3_DCFG_FUSESR_VID_SHIFT	25
+#define FSL_CHASSIS3_DCFG_FUSESR_ALTVID_SHIFT	20
+#else
+#define FSL_CHASSIS3_DCFG_FUSESR_VID_SHIFT	2
+#define FSL_CHASSIS3_DCFG_FUSESR_ALTVID_SHIFT	7
+#endif
 	u32	dcfg_fusesr;	/* Fuse status register */
 	u8	res_064[0x70-0x64];
 	u32	devdisr;	/* Device disable control 1 */
@@ -263,6 +328,36 @@ struct ccsr_gur {
 #define FSL_CHASSIS3_SRDS2_PRTCL_SHIFT	FSL_CHASSIS3_RCWSR28_SRDS2_PRTCL_SHIFT
 #define FSL_CHASSIS3_SRDS1_REGSR	29
 #define FSL_CHASSIS3_SRDS2_REGSR	29
+#elif defined(CONFIG_ARCH_LX2160A)
+#define FSL_CHASSIS3_EC1_REGSR  27
+#define FSL_CHASSIS3_EC2_REGSR  27
+#define FSL_CHASSIS3_EC1_REGSR_PRTCL_MASK	0x00000003
+#define FSL_CHASSIS3_EC1_REGSR_PRTCL_SHIFT	0
+#define FSL_CHASSIS3_EC2_REGSR_PRTCL_MASK	0x00000007
+#define FSL_CHASSIS3_EC2_REGSR_PRTCL_SHIFT	2
+#define FSL_CHASSIS3_RCWSR28_SRDS1_PRTCL_MASK   0x001F0000
+#define FSL_CHASSIS3_RCWSR28_SRDS1_PRTCL_SHIFT  16
+#define FSL_CHASSIS3_RCWSR28_SRDS2_PRTCL_MASK   0x03E00000
+#define FSL_CHASSIS3_RCWSR28_SRDS2_PRTCL_SHIFT  21
+#define FSL_CHASSIS3_RCWSR28_SRDS3_PRTCL_MASK   0x7C000000
+#define FSL_CHASSIS3_RCWSR28_SRDS3_PRTCL_SHIFT  26
+#define FSL_CHASSIS3_SRDS1_PRTCL_MASK	FSL_CHASSIS3_RCWSR28_SRDS1_PRTCL_MASK
+#define FSL_CHASSIS3_SRDS1_PRTCL_SHIFT	FSL_CHASSIS3_RCWSR28_SRDS1_PRTCL_SHIFT
+#define FSL_CHASSIS3_SRDS2_PRTCL_MASK	FSL_CHASSIS3_RCWSR28_SRDS2_PRTCL_MASK
+#define FSL_CHASSIS3_SRDS2_PRTCL_SHIFT	FSL_CHASSIS3_RCWSR28_SRDS2_PRTCL_SHIFT
+#define FSL_CHASSIS3_SRDS3_PRTCL_MASK	FSL_CHASSIS3_RCWSR28_SRDS3_PRTCL_MASK
+#define FSL_CHASSIS3_SRDS3_PRTCL_SHIFT	FSL_CHASSIS3_RCWSR28_SRDS3_PRTCL_SHIFT
+#define FSL_CHASSIS3_SRDS1_REGSR	29
+#define FSL_CHASSIS3_SRDS2_REGSR	29
+#define FSL_CHASSIS3_SRDS3_REGSR	29
+#define FSL_CHASSIS3_RCWSR12_REGSR         12
+#define FSL_CHASSIS3_RCWSR13_REGSR         13
+#define FSL_CHASSIS3_SDHC1_BASE_PMUX_MASK  0x07000000
+#define FSL_CHASSIS3_SDHC1_BASE_PMUX_SHIFT 24
+#define FSL_CHASSIS3_SDHC2_BASE_PMUX_MASK  0x00000038
+#define FSL_CHASSIS3_SDHC2_BASE_PMUX_SHIFT 3
+#define FSL_CHASSIS3_IIC5_PMUX_MASK        0x00000E00
+#define FSL_CHASSIS3_IIC5_PMUX_SHIFT       9
 #elif defined(CONFIG_ARCH_LS1088A)
 #define FSL_CHASSIS3_EC1_REGSR  26
 #define FSL_CHASSIS3_EC2_REGSR  26
@@ -385,6 +480,40 @@ struct ccsr_reset {
 	u8 res_a08[0xbf8-0xa08];	/* 0xa08 */
 	u32 ip_rev1;			/* 0xbf8 */
 	u32 ip_rev2;			/* 0xbfc */
+};
+
+struct ccsr_serdes {
+	struct {
+		u32     rstctl; /* Reset Control Register */
+		u32     pllcr0; /* PLL Control Register 0 */
+		u32     pllcr1; /* PLL Control Register 1 */
+		u32     pllcr2; /* PLL Control Register 2 */
+		u32     pllcr3; /* PLL Control Register 3 */
+		u32     pllcr4; /* PLL Control Register 4 */
+		u32     pllcr5; /* PLL Control Register 5 */
+		u8      res[0x20 - 0x1c];
+	} bank[2];
+	u8      res1[0x90 - 0x40];
+	u32     srdstcalcr;     /* TX Calibration Control */
+	u32     srdstcalcr1;    /* TX Calibration Control1 */
+	u8      res2[0xa0 - 0x98];
+	u32     srdsrcalcr;     /* RX Calibration Control */
+	u32     srdsrcalcr1;    /* RX Calibration Control1 */
+	u8      res3[0xb0 - 0xa8];
+	u32     srdsgr0;        /* General Register 0 */
+	u8      res4[0x800 - 0xb4];
+	struct serdes_lane {
+		u32     gcr0;   /* General Control Register 0 */
+		u32     gcr1;   /* General Control Register 1 */
+		u32     gcr2;   /* General Control Register 2 */
+		u32     ssc0;   /* Speed Switch Control 0 */
+		u32     rec0;   /* Receive Equalization Control 0 */
+		u32     rec1;   /* Receive Equalization Control 1 */
+		u32     tec0;   /* Transmit Equalization Control 0 */
+		u32     ssc1;   /* Speed Switch Control 1 */
+		u8      res1[0x840 - 0x820];
+	} lane[8];
+	u8 res5[0x19fc - 0xa00];
 };
 
 #endif /*__ASSEMBLY__*/

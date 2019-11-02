@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2000-2005, DENX Software Engineering
  *		Wolfgang Denk <wd@denx.de>
@@ -6,8 +7,6 @@
  *			<mushtaqk_921@yahoo.co.in>
  * Copyright (C) 2008 Freescale Semiconductor, Inc.
  *		Dave Liu <daveliu@freescale.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -52,7 +51,6 @@ int sata_probe(int devnum)
 {
 #ifdef CONFIG_AHCI
 	struct udevice *dev;
-	struct udevice *blk;
 	int rc;
 
 	rc = uclass_get_device(UCLASS_AHCI, devnum, &dev);
@@ -62,18 +60,14 @@ int sata_probe(int devnum)
 		printf("Cannot probe SATA device %d (err=%d)\n", devnum, rc);
 		return CMD_RET_FAILURE;
 	}
+	if (!dev) {
+		printf("No SATA device found!\n");
+		return CMD_RET_FAILURE;
+	}
 	rc = sata_scan(dev);
 	if (rc) {
 		printf("Cannot scan SATA device %d (err=%d)\n", devnum, rc);
 		return CMD_RET_FAILURE;
-	}
-
-	rc = blk_get_from_parent(dev, &blk);
-	if (!rc) {
-		struct blk_desc *desc = dev_get_uclass_platdata(blk);
-
-		if (desc->lba > 0 && desc->blksz > 0)
-			part_init(desc);
 	}
 
 	return 0;
@@ -108,8 +102,8 @@ static int do_sata(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 	/* If the user has not yet run `sata init`, do it now */
 	if (sata_curr_device == -1) {
 		rc = sata_probe(0);
-		if (rc < 0)
-			return CMD_RET_FAILURE;
+		if (rc)
+			return rc;
 		sata_curr_device = 0;
 	}
 

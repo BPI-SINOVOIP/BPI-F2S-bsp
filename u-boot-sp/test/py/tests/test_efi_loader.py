@@ -1,9 +1,8 @@
+# SPDX-License-Identifier: GPL-2.0
 # Copyright (c) 2016, NVIDIA CORPORATION. All rights reserved.
 # Copyright (c) 2016, Alexander Graf <agraf@suse.de>
 #
 # based on test_net.py.
-#
-# SPDX-License-Identifier: GPL-2.0
 
 # Test efi loader implementation
 
@@ -12,7 +11,7 @@ import u_boot_utils
 
 """
 Note: This test relies on boardenv_* containing configuration values to define
-which the network environment available for testing. Without this, the parts
+which network environment is available for testing. Without this, the parts
 that rely on network will be automatically skipped.
 
 For example:
@@ -36,17 +35,17 @@ env__net_dhcp_server = True
 # static IP. If solely relying on DHCP, this variable may be omitted or set to
 # an empty list.
 env__net_static_env_vars = [
-    ("ipaddr", "10.0.0.100"),
-    ("netmask", "255.255.255.0"),
-    ("serverip", "10.0.0.1"),
+    ('ipaddr', '10.0.0.100'),
+    ('netmask', '255.255.255.0'),
+    ('serverip', '10.0.0.1'),
 ]
 
 # Details regarding a file that may be read from a TFTP server. This variable
 # may be omitted or set to None if TFTP testing is not possible or desired.
 env__efi_loader_helloworld_file = {
-    "fn": "lib/efi_loader/helloworld.efi",
-    "size": 5058624,
-    "crc32": "c2244b26",
+    'fn': 'lib/efi_loader/helloworld.efi',
+    'size': 5058624,
+    'crc32': 'c2244b26',
 }
 """
 
@@ -119,7 +118,7 @@ def fetch_tftp_file(u_boot_console, env_conf):
 
     addr = f.get('addr', None)
     if not addr:
-        addr = u_boot_utils.find_ram_base(u_boot_console) + (1024 * 1024 * 4)
+        addr = u_boot_utils.find_ram_base(u_boot_console)
 
     fn = f['fn']
     output = u_boot_console.run_command('tftpboot %x %s' % (addr, fn))
@@ -153,6 +152,8 @@ def test_efi_helloworld_net(u_boot_console):
 
     output = u_boot_console.run_command('bootefi %x' % addr)
     expected_text = 'Hello, world'
+    assert expected_text in output
+    expected_text = '## Application terminated, r = 0'
     assert expected_text in output
 
 @pytest.mark.buildconfigspec('cmd_bootefi_hello')

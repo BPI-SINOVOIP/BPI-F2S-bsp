@@ -1,29 +1,28 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2016 Rockchip Electronics Co., Ltd
  * (C) Copyright 2017 Theobroma Systems Design und Consulting GmbH
- *
- * SPDX-License-Identifier:     GPL-2.0+
  */
 
 #include <common.h>
+#include <debug_uart.h>
+#include <dm.h>
+#include <ram.h>
+#include <spl.h>
+#include <spl_gpio.h>
+#include <syscon.h>
+#include <asm/io.h>
 #include <asm/arch/bootrom.h>
 #include <asm/arch/clock.h>
 #include <asm/arch/grf_rk3399.h>
 #include <asm/arch/hardware.h>
 #include <asm/arch/periph.h>
-#include <asm/io.h>
-#include <debug_uart.h>
-#include <dm.h>
+#include <asm/arch/sys_proto.h>
 #include <dm/pinctrl.h>
-#include <ram.h>
-#include <spl.h>
-#include <syscon.h>
-
-DECLARE_GLOBAL_DATA_PTR;
 
 void board_return_to_bootrom(void)
 {
-	back_to_bootrom();
+	back_to_bootrom(BROM_BOOT_NEXTSTAGE);
 }
 
 static const char * const boot_devices[BROM_LAST_BOOTSOURCE + 1] = {
@@ -60,9 +59,52 @@ u32 spl_boot_device(void)
 	return boot_device;
 }
 
-u32 spl_boot_mode(const u32 boot_device)
+const char *spl_decode_boot_device(u32 boot_device)
 {
-	return MMCSD_MODE_RAW;
+	int i;
+	static const struct {
+		u32 boot_device;
+		const char *ofpath;
+	} spl_boot_devices_tbl[] = {
+		{ BOOT_DEVICE_MMC1, "/dwmmc@fe320000" },
+		{ BOOT_DEVICE_MMC2, "/sdhci@fe330000" },
+		{ BOOT_DEVICE_SPI, "/spi@ff1d0000" },
+	};
+
+	for (i = 0; i < ARRAY_SIZE(spl_boot_devices_tbl); ++i)
+		if (spl_boot_devices_tbl[i].boot_device == boot_device)
+			return spl_boot_devices_tbl[i].ofpath;
+
+	return NULL;
+}
+
+void spl_perform_fixups(struct spl_image_info *spl_image)
+{
+	void *blob = spl_image->fdt_addr;
+	const char *boot_ofpath;
+	int chosen;
+
+	/*
+	 * Inject the ofpath of the device the full U-Boot (or Linux in
+	 * Falcon-mode) was booted from into the FDT, if a FDT has been
+	 * loaded at the same time.
+	 */
+	if (!blob)
+		return;
+
+	boot_ofpath = spl_decode_boot_device(spl_image->boot_device);
+	if (!boot_ofpath) {
+		pr_err("%s: could not map boot_device to ofpath\n", __func__);
+		return;
+	}
+
+	chosen = fdt_find_or_add_subnode(blob, 0, "chosen");
+	if (chosen < 0) {
+		pr_err("%s: could not find/create '/chosen'\n", __func__);
+		return;
+	}
+	fdt_setprop_string(blob, chosen,
+			   "u-boot,spl-boot-device", boot_ofpath);
 }
 
 #define TIMER_CHN10_BASE	0xff8680a0
@@ -88,7 +130,13 @@ void secure_timer_init(void)
 void board_debug_uart_init(void)
 {
 #define GRF_BASE	0xff770000
+#define GPIO0_BASE	0xff720000
+#define PMUGRF_BASE	0xff320000
 	struct rk3399_grf_regs * const grf = (void *)GRF_BASE;
+#ifdef CONFIG_TARGET_CHROMEBOOK_BOB
+	struct rk3399_pmugrf_regs * const pmugrf = (void *)PMUGRF_BASE;
+	struct rockchip_gpio_regs * const gpio = (void *)GPIO0_BASE;
+#endif
 
 #if defined(CONFIG_DEBUG_UART_BASE) && (CONFIG_DEBUG_UART_BASE == 0xff180000)
 	/* Enable early UART0 on the RK3399 */
@@ -99,6 +147,20 @@ void board_debug_uart_init(void)
 		     GRF_GPIO2C1_SEL_MASK,
 		     GRF_UART0BT_SOUT << GRF_GPIO2C1_SEL_SHIFT);
 #else
+# ifdef CONFIG_TARGET_CHROMEBOOK_BOB
+	rk_setreg(&grf->io_vsel, 1 << 0);
+
+	/*
+	 * Let's enable these power rails here, we are already running the SPI
+	 * Flash based code.
+	 */
+	spl_gpio_output(gpio, GPIO(BANK_B, 2), 1);  /* PP1500_EN */
+	spl_gpio_set_pull(&pmugrf->gpio0_p, GPIO(BANK_B, 2), GPIO_PULL_NORMAL);
+
+	spl_gpio_output(gpio, GPIO(BANK_B, 4), 1);  /* PP3000_EN */
+	spl_gpio_set_pull(&pmugrf->gpio0_p, GPIO(BANK_B, 4), GPIO_PULL_NORMAL);
+#endif /* CONFIG_TARGET_CHROMEBOOK_BOB */
+
 	/* Enable early UART2 channel C on the RK3399 */
 	rk_clrsetreg(&grf->gpio4c_iomux,
 		     GRF_GPIO4C3_SEL_MASK,
@@ -123,6 +185,22 @@ void board_init_f(ulong dummy)
 
 #define EARLY_UART
 #ifdef EARLY_UART
+	debug_uart_init();
+
+# ifdef CONFIG_TARGET_CHROMEBOOK_BOB
+	int sum, i;
+
+	/*
+	 * Add a delay and ensure that the compiler does not optimise this out.
+	 * This is needed since the power rails tail a while to turn on, and
+	 * we get garbage serial output otherwise.
+	 */
+	sum = 0;
+	for (i = 0; i < 150000; i++)
+		sum += i;
+	gru_dummy_function(sum);
+#endif /* CONFIG_TARGET_CHROMEBOOK_BOB */
+
 	/*
 	 * Debug UART can be used from here if required:
 	 *
@@ -131,8 +209,7 @@ void board_init_f(ulong dummy)
 	 * printhex8(0x1234);
 	 * printascii("string");
 	 */
-	debug_uart_init();
-	printascii("U-Boot SPL board init");
+	printascii("U-Boot SPL board init\n");
 #endif
 
 	ret = spl_early_init();
@@ -162,13 +239,13 @@ void board_init_f(ulong dummy)
 
 	ret = uclass_get_device(UCLASS_PINCTRL, 0, &pinctrl);
 	if (ret) {
-		debug("Pinctrl init failed: %d\n", ret);
+		pr_err("Pinctrl init failed: %d\n", ret);
 		return;
 	}
 
 	ret = uclass_get_device(UCLASS_RAM, 0, &dev);
 	if (ret) {
-		debug("DRAM init failed: %d\n", ret);
+		pr_err("DRAM init failed: %d\n", ret);
 		return;
 	}
 }

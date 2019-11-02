@@ -1,10 +1,9 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * Cache operations for the cache instruction.
  *
  * (C) Copyright 1996, 97, 99, 2002, 03 Ralf Baechle
  * (C) Copyright 1999 Silicon Graphics, Inc.
- *
- * SPDX-License-Identifier:	GPL-2.0
  */
 #ifndef	__ASM_CACHEOPS_H
 #define	__ASM_CACHEOPS_H
@@ -20,6 +19,25 @@ static inline void mips_cache(int op, const volatile void *addr)
 #endif
 }
 
+#define MIPS32_WHICH_ICACHE                    0x0
+#define MIPS32_FETCH_AND_LOCK                  0x7
+
+#define ICACHE_LOAD_LOCK (MIPS32_WHICH_ICACHE | (MIPS32_FETCH_AND_LOCK << 2))
+
+/* Prefetch and lock instructions into cache */
+static inline void icache_lock(void *func, size_t len)
+{
+	int i, lines = ((len - 1) / ARCH_DMA_MINALIGN) + 1;
+
+	for (i = 0; i < lines; i++) {
+		asm volatile (" cache %0, %1(%2)"
+			      : /* No Output */
+			      : "I" ICACHE_LOAD_LOCK,
+				"n" (i * ARCH_DMA_MINALIGN),
+				"r" (func)
+			      : /* No Clobbers */);
+	}
+}
 #endif /* !__ASSEMBLY__ */
 
 /*

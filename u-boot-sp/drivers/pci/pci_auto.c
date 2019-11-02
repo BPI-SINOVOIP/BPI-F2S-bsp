@@ -1,11 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * PCI autoconfiguration library
  *
  * Author: Matt Porter <mporter@mvista.com>
  *
  * Copyright 2000 MontaVista Software Inc.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -99,7 +98,8 @@ void dm_pciauto_setup_device(struct udevice *dev, int bars_num,
 		}
 
 		if (!enum_only && pciauto_region_allocate(bar_res, bar_size,
-							  &bar_value) == 0) {
+							  &bar_value,
+							  found_mem64) == 0) {
 			/* Write it out and update our limit */
 			dm_pci_write_config32(dev, bar, (u32)bar_value);
 
@@ -141,7 +141,8 @@ void dm_pciauto_setup_device(struct udevice *dev, int bars_num,
 				debug("PCI Autoconfig: ROM, size=%#x, ",
 				      (unsigned int)bar_size);
 				if (pciauto_region_allocate(mem, bar_size,
-							    &bar_value) == 0) {
+							    &bar_value,
+							    false) == 0) {
 					dm_pci_write_config32(dev, rom_addr,
 							      bar_value);
 				}
@@ -181,8 +182,8 @@ void dm_pciauto_prescan_setup_bridge(struct udevice *dev, int sub_bus)
 
 	/* Configure bus number registers */
 	dm_pci_write_config8(dev, PCI_PRIMARY_BUS,
-			     PCI_BUS(dm_pci_get_bdf(dev)));
-	dm_pci_write_config8(dev, PCI_SECONDARY_BUS, sub_bus);
+			     PCI_BUS(dm_pci_get_bdf(dev)) - ctlr->seq);
+	dm_pci_write_config8(dev, PCI_SECONDARY_BUS, sub_bus - ctlr->seq);
 	dm_pci_write_config8(dev, PCI_SUBORDINATE_BUS, 0xff);
 
 	if (pci_mem) {
@@ -257,7 +258,7 @@ void dm_pciauto_postscan_setup_bridge(struct udevice *dev, int sub_bus)
 	pci_io = ctlr_hose->pci_io;
 
 	/* Configure bus number registers */
-	dm_pci_write_config8(dev, PCI_SUBORDINATE_BUS, sub_bus);
+	dm_pci_write_config8(dev, PCI_SUBORDINATE_BUS, sub_bus - ctlr->seq);
 
 	if (pci_mem) {
 		/* Round memory allocator to 1MB boundary */

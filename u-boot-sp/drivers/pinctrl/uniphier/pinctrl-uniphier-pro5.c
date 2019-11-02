@@ -1,8 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2015-2016 Socionext Inc.
  *   Author: Masahiro Yamada <yamada.masahiro@socionext.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -154,5 +153,7 @@ U_BOOT_DRIVER(uniphier_pro5_pinctrl) = {
 	.probe = uniphier_pro5_pinctrl_probe,
 	.priv_auto_alloc_size = sizeof(struct uniphier_pinctrl_priv),
 	.ops = &uniphier_pinctrl_ops,
+#if !CONFIG_IS_ENABLED(OF_CONTROL)
 	.flags = DM_FLAG_PRE_RELOC,
+#endif
 };

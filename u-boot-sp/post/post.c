@@ -1,8 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2002
  * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -13,10 +12,6 @@
 
 #ifdef CONFIG_SYS_POST_HOTKEYS_GPIO
 #include <asm/gpio.h>
-#endif
-
-#ifdef CONFIG_LOGBUFFER
-#include <logbuff.h>
 #endif
 
 DECLARE_GLOBAL_DATA_PTR;
@@ -407,13 +402,8 @@ int post_log(char *format, ...)
 	vsprintf(printbuffer, format, args);
 	va_end(args);
 
-#ifdef CONFIG_LOGBUFFER
-	/* Send to the logbuffer */
-	logbuff_log(printbuffer);
-#else
 	/* Send to the stdout file */
 	puts(printbuffer);
-#endif
 
 	return 0;
 }

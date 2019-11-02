@@ -1,7 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * (C) Copyright 2015 Google, Inc
- *
- * SPDX-License-Identifier:	GPL-2.0
  */
 
 #ifndef _ASM_ARCH_PERIPH_H
@@ -24,6 +23,9 @@ enum periph_id {
 	PERIPH_ID_I2C3,
 	PERIPH_ID_I2C4,
 	PERIPH_ID_I2C5,
+	PERIPH_ID_I2C6,
+	PERIPH_ID_I2C7,
+	PERIPH_ID_I2C8,
 	PERIPH_ID_SPI0,
 	PERIPH_ID_SPI1,
 	PERIPH_ID_SPI2,
@@ -43,6 +45,7 @@ enum periph_id {
 	PERIPH_ID_HDMI,
 	PERIPH_ID_GMAC,
 	PERIPH_ID_SFC,
+	PERIPH_ID_I2S,
 
 	PERIPH_ID_COUNT,
 

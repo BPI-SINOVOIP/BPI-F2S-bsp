@@ -1,7 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2017 Theobroma Systems Design und Consulting GmbH
- *
- * SPDX-License-Identifier: GPL-2.0+
  */
 
 #include <common.h>
@@ -152,6 +151,8 @@ static const struct timer_ops rockchip_timer_ops = {
 };
 
 static const struct udevice_id rockchip_timer_ids[] = {
+	{ .compatible = "rockchip,rk3188-timer" },
+	{ .compatible = "rockchip,rk3288-timer" },
 	{ .compatible = "rockchip,rk3368-timer" },
 	{}
 };
@@ -162,7 +163,6 @@ U_BOOT_DRIVER(rockchip_rk3368_timer) = {
 	.of_match = rockchip_timer_ids,
 	.probe = rockchip_timer_probe,
 	.ops	= &rockchip_timer_ops,
-	.flags = DM_FLAG_PRE_RELOC,
 	.priv_auto_alloc_size = sizeof(struct rockchip_timer_priv),
 #if CONFIG_IS_ENABLED(OF_PLATDATA)
 	.platdata_auto_alloc_size = sizeof(struct rockchip_timer_plat),

@@ -1,7 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (c) 2013, Google Inc.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifdef USE_HOSTCC
@@ -72,6 +71,19 @@ struct crypto_algo crypto_algos[] = {
 
 };
 
+struct padding_algo padding_algos[] = {
+	{
+		.name = "pkcs-1.5",
+		.verify = padding_pkcs_15_verify,
+	},
+#ifdef CONFIG_FIT_ENABLE_RSASSA_PSS_SUPPORT
+	{
+		.name = "pss",
+		.verify = padding_pss_verify,
+	}
+#endif /* CONFIG_FIT_ENABLE_RSASSA_PSS_SUPPORT */
+};
+
 struct checksum_algo *image_get_checksum_algo(const char *full_name)
 {
 	int i;
@@ -102,6 +114,21 @@ struct crypto_algo *image_get_crypto_algo(const char *full_name)
 	for (i = 0; i < ARRAY_SIZE(crypto_algos); i++) {
 		if (!strcmp(crypto_algos[i].name, name))
 			return &crypto_algos[i];
+	}
+
+	return NULL;
+}
+
+struct padding_algo *image_get_padding_algo(const char *name)
+{
+	int i;
+
+	if (!name)
+		return NULL;
+
+	for (i = 0; i < ARRAY_SIZE(padding_algos); i++) {
+		if (!strcmp(padding_algos[i].name, name))
+			return &padding_algos[i];
 	}
 
 	return NULL;
@@ -156,11 +183,22 @@ static int fit_image_setup_verify(struct image_sign_info *info,
 		char **err_msgp)
 {
 	char *algo_name;
+	const char *padding_name;
+
+	if (fdt_totalsize(fit) > CONFIG_FIT_SIGNATURE_MAX_SIZE) {
+		*err_msgp = "Total size too large";
+		return 1;
+	}
 
 	if (fit_image_hash_get_algo(fit, noffset, &algo_name)) {
 		*err_msgp = "Can't get hash algo property";
 		return -1;
 	}
+
+	padding_name = fdt_getprop(fit, noffset, "padding", NULL);
+	if (!padding_name)
+		padding_name = RSA_DEFAULT_PADDING_NAME;
+
 	memset(info, '\0', sizeof(*info));
 	info->keyname = fdt_getprop(fit, noffset, "key-name-hint", NULL);
 	info->fit = (void *)fit;
@@ -168,6 +206,7 @@ static int fit_image_setup_verify(struct image_sign_info *info,
 	info->name = algo_name;
 	info->checksum = image_get_checksum_algo(algo_name);
 	info->crypto = image_get_crypto_algo(algo_name);
+	info->padding = image_get_padding_algo(padding_name);
 	info->fdt_blob = gd_fdt_blob();
 	info->required_keynode = required_keynode;
 	printf("%s:%s", algo_name, info->keyname);
@@ -330,6 +369,11 @@ int fit_config_check_sig(const void *fit, int noffset, int required_keynode,
 		return -1;
 	}
 
+	if (prop && prop_len > 0 && prop[prop_len - 1] != '\0') {
+		*err_msgp = "hashed-nodes property must be null-terminated";
+		return -1;
+	}
+
 	/* Add a sanity check here since we are using the stack */
 	if (count > IMAGE_MAX_HASHED_NODES) {
 		*err_msgp = "Number of hashed nodes exceeds maximum";
@@ -347,7 +391,7 @@ int fit_config_check_sig(const void *fit, int noffset, int required_keynode,
 
 	/*
 	 * Each node can generate one region for each sub-node. Allow for
-	 * 7 sub-nodes (hash@1, signature@1, etc.) and some extra.
+	 * 7 sub-nodes (hash-1, signature-1, etc.) and some extra.
 	 */
 	max_regions = 20 + count * 7;
 	struct fdt_region fdt_regions[max_regions];
@@ -373,8 +417,11 @@ int fit_config_check_sig(const void *fit, int noffset, int required_keynode,
 	/* Add the strings */
 	strings = fdt_getprop(fit, noffset, "hashed-strings", NULL);
 	if (strings) {
-		fdt_regions[count].offset = fdt_off_dt_strings(fit) +
-				fdt32_to_cpu(strings[0]);
+		/*
+		 * The strings region offset must be a static 0x0.
+		 * This is set in tool/image-host.c
+		 */
+		fdt_regions[count].offset = fdt_off_dt_strings(fit);
 		fdt_regions[count].size = fdt32_to_cpu(strings[1]);
 		count++;
 	}

@@ -1,8 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2013 Samsung Electronics
  * Przemyslaw Marczak <p.marczak@samsung.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -102,7 +101,7 @@ void set_board_info(void)
 		bdtype = "";
 
 	sprintf(info, "%s%s", bdname, bdtype);
-	env_set("boardname", info);
+	env_set("board_name", info);
 #endif
 	snprintf(info, ARRAY_SIZE(info),  "%s%x-%s%s.dtb",
 		 CONFIG_SYS_SOC, s5p_cpu_id, bdname, bdtype);
@@ -457,7 +456,7 @@ void draw_logo(void)
 
 	addr = panel_info.logo_addr;
 	if (!addr) {
-		pr_err("There is no logo data.");
+		pr_err("There is no logo data.\n");
 		return;
 	}
 

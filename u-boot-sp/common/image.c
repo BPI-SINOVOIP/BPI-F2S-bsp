@@ -1,10 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2008 Semihalf
  *
  * (C) Copyright 2000-2006
  * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef USE_HOSTCC
@@ -15,10 +14,6 @@
 #include <status_led.h>
 #endif
 
-#ifdef CONFIG_LOGBUFFER
-#include <logbuff.h>
-#endif
-
 #include <rtc.h>
 
 #include <environment.h>
@@ -26,7 +21,7 @@
 #include <mapmem.h>
 
 #if IMAGE_ENABLE_FIT || IMAGE_ENABLE_OF_LIBFDT
-#include <libfdt.h>
+#include <linux/libfdt.h>
 #include <fdt_support.h>
 #include <fpga.h>
 #include <xilinx.h>
@@ -90,11 +85,13 @@ static const table_entry_t uimage_arch[] = {
 	{	IH_ARCH_ARC,		"arc",		"ARC",		},
 	{	IH_ARCH_X86_64,		"x86_64",	"AMD x86_64",	},
 	{	IH_ARCH_XTENSA,		"xtensa",	"Xtensa",	},
+	{	IH_ARCH_RISCV,		"riscv",	"RISC-V",	},
 	{	-1,			"",		"",		},
 };
 
 static const table_entry_t uimage_os[] = {
 	{	IH_OS_INVALID,	"invalid",	"Invalid OS",		},
+	{       IH_OS_ARM_TRUSTED_FIRMWARE, "arm-trusted-firmware", "ARM Trusted Firmware"  },
 	{	IH_OS_LINUX,	"linux",	"Linux",		},
 #if defined(CONFIG_LYNXKDI) || defined(USE_HOSTCC)
 	{	IH_OS_LYNXOS,	"lynxos",	"LynxOS",		},
@@ -103,6 +100,7 @@ static const table_entry_t uimage_os[] = {
 	{	IH_OS_OSE,	"ose",		"Enea OSE",		},
 	{	IH_OS_PLAN9,	"plan9",	"Plan 9",		},
 	{	IH_OS_RTEMS,	"rtems",	"RTEMS",		},
+	{	IH_OS_TEE,	"tee",		"Trusted Execution Environment" },
 	{	IH_OS_U_BOOT,	"u-boot",	"U-Boot",		},
 	{	IH_OS_VXWORKS,	"vxworks",	"VxWorks",		},
 #if defined(CONFIG_CMD_ELF) || defined(USE_HOSTCC)
@@ -141,13 +139,16 @@ static const table_entry_t uimage_type[] = {
 	{	IH_TYPE_KERNEL_NOLOAD, "kernel_noload",  "Kernel Image (no loading done)", },
 	{	IH_TYPE_KWBIMAGE,   "kwbimage",   "Kirkwood Boot Image",},
 	{	IH_TYPE_IMXIMAGE,   "imximage",   "Freescale i.MX Boot Image",},
+	{	IH_TYPE_IMX8IMAGE,  "imx8image",  "NXP i.MX8 Boot Image",},
+	{	IH_TYPE_IMX8MIMAGE, "imx8mimage", "NXP i.MX8M Boot Image",},
 	{	IH_TYPE_INVALID,    "invalid",	  "Invalid Image",	},
 	{	IH_TYPE_MULTI,	    "multi",	  "Multi-File Image",	},
 	{	IH_TYPE_OMAPIMAGE,  "omapimage",  "TI OMAP SPL With GP CH",},
 	{	IH_TYPE_PBLIMAGE,   "pblimage",   "Freescale PBL Boot Image",},
 	{	IH_TYPE_RAMDISK,    "ramdisk",	  "RAMDisk Image",	},
 	{	IH_TYPE_SCRIPT,     "script",	  "Script",		},
-	{	IH_TYPE_SOCFPGAIMAGE, "socfpgaimage", "Altera SOCFPGA preloader",},
+	{	IH_TYPE_SOCFPGAIMAGE, "socfpgaimage", "Altera SoCFPGA CV/AV preloader",},
+	{	IH_TYPE_SOCFPGAIMAGE_V1, "socfpgaimage_v1", "Altera SoCFPGA A10 preloader",},
 	{	IH_TYPE_STANDALONE, "standalone", "Standalone Program", },
 	{	IH_TYPE_UBLIMAGE,   "ublimage",   "Davinci UBL image",},
 	{	IH_TYPE_MXSIMAGE,   "mxsimage",   "Freescale MXS Boot Image",},
@@ -160,11 +161,13 @@ static const table_entry_t uimage_type[] = {
 	{	IH_TYPE_VYBRIDIMAGE, "vybridimage",  "Vybrid Boot Image", },
 	{	IH_TYPE_ZYNQIMAGE,  "zynqimage",  "Xilinx Zynq Boot Image" },
 	{	IH_TYPE_ZYNQMPIMAGE, "zynqmpimage", "Xilinx ZynqMP Boot Image" },
+	{	IH_TYPE_ZYNQMPBIF,  "zynqmpbif",  "Xilinx ZynqMP Boot Image (bif)" },
 	{	IH_TYPE_FPGA,       "fpga",       "FPGA Image" },
-	{	IH_TYPE_TEE,        "tee",        "Trusted Execution Environment Image",},
+	{       IH_TYPE_TEE,        "tee",        "Trusted Execution Environment Image",},
 	{	IH_TYPE_FIRMWARE_IVT, "firmware_ivt", "Firmware with HABv4 IVT" },
-	{	IH_TYPE_PMMC,       "pmmc",       "TI Power Management Micro-Controller Firmware",},
-	{	IH_TYPE_QUICKBOOT,  "quickboot" , "Sunplus Quick Boot Image", },
+	{       IH_TYPE_PMMC,        "pmmc",        "TI Power Management Micro-Controller Firmware",},
+	{	IH_TYPE_STM32IMAGE, "stm32image", "STMicroelectronics STM32 Image" },
+	{	IH_TYPE_MTKIMAGE,   "mtk_image",   "MediaTek BootROM loadable Image" },
 	{	-1,		    "",		  "",			},
 };
 
@@ -1154,11 +1157,6 @@ int boot_ramdisk_high(struct lmb *lmb, ulong rd_data, ulong rd_len,
 	}
 
 
-#ifdef CONFIG_LOGBUFFER
-	/* Prevent initrd from overwriting logbuffer */
-	lmb_reserve(lmb, logbuffer_base() - LOGBUFF_OVERHEAD, LOGBUFF_RESERVE);
-#endif
-
 	debug("## initrd_high = 0x%08lx, copy_to_ram = %d\n",
 			initrd_high, initrd_copy_to_ram);
 
@@ -1195,7 +1193,8 @@ int boot_ramdisk_high(struct lmb *lmb, ulong rd_data, ulong rd_len,
 			 * AMP boot scenarios in which we might not be
 			 * HW cache coherent
 			 */
-			flush_cache((unsigned long)*initrd_start, rd_len);
+			flush_cache((unsigned long)*initrd_start,
+				    ALIGN(rd_len, ARCH_DMA_MINALIGN));
 #endif
 			puts("OK\n");
 		}
@@ -1224,7 +1223,7 @@ int boot_get_setup(bootm_headers_t *images, uint8_t arch,
 }
 
 #if IMAGE_ENABLE_FIT
-#if defined(CONFIG_FPGA) && defined(CONFIG_FPGA_XILINX)
+#if defined(CONFIG_FPGA)
 int boot_get_fpga(int argc, char * const argv[], bootm_headers_t *images,
 		  uint8_t arch, const ulong *ld_start, ulong * const ld_len)
 {
@@ -1235,8 +1234,6 @@ int boot_get_fpga(int argc, char * const argv[], bootm_headers_t *images,
 	const char *uname, *name;
 	int err;
 	int devnum = 0; /* TODO support multi fpga platforms */
-	const fpga_desc * const desc = fpga_get_desc(devnum);
-	xilinx_desc *desc_xilinx = desc->devdesc;
 
 	/* Check to see if the images struct has a FIT configuration */
 	if (!genimg_has_config(images)) {
@@ -1281,7 +1278,7 @@ int boot_get_fpga(int argc, char * const argv[], bootm_headers_t *images,
 			return fit_img_result;
 		}
 
-		if (img_len >= desc_xilinx->size) {
+		if (!fpga_is_partial_data(devnum, img_len)) {
 			name = "full";
 			err = fpga_loadbitstream(devnum, (char *)img_data,
 						 img_len, BIT_FULL);
@@ -1419,7 +1416,7 @@ int boot_get_loadable(int argc, char * const argv[], bootm_headers_t *images,
  * @cmd_end: pointer to a ulong variable, will hold cmdline end
  *
  * boot_get_cmdline() allocates space for kernel command line below
- * BOOTMAPSZ + env_get_bootm_low() address. If "bootargs" U-Boot environemnt
+ * BOOTMAPSZ + env_get_bootm_low() address. If "bootargs" U-Boot environment
  * variable is present its contents is copied to allocated kernel
  * command line.
  *

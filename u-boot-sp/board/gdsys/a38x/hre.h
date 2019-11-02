@@ -1,8 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * (C) Copyright 2013
  * Reinhard Pfau, Guntermann & Drunck GmbH, reinhard.pfau@gdsys.cc
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __HRE_H
@@ -33,6 +32,6 @@ enum {
 };
 
 int hre_verify_program(struct key_program *prg);
-int hre_run_program(const uint8_t *code, size_t code_size);
+int hre_run_program(struct udevice *tpm, const uint8_t *code, size_t code_size);
 
 #endif /* __HRE_H */

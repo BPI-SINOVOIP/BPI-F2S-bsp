@@ -1,7 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2017 Rockchip Electronics Co., Ltd.
- *
- * SPDX-License-Identifier:     GPL-2.0+
  */
 #include <common.h>
 #include <clk.h>
@@ -9,36 +8,12 @@
 #include <ram.h>
 #include <syscon.h>
 #include <asm/io.h>
+#include <asm/arch/boot_mode.h>
 #include <asm/arch/clock.h>
 #include <asm/arch/periph.h>
 #include <asm/arch/grf_rk322x.h>
-#include <asm/arch/boot_mode.h>
 
 DECLARE_GLOBAL_DATA_PTR;
-
-#define GRF_BASE	0x11000000
-
-static void setup_boot_mode(void)
-{
-	struct rk322x_grf *const grf = (void *)GRF_BASE;
-	int boot_mode = readl(&grf->os_reg[0]);
-
-	debug("boot mode %x.\n", boot_mode);
-
-	/* Clear boot mode */
-	writel(BOOT_NORMAL, &grf->os_reg[0]);
-
-	switch (boot_mode) {
-	case BOOT_FASTBOOT:
-		printf("enter fastboot!\n");
-		env_set("preboot", "setenv preboot; fastboot usb0");
-		break;
-	case BOOT_UMS:
-		printf("enter UMS!\n");
-		env_set("preboot", "setenv preboot; ums mmc 0");
-		break;
-	}
-}
 
 __weak int rk_board_late_init(void)
 {
@@ -58,6 +33,24 @@ int board_init(void)
 	/* Enable early UART2 channel 1 on the RK322x */
 #define GRF_BASE	0x11000000
 	struct rk322x_grf * const grf = (void *)GRF_BASE;
+	enum {
+		GPIO1B2_SHIFT		= 4,
+		GPIO1B2_MASK		= 3 << GPIO1B2_SHIFT,
+		GPIO1B2_GPIO		= 0,
+		GPIO1B2_UART21_SIN,
+
+		GPIO1B1_SHIFT		= 2,
+		GPIO1B1_MASK		= 3 << GPIO1B1_SHIFT,
+		GPIO1B1_GPIO            = 0,
+		GPIO1B1_UART1_SOUT,
+		GPIO1B1_UART21_SOUT,
+	};
+	enum {
+		CON_IOMUX_UART2SEL_SHIFT= 8,
+		CON_IOMUX_UART2SEL_MASK	= 1 << CON_IOMUX_UART2SEL_SHIFT,
+		CON_IOMUX_UART2SEL_2	= 0,
+		CON_IOMUX_UART2SEL_21,
+	};
 
 	rk_clrsetreg(&grf->gpio1b_iomux,
 		     GPIO1B1_MASK | GPIO1B2_MASK,
@@ -146,8 +139,8 @@ int board_usb_cleanup(int index, enum usb_init_type init)
 }
 #endif
 
-#if defined(CONFIG_USB_FUNCTION_FASTBOOT)
-int fb_set_reboot_flag(void)
+#if CONFIG_IS_ENABLED(FASTBOOT)
+int fastboot_set_reboot_flag(void)
 {
 	struct rk322x_grf *grf;
 

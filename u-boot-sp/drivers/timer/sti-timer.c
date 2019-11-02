@@ -1,8 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2017, STMicroelectronics - All Rights Reserved
  * Author(s): Patrice Chotard, <patrice.chotard@st.com> for STMicroelectronics.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -75,5 +74,4 @@ U_BOOT_DRIVER(sti_timer) = {
 	.priv_auto_alloc_size = sizeof(struct sti_timer_priv),
 	.probe = sti_timer_probe,
 	.ops = &sti_timer_ops,
-	.flags = DM_FLAG_PRE_RELOC,
 };

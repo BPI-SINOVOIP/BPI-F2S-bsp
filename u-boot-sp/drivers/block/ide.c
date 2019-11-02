@@ -1,8 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2000-2011
  * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -1169,8 +1168,6 @@ static int ide_blk_probe(struct udevice *udev)
 	strncpy(desc->revision, ide_dev_desc[desc->devnum].revision,
 		BLK_REV_SIZE);
 	desc->revision[BLK_REV_SIZE] = '\0';
-
-	part_init(desc);
 
 	return 0;
 }

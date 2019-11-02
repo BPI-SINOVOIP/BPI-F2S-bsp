@@ -1,7 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * (C) Copyright 2016 - Beniamino Galvani <b.galvani@gmail.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __PINCTRL_MESON_H__
@@ -13,9 +12,7 @@ struct meson_pmx_group {
 	const char *name;
 	const unsigned int *pins;
 	unsigned int num_pins;
-	bool is_gpio;
-	unsigned int reg;
-	unsigned int bit;
+	const void *data;
 };
 
 struct meson_pmx_func {
@@ -34,12 +31,16 @@ struct meson_pinctrl_data {
 	unsigned int num_groups;
 	unsigned int num_funcs;
 	unsigned int num_banks;
+	const struct driver *gpio_driver;
+	void *pmx_data;
 };
 
 struct meson_pinctrl {
 	struct meson_pinctrl_data *data;
 	void __iomem *reg_mux;
 	void __iomem *reg_gpio;
+	void __iomem *reg_pull;
+	void __iomem *reg_pullen;
 };
 
 /**
@@ -90,23 +91,6 @@ struct meson_bank {
 
 #define PIN(x, b)	(b + x)
 
-#define GROUP(grp, r, b)						\
-	{								\
-		.name = #grp,						\
-		.pins = grp ## _pins,					\
-		.num_pins = ARRAY_SIZE(grp ## _pins),			\
-		.reg = r,						\
-		.bit = b,						\
-	 }
-
-#define GPIO_GROUP(gpio, b)						\
-	{								\
-		.name = #gpio,						\
-		.pins = (const unsigned int[]){ PIN(gpio, b) },		\
-		.num_pins = 1,						\
-		.is_gpio = true,					\
-	 }
-
 #define FUNCTION(fn)							\
 	{								\
 		.name = #fn,						\
@@ -132,6 +116,26 @@ struct meson_bank {
 
 extern const struct pinctrl_ops meson_pinctrl_ops;
 
+int meson_pinctrl_get_groups_count(struct udevice *dev);
+const char *meson_pinctrl_get_group_name(struct udevice *dev,
+					 unsigned int selector);
+int meson_pinmux_get_functions_count(struct udevice *dev);
+const char *meson_pinmux_get_function_name(struct udevice *dev,
+					   unsigned int selector);
 int meson_pinctrl_probe(struct udevice *dev);
+
+int meson_gpio_get(struct udevice *dev, unsigned int offset);
+int meson_gpio_set(struct udevice *dev, unsigned int offset, int value);
+int meson_gpio_get_direction(struct udevice *dev, unsigned int offset);
+int meson_gpio_direction_input(struct udevice *dev, unsigned int offset);
+int meson_gpio_direction_output(struct udevice *dev, unsigned int offset,
+				int value);
+int meson_gpio_probe(struct udevice *dev);
+
+int meson_pinconf_set(struct udevice *dev, unsigned int pin,
+		      unsigned int param, unsigned int arg);
+int meson_pinconf_group_set(struct udevice *dev,
+			    unsigned int group_selector,
+			    unsigned int param, unsigned int arg);
 
 #endif /* __PINCTRL_MESON_H__ */

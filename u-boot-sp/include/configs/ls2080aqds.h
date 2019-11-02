@@ -1,8 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright 2017 NXP
  * Copyright 2015 Freescale Semiconductor
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __LS2_QDS_H
@@ -43,11 +42,8 @@ unsigned long get_board_ddr_clk(void);
 #ifdef CONFIG_SYS_FSL_HAS_DP_DDR
 #define CONFIG_DP_DDR_DIMM_SLOTS_PER_CTLR	1
 #endif
-#define CONFIG_FSL_DDR_BIST	/* enable built-in memory test */
 
 /* SATA */
-#define CONFIG_LIBATA
-#define CONFIG_SCSI_AHCI
 #define CONFIG_SCSI_AHCI_PLAT
 
 #define CONFIG_SYS_SATA1			AHCI_BASE_ADDR1
@@ -58,7 +54,14 @@ unsigned long get_board_ddr_clk(void);
 #define CONFIG_SYS_SCSI_MAX_DEVICE		(CONFIG_SYS_SCSI_MAX_SCSI_ID * \
 						CONFIG_SYS_SCSI_MAX_LUN)
 
-/* undefined CONFIG_FSL_DDR_SYNC_REFRESH for simulator */
+#ifdef CONFIG_TFABOOT
+#define CONFIG_SYS_MMC_ENV_DEV		0
+#define CONFIG_ENV_SIZE			0x20000
+#define CONFIG_ENV_OFFSET		0x500000
+#define CONFIG_ENV_ADDR			(CONFIG_SYS_FLASH_BASE + \
+					 CONFIG_ENV_OFFSET)
+#define CONFIG_ENV_SECT_SIZE		0x20000
+#endif
 
 #define CONFIG_SYS_NOR0_CSPR_EXT	(0x0)
 #define CONFIG_SYS_NOR_AMASK		IFC_AMASK(128*1024*1024)
@@ -99,9 +102,6 @@ unsigned long get_board_ddr_clk(void);
 #define CONFIG_SYS_IFC_CCR	0x01000000
 
 #ifdef CONFIG_MTD_NOR_FLASH
-#define CONFIG_FLASH_CFI_DRIVER
-#define CONFIG_SYS_FLASH_CFI
-#define CONFIG_SYS_FLASH_USE_BUFFER_WRITE
 #define CONFIG_SYS_FLASH_QUIET_TEST
 #define CONFIG_FLASH_SHOW_PROGRESS	45 /* count down from 45/5: 9..1 */
 
@@ -267,7 +267,7 @@ unsigned long get_board_ddr_clk(void);
 #define CONFIG_SYS_CS2_FTIM2		CONFIG_SYS_NAND_FTIM2
 #define CONFIG_SYS_CS2_FTIM3		CONFIG_SYS_NAND_FTIM3
 
-#ifndef CONFIG_QSPI_BOOT
+#if !defined(CONFIG_QSPI_BOOT) && !defined(CONFIG_TFABOOT)
 #define CONFIG_ENV_ADDR			(CONFIG_SYS_FLASH_BASE + 0x300000)
 #define CONFIG_ENV_SECT_SIZE		0x20000
 #define CONFIG_ENV_SIZE			0x2000
@@ -291,8 +291,6 @@ unsigned long get_board_ddr_clk(void);
 
 /* SPI */
 #if defined(CONFIG_FSL_QSPI) || defined(CONFIG_FSL_DSPI)
-#define CONFIG_SPI_FLASH
-
 #ifdef CONFIG_FSL_DSPI
 #define CONFIG_SPI_FLASH_STMICRO
 #define CONFIG_SPI_FLASH_SST
@@ -345,7 +343,6 @@ unsigned long get_board_ddr_clk(void);
 
 /*  MMC  */
 #ifdef CONFIG_MMC
-#define CONFIG_FSL_ESDHC
 #define CONFIG_SYS_FSL_MMC_HAS_CAPBLT_VS33
 #endif
 
@@ -368,6 +365,33 @@ unsigned long get_board_ddr_clk(void);
 	"esbc_validate 0x580740000;"            \
 	"fsl_mc start mc 0x580a00000"           \
 	" 0x580e00000 \0"
+#else
+#ifdef CONFIG_TFABOOT
+#define SD_MC_INIT_CMD				\
+	"mmcinfo;mmc read 0x80000000 0x5000 0x800;"  \
+	"mmc read 0x80100000 0x7000 0x800;" \
+	"fsl_mc start mc 0x80000000 0x80100000\0"
+#define IFC_MC_INIT_CMD				\
+	"fsl_mc start mc 0x580a00000" \
+	" 0x580e00000 \0"
+#define CONFIG_EXTRA_ENV_SETTINGS		\
+	"hwconfig=fsl_ddr:bank_intlv=auto\0"    \
+	"loadaddr=0x80100000\0"                 \
+	"loadaddr_sd=0x90100000\0"                 \
+	"kernel_addr=0x100000\0"                \
+	"kernel_addr_sd=0x800\0"                \
+	"ramdisk_addr=0x800000\0"               \
+	"ramdisk_size=0x2000000\0"              \
+	"fdt_high=0xa0000000\0"                 \
+	"initrd_high=0xffffffffffffffff\0"      \
+	"kernel_start=0x581000000\0"            \
+	"kernel_start_sd=0x8000\0"              \
+	"kernel_load=0xa0000000\0"              \
+	"kernel_size=0x2800000\0"               \
+	"kernel_size_sd=0x14000\0"               \
+	"mcinitcmd=fsl_mc start mc 0x580a00000" \
+	" 0x580e00000 \0"			\
+	"mcmemsize=0x70000000 \0"
 #elif defined(CONFIG_SD_BOOT)
 #define CONFIG_EXTRA_ENV_SETTINGS		\
 	"hwconfig=fsl_ddr:bank_intlv=auto\0"    \
@@ -399,8 +423,8 @@ unsigned long get_board_ddr_clk(void);
 	"mcmemsize=0x40000000\0"		\
 	"mcinitcmd=fsl_mc start mc 0x580a00000" \
 	" 0x580e00000 \0"
+#endif /* CONFIG_TFABOOT */
 #endif /* CONFIG_SECURE_BOOT */
-
 
 #if defined(CONFIG_FSL_MC_ENET) && !defined(CONFIG_SPL_BUILD)
 #define CONFIG_FSL_MEMAC
@@ -430,7 +454,6 @@ unsigned long get_board_ddr_clk(void);
 #define XQSGMII_CARD_PHY4_PORT2_ADDR 0xe
 #define XQSGMII_CARD_PHY4_PORT3_ADDR 0xf
 
-#define CONFIG_MII		/* MII PHY management */
 #define CONFIG_ETHPRIME		"DPMAC1@xgmii"
 
 #endif

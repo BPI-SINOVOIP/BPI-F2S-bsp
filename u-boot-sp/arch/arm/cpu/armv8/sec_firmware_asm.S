@@ -1,7 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright 2016 NXP Semiconductor, Inc.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <config.h>
@@ -69,7 +68,7 @@ ENTRY(armv8_el2_to_aarch32)
 	mov	x3, x2
 	mov	x2, x1
 	mov	x1, x4
-	ldr	x0, =0xc000ff04
+	ldr	x0, =0xc200ff17
 	smc	#0
 	ret
 ENDPROC(armv8_el2_to_aarch32)

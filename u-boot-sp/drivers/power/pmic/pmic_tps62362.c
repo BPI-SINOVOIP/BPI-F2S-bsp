@@ -1,8 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2014 Texas Instruments Incorporated -  http://www.ti.com
  * Author: Felipe Balbi <balbi@ti.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -10,6 +9,10 @@
 #include <linux/errno.h>
 #include <power/pmic.h>
 #include <power/tps62362.h>
+
+#ifdef CONFIG_DM_I2C
+struct udevice *tps62362_dev __attribute__((section(".data"))) = NULL;
+#endif
 
 /**
  * tps62362_voltage_update() - Function to change a voltage level, as this
@@ -23,9 +26,16 @@ int tps62362_voltage_update(unsigned char reg, unsigned char volt_sel)
 	if (reg > TPS62362_NUM_REGS)
 		return 1;
 
+#ifndef CONFIG_DM_I2C
 	return i2c_write(TPS62362_I2C_ADDR, reg, 1, &volt_sel, 1);
+#else
+	if (!tps62362_dev)
+		return -ENODEV;
+	return dm_i2c_reg_write(tps62362_dev, reg, volt_sel);
+#endif
 }
 
+#ifndef CONFIG_DM_I2C
 int power_tps62362_init(unsigned char bus)
 {
 	static const char name[] = "TPS62362";
@@ -45,3 +55,16 @@ int power_tps62362_init(unsigned char bus)
 
 	return 0;
 }
+#else
+int power_tps62362_init(unsigned char bus)
+{
+	struct udevice *dev = NULL;
+	int rc;
+
+	rc = i2c_get_chip_for_busnum(bus, TPS62362_I2C_ADDR, 1, &dev);
+	if (rc)
+		return rc;
+	tps62362_dev = dev;
+	return 0;
+}
+#endif

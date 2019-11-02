@@ -1,13 +1,13 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (c) 2015 Google, Inc
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
 #include <bmp_layout.h>
 #include <dm.h>
 #include <mapmem.h>
+#include <splash.h>
 #include <video.h>
 #include <watchdog.h>
 #include <asm/unaligned.h>
@@ -141,8 +141,6 @@ __weak void fb_put_word(uchar **fb, uchar **from)
 }
 #endif /* CONFIG_BMP_16BPP */
 
-#define BMP_ALIGN_CENTER	0x7fff
-
 /**
  * video_splash_align_axis() - Align a single coordinate
  *
@@ -231,11 +229,12 @@ int video_bmp_display(struct udevice *dev, ulong bmp_image, int x, int y,
 	}
 
 	/*
-	 * We support displaying 8bpp BMPs on 16bpp LCDs
+	 * We support displaying 8bpp and 24bpp BMPs on 16bpp LCDs
 	 * and displaying 24bpp BMPs on 32bpp LCDs
-	 * */
+	 */
 	if (bpix != bmp_bpix &&
 	    !(bmp_bpix == 8 && bpix == 16) &&
+	    !(bmp_bpix == 24 && bpix == 16) &&
 	    !(bmp_bpix == 24 && bpix == 32)) {
 		printf("Error: %d bit/pixel mode, but BMP has %d bit/pixel\n",
 		       bpix, get_unaligned_le16(&bmp->header.bit_count));
@@ -320,12 +319,22 @@ int video_bmp_display(struct udevice *dev, ulong bmp_image, int x, int y,
 	case 24:
 		for (i = 0; i < height; ++i) {
 			for (j = 0; j < width; j++) {
-				*(fb++) = *(bmap++);
-				*(fb++) = *(bmap++);
-				*(fb++) = *(bmap++);
-				*(fb++) = 0;
+				if (bpix == 16) {
+					/* 16bit 555RGB format */
+					*(u16 *)fb = ((bmap[2] >> 3) << 10) |
+						((bmap[1] >> 3) << 5) |
+						(bmap[0] >> 3);
+					bmap += 3;
+					fb += 2;
+				} else {
+					*(fb++) = *(bmap++);
+					*(fb++) = *(bmap++);
+					*(fb++) = *(bmap++);
+					*(fb++) = 0;
+				}
 			}
 			fb -= priv->line_length + width * (bpix / 8);
+			bmap += (padded_width - width) * 3;
 		}
 		break;
 #endif /* CONFIG_BMP_24BPP */
@@ -346,7 +355,7 @@ int video_bmp_display(struct udevice *dev, ulong bmp_image, int x, int y,
 		break;
 	};
 
-	video_sync(dev);
+	video_sync(dev, false);
 
 	return 0;
 }

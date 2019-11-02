@@ -1,9 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright (c) 2013-2016 Stefan Agner
  *
  * Configuration settings for the Toradex Colibri T30 modules.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __CONFIG_H
@@ -14,7 +13,6 @@
 #include "tegra30-common.h"
 
 /* High-level configuration options */
-#define CONFIG_DISPLAY_BOARDINFO_LATE	/* Calls show_board_info() */
 
 /* Board-specific serial config */
 #define CONFIG_TEGRA_ENABLE_UARTA
@@ -22,19 +20,11 @@
 
 #define CONFIG_MACH_TYPE		MACH_TYPE_COLIBRI_T30
 
-/* I2C */
-#define CONFIG_SYS_I2C_TEGRA
-
 /* Environment in eMMC, before config block at the end of 1st "boot sector" */
 #define CONFIG_ENV_OFFSET		(-CONFIG_ENV_SIZE + \
 					 CONFIG_TDX_CFG_BLOCK_OFFSET)
 #define CONFIG_SYS_MMC_ENV_DEV		0
 #define CONFIG_SYS_MMC_ENV_PART		1
-
-/* USB host support */
-#define CONFIG_USB_EHCI_TEGRA
-
-/* USB networking support */
 
 /* General networking support */
 #define CONFIG_IP_DEFRAG

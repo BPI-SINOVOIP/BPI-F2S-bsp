@@ -1,7 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (c) 2015 Paul Thacker <paul.thacker@microchip.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  *
  */
 #include <common.h>
@@ -51,8 +50,8 @@ static int pic32_serial_init(void __iomem *base, ulong clk, u32 baudrate)
 	u32 div = DIV_ROUND_CLOSEST(clk, baudrate * 16);
 
 	/* wait for TX FIFO to empty */
-	wait_for_bit(__func__, base + U_STA, UART_TX_EMPTY,
-		     true, CONFIG_SYS_HZ, false);
+	wait_for_bit_le32(base + U_STA, UART_TX_EMPTY,
+			  true, CONFIG_SYS_HZ, false);
 
 	/* send break */
 	writel(UART_TX_BRK, base + U_STASET);
@@ -177,7 +176,6 @@ U_BOOT_DRIVER(pic32_serial) = {
 	.of_match	= pic32_uart_ids,
 	.probe		= pic32_uart_probe,
 	.ops		= &pic32_uart_ops,
-	.flags		= DM_FLAG_PRE_RELOC,
 	.priv_auto_alloc_size = sizeof(struct pic32_uart_priv),
 };
 

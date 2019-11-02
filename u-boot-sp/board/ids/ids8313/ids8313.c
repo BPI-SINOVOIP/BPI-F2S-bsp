@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2013
  * Heiko Schocher, DENX Software Engineering, hs@denx.de.
@@ -8,14 +9,12 @@
  *
  * Sergej Stepanov <ste@ids.de>
  * Based on board/freescale/mpc8313erdb/mpc8313erdb.c
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
 #include <mpc83xx.h>
 #include <spi.h>
-#include <libfdt.h>
+#include <linux/libfdt.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 /** CPLD contains the info about:
@@ -209,4 +208,4 @@ void spi_cs_deactivate(struct spi_slave *slave)
 	/* deactivate the spi_cs */
 	setbits_be32(&iopd->dat, IDSCPLD_SPI_CS_MASK);
 }
-#endif /* CONFIG_HARD_SPI */
+#endif

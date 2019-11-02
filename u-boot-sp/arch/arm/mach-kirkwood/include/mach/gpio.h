@@ -1,7 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * arch/asm-arm/mach-kirkwood/include/mach/gpio.h
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 /*
@@ -14,10 +13,6 @@
 
 #ifndef __KIRKWOOD_GPIO_H
 #define __KIRKWOOD_GPIO_H
-
-/* got from kernel include/linux/bitops.h */
-#define BITS_PER_BYTE 8
-#define BITS_TO_LONGS(nr)	DIV_ROUND_UP(nr, BITS_PER_BYTE * sizeof(long))
 
 #define GPIO_MAX		50
 #define GPIO_OFF(pin)		(((pin) >> 5) ? 0x0040 : 0x0000)

@@ -1,10 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2010-2013 Freescale Semiconductor, Inc.
  * Copyright (C) 2013, Boundary Devices <info@boundarydevices.com>
  * Copyright (C) 2014-2016, Toradex AG
  * copied from nitrogen6x
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -746,6 +745,15 @@ static void setup_display(void)
 	gpio_direction_output(RGB_BACKLIGHTPWM_OE, 0);
 	gpio_direction_output(RGB_BACKLIGHT_GP, 1);
 }
+
+/*
+ * Backlight off before OS handover
+ */
+void board_preboot_os(void)
+{
+	gpio_direction_output(RGB_BACKLIGHTPWM_GP, 1);
+	gpio_direction_output(RGB_BACKLIGHT_GP, 0);
+}
 #endif /* defined(CONFIG_VIDEO_IPUV3) */
 
 int board_early_init_f(void)
@@ -892,7 +900,7 @@ void ldo_mode_set(int ldo_bypass)
 
 #ifdef CONFIG_SPL_BUILD
 #include <spl.h>
-#include <libfdt.h>
+#include <linux/libfdt.h>
 #include "asm/arch/mx6q-ddr.h"
 #include "asm/arch/iomux.h"
 #include "asm/arch/crm_regs.h"

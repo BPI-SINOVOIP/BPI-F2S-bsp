@@ -1,9 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2007-2008 Semihalf
  *
  * Written by: Rafal Jaworowski <raj@semihalf.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <config.h>
@@ -100,6 +99,7 @@ static int dev_stor_get(int type, int *more, struct device_info *di)
 {
 	struct blk_desc *dd;
 	int found = 0;
+	int found_last = 0;
 	int i = 0;
 
 	/* Wasn't configured for this type, return 0 directly */
@@ -112,9 +112,13 @@ static int dev_stor_get(int type, int *more, struct device_info *di)
 			if (di->cookie ==
 			    (void *)blk_get_dev(specs[type].name, i)) {
 				i += 1;
+				found_last = 1;
 				break;
 			}
 		}
+
+		if (!found_last)
+			i = 0;
 	}
 
 	for (; i < specs[type].max_dev; i++) {

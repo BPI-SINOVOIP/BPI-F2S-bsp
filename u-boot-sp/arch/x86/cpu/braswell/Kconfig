@@ -1,8 +1,6 @@
+# SPDX-License-Identifier: GPL-2.0+
 #
 # Copyright (C) 2017, Bin Meng <bmeng.cn@gmail.com>
-#
-# SPDX-License-Identifier:	GPL-2.0+
-#
 
 config INTEL_BRASWELL
 	bool
@@ -19,6 +17,7 @@ config INTEL_BRASWELL
 	imply MMC_SDHCI
 	imply MMC_SDHCI_SDMA
 	imply SCSI
+	imply SCSI_AHCI
 	imply SPI_FLASH
 	imply SYS_NS16550
 	imply USB

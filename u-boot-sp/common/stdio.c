@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2009 Sergey Kubushyn <ksi@koi8.net>
  *
@@ -5,8 +6,6 @@
  *
  * (C) Copyright 2000
  * Paolo Scaffardi, AIRVENT SAM s.p.a - RIMINI(ITALY), arsenio@tin.it
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <config.h>
@@ -17,9 +16,6 @@
 #include <malloc.h>
 #include <stdio_dev.h>
 #include <serial.h>
-#ifdef CONFIG_LOGBUFFER
-#include <logbuff.h>
-#endif
 
 #if defined(CONFIG_SYS_I2C)
 #include <i2c.h>
@@ -380,9 +376,6 @@ int stdio_add_devices(void)
 #endif /* CONFIG_DM_VIDEO */
 #if defined(CONFIG_KEYBOARD) && !defined(CONFIG_DM_KEYBOARD)
 	drv_keyboard_init ();
-#endif
-#ifdef CONFIG_LOGBUFFER
-	drv_logbuff_init ();
 #endif
 	drv_system_init ();
 	serial_stdio_init ();

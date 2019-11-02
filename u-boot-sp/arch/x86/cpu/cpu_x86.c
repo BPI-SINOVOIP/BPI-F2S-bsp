@@ -1,7 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2015, Bin Meng <bmeng.cn@gmail.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -95,4 +94,5 @@ U_BOOT_DRIVER(cpu_x86_drv) = {
 	.of_match	= cpu_x86_ids,
 	.bind		= cpu_x86_bind,
 	.ops		= &cpu_x86_ops,
+	.flags		= DM_FLAG_PRE_RELOC,
 };

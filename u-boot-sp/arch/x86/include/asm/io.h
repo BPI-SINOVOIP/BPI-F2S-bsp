@@ -1,8 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * (C) Copyright 2000-2002
  * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef _ASM_IO_H
@@ -58,52 +57,56 @@
  * memory location directly.
  */
 
-#define readb(addr) (*(volatile unsigned char *) (addr))
-#define readw(addr) (*(volatile unsigned short *) (addr))
-#define readl(addr) (*(volatile unsigned int *) (addr))
+#define readb(addr) (*(volatile u8 *)(uintptr_t)(addr))
+#define readw(addr) (*(volatile u16 *)(uintptr_t)(addr))
+#define readl(addr) (*(volatile u32 *)(uintptr_t)(addr))
+#define readq(addr) (*(volatile u64 *)(uintptr_t)(addr))
 #define __raw_readb readb
 #define __raw_readw readw
 #define __raw_readl readl
+#define __raw_readq readq
 
-#define writeb(b,addr) (*(volatile unsigned char *) (addr) = (b))
-#define writew(b,addr) (*(volatile unsigned short *) (addr) = (b))
-#define writel(b,addr) (*(volatile unsigned int *) (addr) = (b))
+#define writeb(b, addr) (*(volatile u8 *)(addr) = (b))
+#define writew(b, addr) (*(volatile u16 *)(addr) = (b))
+#define writel(b, addr) (*(volatile u32 *)(addr) = (b))
+#define writeq(b, addr) (*(volatile u64 *)(addr) = (b))
 #define __raw_writeb writeb
 #define __raw_writew writew
 #define __raw_writel writel
+#define __raw_writeq writeq
 
 #define memset_io(a,b,c)	memset((a),(b),(c))
 #define memcpy_fromio(a,b,c)	memcpy((a),(b),(c))
 #define memcpy_toio(a,b,c)	memcpy((a),(b),(c))
 
-#define write_arch(type, endian, a, v) __raw_write##type(cpu_to_##endian(v), a)
-#define read_arch(type, endian, a) endian##_to_cpu(__raw_read##type(a))
+#define out_arch(type, endian, a, v)	__raw_write##type(cpu_to_##endian(v), a)
+#define in_arch(type, endian, a)	endian##_to_cpu(__raw_read##type(a))
 
-#define write_le64(a, v)	write_arch(q, le64, a, v)
-#define write_le32(a, v)	write_arch(l, le32, a, v)
-#define write_le16(a, v)	write_arch(w, le16, a, v)
+#define out_le64(a, v)	out_arch(q, le64, a, v)
+#define out_le32(a, v)	out_arch(l, le32, a, v)
+#define out_le16(a, v)	out_arch(w, le16, a, v)
 
-#define read_le64(a)	read_arch(q, le64, a)
-#define read_le32(a)	read_arch(l, le32, a)
-#define read_le16(a)	read_arch(w, le16, a)
+#define in_le64(a)	in_arch(q, le64, a)
+#define in_le32(a)	in_arch(l, le32, a)
+#define in_le16(a)	in_arch(w, le16, a)
 
-#define write_be32(a, v)	write_arch(l, be32, a, v)
-#define write_be16(a, v)	write_arch(w, be16, a, v)
+#define out_be32(a, v)	out_arch(l, be32, a, v)
+#define out_be16(a, v)	out_arch(w, be16, a, v)
 
-#define read_be32(a)	read_arch(l, be32, a)
-#define read_be16(a)	read_arch(w, be16, a)
+#define in_be32(a)	in_arch(l, be32, a)
+#define in_be16(a)	in_arch(w, be16, a)
 
-#define write_8(a, v)	__raw_writeb(v, a)
-#define read_8(a)	__raw_readb(a)
+#define out_8(a, v)	__raw_writeb(v, a)
+#define in_8(a)		__raw_readb(a)
 
 #define clrbits(type, addr, clear) \
-	write_##type((addr), read_##type(addr) & ~(clear))
+	out_##type((addr), in_##type(addr) & ~(clear))
 
 #define setbits(type, addr, set) \
-	write_##type((addr), read_##type(addr) | (set))
+	out_##type((addr), in_##type(addr) | (set))
 
 #define clrsetbits(type, addr, clear, set) \
-	write_##type((addr), (read_##type(addr) & ~(clear)) | (set))
+	out_##type((addr), (in_##type(addr) & ~(clear)) | (set))
 
 #define clrbits_be32(addr, clear) clrbits(be32, addr, clear)
 #define setbits_be32(addr, set) setbits(be32, addr, set)
@@ -237,6 +240,72 @@ static inline void sync(void)
 #define dmb()		__asm__ __volatile__ ("" : : : "memory")
 #define __iormb()	dmb()
 #define __iowmb()	dmb()
+
+/*
+ * Read/write from/to an (offsettable) iomem cookie. It might be a PIO
+ * access or a MMIO access, these functions don't care. The info is
+ * encoded in the hardware mapping set up by the mapping functions
+ * (or the cookie itself, depending on implementation and hw).
+ *
+ * The generic routines don't assume any hardware mappings, and just
+ * encode the PIO/MMIO as part of the cookie. They coldly assume that
+ * the MMIO IO mappings are not in the low address range.
+ *
+ * Architectures for which this is not true can't use this generic
+ * implementation and should do their own copy.
+ */
+
+/*
+ * We assume that all the low physical PIO addresses (0-0xffff) always
+ * PIO. That means we can do some sanity checks on the low bits, and
+ * don't need to just take things for granted.
+ */
+#define PIO_RESERVED	0x10000UL
+
+/*
+ * Ugly macros are a way of life.
+ */
+#define IO_COND(addr, is_pio, is_mmio) do {			\
+	unsigned long port = (unsigned long __force)addr;	\
+	if (port >= PIO_RESERVED) {				\
+		is_mmio;					\
+	} else {						\
+		is_pio;						\
+	}							\
+} while (0)
+
+static inline u8 ioread8(const volatile void __iomem *addr)
+{
+	IO_COND(addr, return inb(port), return readb(addr));
+	return 0xff;
+}
+
+static inline u16 ioread16(const volatile void __iomem *addr)
+{
+	IO_COND(addr, return inw(port), return readw(addr));
+	return 0xffff;
+}
+
+static inline u32 ioread32(const volatile void __iomem *addr)
+{
+	IO_COND(addr, return inl(port), return readl(addr));
+	return 0xffffffff;
+}
+
+static inline void iowrite8(u8 value, volatile void __iomem *addr)
+{
+	IO_COND(addr, outb(value, port), writeb(value, addr));
+}
+
+static inline void iowrite16(u16 value, volatile void __iomem *addr)
+{
+	IO_COND(addr, outw(value, port), writew(value, addr));
+}
+
+static inline void iowrite32(u32 value, volatile void __iomem *addr)
+{
+	IO_COND(addr, outl(value, port), writel(value, addr));
+}
 
 #include <asm-generic/io.h>
 

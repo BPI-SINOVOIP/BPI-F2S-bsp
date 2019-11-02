@@ -1,7 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2015-2016 Stefan Roese <sr@denx.de>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -218,22 +217,6 @@ int board_eth_init(bd_t *bis)
 	return pci_eth_init(bis);
 }
 #endif
-
-int board_video_init(void)
-{
-	struct mvebu_lcd_info lcd_info;
-
-	/* Reserved memory area via CONFIG_SYS_MEM_TOP_HIDE */
-	lcd_info.fb_base	= gd->ram_size;
-	lcd_info.x_res		= 240;
-	lcd_info.x_fp		= 1;
-	lcd_info.x_bp		= 45;
-	lcd_info.y_res		= 320;
-	lcd_info.y_fp		= 1;
-	lcd_info.y_bp		= 3;
-
-	return mvebu_lcd_register_init(&lcd_info);
-}
 
 #ifdef CONFIG_BOARD_LATE_INIT
 int board_late_init(void)

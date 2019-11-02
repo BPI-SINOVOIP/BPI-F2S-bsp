@@ -1,16 +1,13 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Common configuration settings for IGEP technology based boards
  *
  * (C) Copyright 2012
  * ISEE 2007 SL, <www.iseebcn.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __IGEP00X0_H
 #define __IGEP00X0_H
-
-#define CONFIG_NR_DRAM_BANKS            2
 
 #include <configs/ti_omap3_common.h>
 
@@ -21,13 +18,7 @@
 #undef CONFIG_SPL_TEXT_BASE
 #define CONFIG_SPL_TEXT_BASE		0x40200000
 
-#define CONFIG_MISC_INIT_R
-
 #define CONFIG_REVISION_TAG		1
-
-/* GPIO banks */
-#define CONFIG_OMAP3_GPIO_2		/* GPIO32..63   is in GPIO bank 2 */
-#define CONFIG_OMAP3_GPIO_4		/* GPIO96..127  is in GPIO bank 4 */
 
 /* TPS65950 */
 #define PBIASLITEVMODE1			(1 << 8)
@@ -40,21 +31,6 @@
 #define IGEP0030_USB_TRANSCEIVER_RESET		54
 #define GPIO_IGEP00X0_BOARD_DETECTION		28
 #define GPIO_IGEP00X0_REVISION_DETECTION	129
-
-/* USB */
-#define CONFIG_USB_MUSB_UDC		1
-#define CONFIG_USB_OMAP3		1
-#define CONFIG_TWL4030_USB		1
-
-/* USB device configuration */
-#define CONFIG_USB_DEVICE		1
-#define CONFIG_USB_TTY			1
-
-/* Change these to suit your needs */
-#define CONFIG_USBD_VENDORID		0x0451
-#define CONFIG_USBD_PRODUCTID		0x5678
-#define CONFIG_USBD_MANUFACTURER	"Texas Instruments"
-#define CONFIG_USBD_PRODUCT_NAME	"IGEP"
 
 #ifndef CONFIG_SPL_BUILD
 
@@ -71,10 +47,6 @@
 
 #define BOOT_TARGET_DEVICES(func) \
 	func(MMC, mmc, 0)
-
-#define CONFIG_BOOTCOMMAND \
-	"run findfdt; " \
-	"run distro_bootcmd"
 
 #include <config_distro_bootcmd.h>
 
@@ -101,7 +73,6 @@
 
 #endif
 
-#define CONFIG_MTD_PARTITIONS
 #define CONFIG_SYS_MTDPARTS_RUNTIME
 
 /* OneNAND config */
@@ -145,8 +116,6 @@
 #define CONFIG_ENV_UBI_PART		"UBI"
 #define CONFIG_ENV_UBI_VOLUME		"config"
 #define CONFIG_ENV_UBI_VOLUME_REDUND	"config_r"
-#define CONFIG_UBI_SILENCE_MSG		1
-#define CONFIG_UBIFS_SILENCE_MSG	1
 #define CONFIG_ENV_SIZE			(32*1024)
 
 #endif /* __IGEP00X0_H */

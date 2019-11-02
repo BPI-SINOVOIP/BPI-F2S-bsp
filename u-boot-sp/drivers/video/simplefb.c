@@ -1,7 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2017 Rob Clark
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -69,5 +68,4 @@ U_BOOT_DRIVER(simple_video) = {
 	.id	= UCLASS_VIDEO,
 	.of_match = simple_video_ids,
 	.probe	= simple_video_probe,
-	.flags	= DM_FLAG_PRE_RELOC,
 };

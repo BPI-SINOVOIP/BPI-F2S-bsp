@@ -1,9 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Command for accessing SPI flash.
  *
  * Copyright (C) 2008 Atmel Corporation
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -287,7 +286,7 @@ static int do_spi_flash_read_write(int argc, char * const argv[])
 	}
 
 	buf = map_physmem(addr, len, MAP_WRBACK);
-	if (!buf) {
+	if (!buf && addr) {
 		puts("Failed to map physical memory\n");
 		return 1;
 	}
@@ -414,7 +413,7 @@ static void show_time(struct test_info *test, int stage)
 		do_div(speed, test->time_ms[stage] * 1024);
 	bps = speed * 8;
 
-	printf("%d %s: %d ticks, %d KiB/s %d.%03d Mbps\n", stage,
+	printf("%d %s: %u ticks, %d KiB/s %d.%03d Mbps\n", stage,
 	       stage_name[stage], test->time_ms[stage],
 	       (int)speed, bps / 1000, bps % 1000);
 }

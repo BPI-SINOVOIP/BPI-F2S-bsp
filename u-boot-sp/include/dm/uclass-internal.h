@@ -1,16 +1,28 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright (c) 2013 Google, Inc
  *
  * (C) Copyright 2012
  * Pavel Herrmann <morpheus.ibis@gmail.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef _DM_UCLASS_INTERNAL_H
 #define _DM_UCLASS_INTERNAL_H
 
 #include <dm/ofnode.h>
+
+/**
+ * uclass_find_next_free_req_seq() - Get the next free req_seq number
+ *
+ * This returns the next free req_seq number. This is useful only if
+ * OF_CONTROL is not used. The next free req_seq number is simply the
+ * maximum req_seq of the uclass + 1.
+ * This allows assiging req_seq number in the binding order.
+ *
+ * @id:		Id number of the uclass
+ * @return	The next free req_seq number
+ */
+int uclass_find_next_free_req_seq(enum uclass_id id);
 
 /**
  * uclass_get_device_tail() - handle the end of a get_device call
@@ -23,6 +35,17 @@
  * @return ret, if non-zero, else the result of the device_probe() call
  */
 int uclass_get_device_tail(struct udevice *dev, int ret, struct udevice **devp);
+
+/**
+ * dev_get_uclass_index() - Get uclass and index of device
+ * @dev:	- in - Device that we want the uclass/index of
+ * @ucp:	- out - A pointer to the uclass the device belongs to
+ *
+ * The device is not prepared for use - this is an internal function.
+ *
+ * @return the index of the device in the uclass list or -ENODEV if not found.
+ */
+int dev_get_uclass_index(struct udevice *dev, struct uclass **ucp);
 
 /**
  * uclass_find_device() - Return n-th child of uclass
@@ -131,6 +154,23 @@ int uclass_find_device_by_of_offset(enum uclass_id id, int node,
  */
 int uclass_find_device_by_ofnode(enum uclass_id id, ofnode node,
 				 struct udevice **devp);
+
+/**
+ * uclass_find_device_by_phandle() - Find a uclass device by phandle
+ *
+ * This searches the devices in the uclass for one with the given phandle.
+ *
+ * The device is NOT probed, it is merely returned.
+ *
+ * @id: ID to look up
+ * @parent: Parent device containing the phandle pointer
+ * @name: Name of property in the parent device node
+ * @devp: Returns pointer to device (there is only one for each node)
+ * @return 0 if OK, -ENOENT if there is no @name present in the node, other
+ *	-ve on error
+ */
+int uclass_find_device_by_phandle(enum uclass_id id, struct udevice *parent,
+				  const char *name, struct udevice **devp);
 
 /**
  * uclass_bind_device() - Associate device with a uclass

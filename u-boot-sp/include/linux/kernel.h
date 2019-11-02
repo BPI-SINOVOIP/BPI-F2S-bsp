@@ -33,11 +33,16 @@
 #define S64_MAX		((s64)(U64_MAX>>1))
 #define S64_MIN		((s64)(-S64_MAX - 1))
 
+/* Aliases defined by stdint.h */
+#define UINT32_MAX	U32_MAX
+#define UINT64_MAX	U64_MAX
+
 #define STACK_MAGIC	0xdeadbeef
 
 #define REPEAT_BYTE(x)	((~0ul / 0xff) * (x))
 
 #define ALIGN(x,a)		__ALIGN_MASK((x),(typeof(x))(a)-1)
+#define ALIGN_DOWN(x, a)	ALIGN((x) - ((a) - 1), (a))
 #define __ALIGN_MASK(x,mask)	(((x)+(mask))&~(mask))
 #define PTR_ALIGN(p, a)		((typeof(p))ALIGN((unsigned long)(p), (a)))
 #define IS_ALIGNED(x, a)		(((x) & ((typeof(x))(a) - 1)) == 0)
@@ -95,6 +100,18 @@
 	 ((typeof(divisor))-1) > 0 || (__x) > 0) ?	\
 		(((__x) + ((__d) / 2)) / (__d)) :	\
 		(((__x) - ((__d) / 2)) / (__d));	\
+}							\
+)
+/*
+ * Same as above but for u64 dividends. divisor must be a 32-bit
+ * number.
+ */
+#define DIV_ROUND_CLOSEST_ULL(x, divisor)(		\
+{							\
+	typeof(divisor) __d = divisor;			\
+	unsigned long long _tmp = (x) + (__d) / 2;	\
+	do_div(_tmp, __d);				\
+	_tmp;						\
 }							\
 )
 

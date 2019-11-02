@@ -1,48 +1,39 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright 2017 NXP
  * Copyright (C) 2014 Freescale Semiconductor
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __LS2_COMMON_H
 #define __LS2_COMMON_H
 
 #define CONFIG_REMAKE_ELF
-#define CONFIG_FSL_LAYERSCAPE
-#define CONFIG_MP
 #define CONFIG_GICV3
-#define CONFIG_FSL_TZPC_BP147
 
 #include <asm/arch/stream_id_lsch3.h>
 #include <asm/arch/config.h>
 
 /* Link Definitions */
+#ifdef CONFIG_TFABOOT
+#define CONFIG_SYS_INIT_SP_ADDR		CONFIG_SYS_TEXT_BASE
+#else
 #define CONFIG_SYS_INIT_SP_ADDR		(CONFIG_SYS_FSL_OCRAM_BASE + 0xfff0)
+#endif
 
 /* We need architecture specific misc initializations */
 
 /* Link Definitions */
+#ifndef CONFIG_TFABOOT
 #ifndef CONFIG_QSPI_BOOT
-#ifdef CONFIG_SPL
-#define CONFIG_SYS_TEXT_BASE		0x80400000
 #else
-#define CONFIG_SYS_TEXT_BASE		0x30100000
-#endif
-#else
-#define CONFIG_SYS_TEXT_BASE		0x20100000
 #define CONFIG_ENV_SIZE			0x2000          /* 8KB */
 #define CONFIG_ENV_OFFSET		0x300000        /* 3MB */
 #define CONFIG_ENV_SECT_SIZE		0x40000
 #endif
-
-#define CONFIG_SUPPORT_RAW_INITRD
+#endif
 
 #define CONFIG_SKIP_LOWLEVEL_INIT
 
-#ifndef CONFIG_SPL
-#define CONFIG_FSL_DDR_INTERACTIVE	/* Interactive debugging */
-#endif
 #ifndef CONFIG_SYS_FSL_DDR4
 #define CONFIG_SYS_DDR_RAW_TIMING
 #endif
@@ -85,14 +76,8 @@
 
 /* I2C */
 #define CONFIG_SYS_I2C
-#define CONFIG_SYS_I2C_MXC
-#define CONFIG_SYS_I2C_MXC_I2C1		/* enable I2C bus 1 */
-#define CONFIG_SYS_I2C_MXC_I2C2		/* enable I2C bus 2 */
-#define CONFIG_SYS_I2C_MXC_I2C3		/* enable I2C bus 3 */
-#define CONFIG_SYS_I2C_MXC_I2C4		/* enable I2C bus 4 */
 
 /* Serial Port */
-#define CONFIG_CONS_INDEX       1
 #define CONFIG_SYS_NS16550_SERIAL
 #define CONFIG_SYS_NS16550_REG_SIZE     1
 #define CONFIG_SYS_NS16550_CLK          (get_serial_clock())
@@ -167,7 +152,7 @@ unsigned long long get_qixis_addr(void);
  * 512MB aligned, so the min size to hide is 512MB.
  */
 #ifdef CONFIG_FSL_MC_ENET
-#define CONFIG_SYS_LS_MC_DRAM_BLOCK_MIN_SIZE		(512UL * 1024 * 1024)
+#define CONFIG_SYS_LS_MC_DRAM_BLOCK_MIN_SIZE		(128UL * 1024 * 1024)
 #endif
 
 /* Command line configuration */
@@ -178,8 +163,6 @@ unsigned long long get_qixis_addr(void);
 /* Physical Memory Map */
 /* fixme: these need to be checked against the board */
 #define CONFIG_CHIP_SELECTS_PER_CTRL	4
-
-#define CONFIG_NR_DRAM_BANKS		3
 
 #define CONFIG_HWCONFIG
 #define HWCONFIG_BUFFER_SIZE		128
@@ -203,6 +186,7 @@ unsigned long long get_qixis_addr(void);
 	"mcinitcmd=fsl_mc start mc 0x580a00000"	\
 	" 0x580e00000 \0"
 
+#ifndef CONFIG_TFABOOT
 #ifdef CONFIG_SD_BOOT
 #define CONFIG_BOOTCOMMAND	"mmc read 0x80200000 0x6800 0x800;"\
 				" fsl_mc apply dpl 0x80200000 &&" \
@@ -213,19 +197,14 @@ unsigned long long get_qixis_addr(void);
 				" cp.b $kernel_start $kernel_load" \
 				" $kernel_size && bootm $kernel_load"
 #endif
+#endif
 
 /* Monitor Command Prompt */
 #define CONFIG_SYS_CBSIZE		512	/* Console I/O Buffer Size */
-#define CONFIG_SYS_LONGHELP
-#define CONFIG_CMDLINE_EDITING		1
-#define CONFIG_AUTO_COMPLETE
 #define CONFIG_SYS_MAXARGS		64	/* max command args */
-
-#define CONFIG_PANIC_HANG	/* do not reset board on panic */
 
 #define CONFIG_SPL_BSS_START_ADDR	0x80100000
 #define CONFIG_SPL_BSS_MAX_SIZE		0x00100000
-#define CONFIG_SPL_FRAMEWORK
 #define CONFIG_SPL_MAX_SIZE		0x16000
 #define CONFIG_SPL_STACK		(CONFIG_SYS_FSL_OCRAM_BASE + 0x9ff0)
 #define CONFIG_SPL_TARGET		"u-boot-with-spl.bin"
@@ -237,7 +216,7 @@ unsigned long long get_qixis_addr(void);
 #endif
 #define CONFIG_SYS_SPL_MALLOC_SIZE	0x00100000
 #define CONFIG_SYS_SPL_MALLOC_START	0x80200000
-#define CONFIG_SYS_MONITOR_LEN		(640 * 1024)
+#define CONFIG_SYS_MONITOR_LEN		(1024 * 1024)
 
 #define CONFIG_SYS_BOOTM_LEN   (64 << 20)      /* Increase max gunzip size */
 

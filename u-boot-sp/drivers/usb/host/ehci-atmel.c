@@ -1,9 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2012
  * Atmel Semiconductor <www.atmel.com>
  * Written-by: Bo Shen <voice.shen@atmel.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -15,9 +14,7 @@
 
 #include "ehci.h"
 
-DECLARE_GLOBAL_DATA_PTR;
-
-#ifndef CONFIG_DM_USB
+#if !CONFIG_IS_ENABLED(DM_USB)
 
 int ehci_hcd_init(int index, enum usb_init_type init,
 		struct ehci_hccr **hccr, struct ehci_hcor **hcor)

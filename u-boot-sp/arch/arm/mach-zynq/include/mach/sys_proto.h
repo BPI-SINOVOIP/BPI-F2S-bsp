@@ -1,7 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright (c) 2013 Xilinx Inc.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef _SYS_PROTO_H_
@@ -19,8 +18,5 @@ extern void zynq_ddrc_init(void);
 extern unsigned int zynq_get_silicon_version(void);
 
 int zynq_board_read_rom_ethaddr(unsigned char *ethaddr);
-
-/* Driver extern functions */
-extern void ps7_init(void);
 
 #endif /* _SYS_PROTO_H_ */

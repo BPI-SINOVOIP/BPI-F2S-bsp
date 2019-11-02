@@ -1,8 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (c) 2009 Daniel Mack <daniel@caiaq.de>
  * Copyright (C) 2010 Freescale Semiconductor, Inc.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <common.h>
@@ -142,13 +141,12 @@ static int usb_phy_enable(int index, struct usb_ehci *ehci)
 
 	/* Stop then Reset */
 	clrbits_le32(usb_cmd, UCMD_RUN_STOP);
-	ret = wait_for_bit(__func__, usb_cmd, UCMD_RUN_STOP, false, 10000,
-			   false);
+	ret = wait_for_bit_le32(usb_cmd, UCMD_RUN_STOP, false, 10000, false);
 	if (ret)
 		return ret;
 
 	setbits_le32(usb_cmd, UCMD_RESET);
-	ret = wait_for_bit(__func__, usb_cmd, UCMD_RESET, false, 10000, false);
+	ret = wait_for_bit_le32(usb_cmd, UCMD_RESET, false, 10000, false);
 	if (ret)
 		return ret;
 
@@ -337,7 +335,7 @@ int ehci_mx6_common_init(struct usb_ehci *ehci, int index)
 	return 0;
 }
 
-#ifndef CONFIG_DM_USB
+#if !CONFIG_IS_ENABLED(DM_USB)
 int ehci_hcd_init(int index, enum usb_init_type init,
 		struct ehci_hccr **hccr, struct ehci_hcor **hcor)
 {
@@ -406,6 +404,7 @@ static int mx6_init_after_reset(struct ehci_ctrl *dev)
 	if (ret)
 		return ret;
 
+#if CONFIG_IS_ENABLED(DM_REGULATOR)
 	if (priv->vbus_supply) {
 		ret = regulator_set_enable(priv->vbus_supply,
 					   (type == USB_INIT_DEVICE) ?
@@ -415,6 +414,7 @@ static int mx6_init_after_reset(struct ehci_ctrl *dev)
 			return ret;
 		}
 	}
+#endif
 
 	if (type == USB_INIT_DEVICE)
 		return 0;
@@ -516,15 +516,17 @@ static int ehci_usb_probe(struct udevice *dev)
 	priv->portnr = dev->seq;
 	priv->init_type = type;
 
+#if CONFIG_IS_ENABLED(DM_REGULATOR)
 	ret = device_get_supply_regulator(dev, "vbus-supply",
 					  &priv->vbus_supply);
 	if (ret)
 		debug("%s: No vbus supply\n", dev->name);
-
+#endif
 	ret = ehci_mx6_common_init(ehci, priv->portnr);
 	if (ret)
 		return ret;
 
+#if CONFIG_IS_ENABLED(DM_REGULATOR)
 	if (priv->vbus_supply) {
 		ret = regulator_set_enable(priv->vbus_supply,
 					   (type == USB_INIT_DEVICE) ?
@@ -534,6 +536,7 @@ static int ehci_usb_probe(struct udevice *dev)
 			return ret;
 		}
 	}
+#endif
 
 	if (priv->init_type == USB_INIT_HOST) {
 		setbits_le32(&ehci->usbmode, CM_HOST);

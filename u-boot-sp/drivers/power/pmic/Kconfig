@@ -48,6 +48,20 @@ config PMIC_AS3722
 	  interface and is designs to cover most of the power managementment
 	  required for a tablets or laptop.
 
+config DM_PMIC_FAN53555
+	bool "Enable support for OnSemi FAN53555"
+	depends on DM_PMIC && DM_REGULATOR && DM_I2C
+	select DM_REGULATOR_FAN53555
+	help
+	  This config enables implementation of driver-model PMIC
+	  uclass features for the FAN53555 regulator. The FAN53555 is
+	  a (family of) single-output regulators that supports
+	  transitioning between two different output voltages based on
+	  an voltage selection pin.
+
+	  The driver implements read/write operations for use with the FAN53555
+	  regulator driver and binds the regulator driver to its node.
+
 config DM_PMIC_PFUZE100
 	bool "Enable Driver Model for PMIC PFUZE100"
 	depends on DM_PMIC
@@ -68,6 +82,13 @@ config DM_PMIC_MAX8998
 	---help---
 	This config enables implementation of driver-model pmic uclass features
 	for PMIC MAX8998. The driver implements read/write operations.
+
+config DM_PMIC_MC34708
+	bool "Enable Driver Model for PMIC MC34708"
+	depends on DM_PMIC
+	help
+	 This config enables implementation of driver-model pmic uclass features
+	 for PMIC MC34708. The driver implements read/write operations.
 
 config PMIC_MAX8997
 	bool "Enable Driver Model for PMIC MAX8997"
@@ -124,7 +145,7 @@ config PMIC_S2MPS11
 	Binding info: doc/device-tree-bindings/pmic/s2mps11.txt
 
 config DM_PMIC_SANDBOX
-	bool "Enable Driver Model for emulated Sandbox PMIC "
+	bool "Enable Driver Model for emulated Sandbox PMIC"
 	depends on DM_PMIC
 	---help---
 	Enable the driver for Sandbox PMIC emulation. The emulated PMIC device
@@ -201,3 +222,19 @@ config POWER_MC34VR500
 	The MC34VR500 is used in conjunction with the FSL T1 and LS1 series
 	SoC. It provides 4 buck DC-DC convertors and 5 LDOs, and it is accessed
 	via an I2C interface.
+
+config DM_PMIC_TPS65910
+	bool "Enable driver for Texas Instruments TPS65910 PMIC"
+	depends on DM_PMIC
+	---help---
+	The TPS65910 is a PMIC containing 3 buck DC-DC converters, one boost
+	DC-DC converter, 8 LDOs and a RTC. This driver binds the SMPS and LDO
+	pmic children.
+
+config PMIC_STPMU1
+	bool "Enable support for STMicroelectronics STPMU1 PMIC"
+	depends on DM_PMIC && DM_I2C
+	---help---
+	The STPMU1 PMIC provides 4 BUCKs, 6 LDOs, 1 VREF and 2 power switches.
+	It is accessed via an I2C interface. The device is used with STM32MP1
+	SoCs. This driver implements register read/write operations.

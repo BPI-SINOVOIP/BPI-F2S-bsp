@@ -1,8 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * (C) Copyright 2002
  * Daniel Engström, Omicron Ceti AB, daniel@omicron.se.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <config.h>
@@ -16,7 +15,7 @@ SECTIONS
 	/DISCARD/ : { *(.u_boot_list_2_cmd_*) }
 #endif
 
-	. = CONFIG_SPL_TEXT_BASE;	/* Location of bootcode in flash */
+	. = IMAGE_TEXT_BASE;	/* Location of bootcode in flash */
 	__text_start = .;
 	.text  : { *(.text*); }
 

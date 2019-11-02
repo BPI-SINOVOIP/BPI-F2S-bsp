@@ -1,12 +1,12 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  *  relocate - common relocation function for ARM U-Boot
  *
  *  Copyright (c) 2013  Albert ARIBAUD <albert.u.boot@aribaud.net>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #include <asm-offsets.h>
+#include <asm/assembler.h>
 #include <config.h>
 #include <elf.h>
 #include <linux/linkage.h>
@@ -83,13 +83,11 @@ ENTRY(relocate_code)
 	beq	relocate_done		/* skip relocation */
 	ldr	r2, =__image_copy_end	/* r2 <- SRC &__image_copy_end */
 
-#ifndef CONFIG_SYS_ZMEM_SKIP_RELOC
 copy_loop:
 	ldmia	r1!, {r10-r11}		/* copy from source address [r1]    */
 	stmia	r0!, {r10-r11}		/* copy to   target address [r0]    */
 	cmp	r1, r2			/* until source end address [r2]    */
 	blo	copy_loop
-#endif
 
 	/*
 	 * fix .rel.dyn relocations

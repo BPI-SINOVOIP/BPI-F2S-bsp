@@ -1,11 +1,13 @@
+/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright (C) 2015  Masahiro Yamada <yamada.masahiro@socionext.com>
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 #ifndef __PINCTRL_H
 #define __PINCTRL_H
+
+#define PINNAME_SIZE	10
+#define PINMUX_SIZE	40
 
 /**
  * struct pinconf_param - pin config parameters
@@ -67,6 +69,7 @@ struct pinconf_param {
  *	pointing a config node. (necessary for pinctrl_full)
  * @set_state_simple: do needed pinctrl operations for a peripherl @periph.
  *	(necessary for pinctrl_simple)
+ * @get_pin_muxing: display the muxing of a given pin.
  */
 struct pinctrl_ops {
 	int (*get_pins_count)(struct udevice *dev);
@@ -130,6 +133,24 @@ struct pinctrl_ops {
 	* @return mux value (SoC-specific, e.g. 0 for input, 1 for output)
 	 */
 	int (*get_gpio_mux)(struct udevice *dev, int banknum, int index);
+
+	/**
+	 * get_pin_muxing() - show pin muxing
+	 *
+	 * This allows to display the muxing of a given pin. It's useful for
+	 * debug purpose to know if a pin is configured as GPIO or as an
+	 * alternate function and which one.
+	 * Typically it is used by a PINCTRL driver with knowledge of the SoC
+	 * pinctrl setup.
+	 *
+	 * @dev:	Pinctrl device to use
+	 * @selector:	Pin selector
+	 * @buf		Pin's muxing description
+	 * @size	Pin's muxing description length
+	 * return 0 if OK, -ve on error
+	 */
+	 int (*get_pin_muxing)(struct udevice *dev, unsigned int selector,
+			       char *buf, int size);
 };
 
 #define pinctrl_get_ops(dev)	((struct pinctrl_ops *)(dev)->driver->ops)
@@ -137,6 +158,12 @@ struct pinctrl_ops {
 /**
  * Generic pin configuration paramters
  *
+ * enum pin_config_param - possible pin configuration parameters
+ * @PIN_CONFIG_BIAS_BUS_HOLD: the pin will be set to weakly latch so that it
+ *	weakly drives the last value on a tristate bus, also known as a "bus
+ *	holder", "bus keeper" or "repeater". This allows another device on the
+ *	bus to change the value by driving the bus high or low and switching to
+ *	tristate. The argument is ignored.
  * @PIN_CONFIG_BIAS_DISABLE: disable any pin bias on the pin, a
  *	transition from say pull-up to pull-down implies that you disable
  *	pull-up in the process, this setting disables all biasing.
@@ -146,14 +173,6 @@ struct pinctrl_ops {
  *	if for example some other pin is going to drive the signal connected
  *	to it for a while. Pins used for input are usually always high
  *	impedance.
- * @PIN_CONFIG_BIAS_BUS_HOLD: the pin will be set to weakly latch so that it
- *	weakly drives the last value on a tristate bus, also known as a "bus
- *	holder", "bus keeper" or "repeater". This allows another device on the
- *	bus to change the value by driving the bus high or low and switching to
- *	tristate. The argument is ignored.
- * @PIN_CONFIG_BIAS_PULL_UP: the pin will be pulled up (usually with high
- *	impedance to VDD). If the argument is != 0 pull-up is enabled,
- *	if it is 0, pull-up is total, i.e. the pin is connected to VDD.
  * @PIN_CONFIG_BIAS_PULL_DOWN: the pin will be pulled down (usually with high
  *	impedance to GROUND). If the argument is != 0 pull-down is enabled,
  *	if it is 0, pull-down is total, i.e. the pin is connected to GROUND.
@@ -165,10 +184,9 @@ struct pinctrl_ops {
  *	If the argument is != 0 pull up/down is enabled, if it is 0, the
  *	configuration is ignored. The proper way to disable it is to use
  *	@PIN_CONFIG_BIAS_DISABLE.
- * @PIN_CONFIG_DRIVE_PUSH_PULL: the pin will be driven actively high and
- *	low, this is the most typical case and is typically achieved with two
- *	active transistors on the output. Setting this config will enable
- *	push-pull mode, the argument is ignored.
+ * @PIN_CONFIG_BIAS_PULL_UP: the pin will be pulled up (usually with high
+ *	impedance to VDD). If the argument is != 0 pull-up is enabled,
+ *	if it is 0, pull-up is total, i.e. the pin is connected to VDD.
  * @PIN_CONFIG_DRIVE_OPEN_DRAIN: the pin will be driven with open drain (open
  *	collector) which means it is usually wired with other output ports
  *	which are then pulled up with an external resistor. Setting this
@@ -176,59 +194,82 @@ struct pinctrl_ops {
  * @PIN_CONFIG_DRIVE_OPEN_SOURCE: the pin will be driven with open source
  *	(open emitter). Setting this config will enable open source mode, the
  *	argument is ignored.
+ * @PIN_CONFIG_DRIVE_PUSH_PULL: the pin will be driven actively high and
+ *	low, this is the most typical case and is typically achieved with two
+ *	active transistors on the output. Setting this config will enable
+ *	push-pull mode, the argument is ignored.
  * @PIN_CONFIG_DRIVE_STRENGTH: the pin will sink or source at most the current
  *	passed as argument. The argument is in mA.
- * @PIN_CONFIG_INPUT_ENABLE: enable the pin's input.  Note that this does not
- *	affect the pin's ability to drive output.  1 enables input, 0 disables
- *	input.
- * @PIN_CONFIG_INPUT_SCHMITT_ENABLE: control schmitt-trigger mode on the pin.
- *      If the argument != 0, schmitt-trigger mode is enabled. If it's 0,
- *      schmitt-trigger mode is disabled.
- * @PIN_CONFIG_INPUT_SCHMITT: this will configure an input pin to run in
- *	schmitt-trigger mode. If the schmitt-trigger has adjustable hysteresis,
- *	the threshold value is given on a custom format as argument when
- *	setting pins to this mode.
  * @PIN_CONFIG_INPUT_DEBOUNCE: this will configure the pin to debounce mode,
  *	which means it will wait for signals to settle when reading inputs. The
  *	argument gives the debounce time in usecs. Setting the
  *	argument to zero turns debouncing off.
- * @PIN_CONFIG_POWER_SOURCE: if the pin can select between different power
- *	supplies, the argument to this parameter (on a custom format) tells
- *	the driver which alternative power source to use.
- * @PIN_CONFIG_SLEW_RATE: if the pin can select slew rate, the argument to
- *	this parameter (on a custom format) tells the driver which alternative
- *	slew rate to use.
+ * @PIN_CONFIG_INPUT_ENABLE: enable the pin's input.  Note that this does not
+ *	affect the pin's ability to drive output.  1 enables input, 0 disables
+ *	input.
+ * @PIN_CONFIG_INPUT_SCHMITT: this will configure an input pin to run in
+ *	schmitt-trigger mode. If the schmitt-trigger has adjustable hysteresis,
+ *	the threshold value is given on a custom format as argument when
+ *	setting pins to this mode.
+ * @PIN_CONFIG_INPUT_SCHMITT_ENABLE: control schmitt-trigger mode on the pin.
+ *      If the argument != 0, schmitt-trigger mode is enabled. If it's 0,
+ *      schmitt-trigger mode is disabled.
  * @PIN_CONFIG_LOW_POWER_MODE: this will configure the pin for low power
  *	operation, if several modes of operation are supported these can be
  *	passed in the argument on a custom form, else just use argument 1
  *	to indicate low power mode, argument 0 turns low power mode off.
- * @PIN_CONFIG_OUTPUT: this will configure the pin as an output. Use argument
- *	1 to indicate high level, argument 0 to indicate low level. (Please
- *	see Documentation/pinctrl.txt, section "GPIO mode pitfalls" for a
- *	discussion around this parameter.)
+ * @PIN_CONFIG_OUTPUT_ENABLE: this will enable the pin's output mode
+ *	without driving a value there. For most platforms this reduces to
+ *	enable the output buffers and then let the pin controller current
+ *	configuration (eg. the currently selected mux function) drive values on
+ *	the line. Use argument 1 to enable output mode, argument 0 to disable
+ *	it.
+ * @PIN_CONFIG_OUTPUT: this will configure the pin as an output and drive a
+ *	value on the line. Use argument 1 to indicate high level, argument 0 to
+ *	indicate low level. (Please see Documentation/driver-api/pinctl.rst,
+ *	section "GPIO mode pitfalls" for a discussion around this parameter.)
+ * @PIN_CONFIG_POWER_SOURCE: if the pin can select between different power
+ *	supplies, the argument to this parameter (on a custom format) tells
+ *	the driver which alternative power source to use.
+ * @PIN_CONFIG_SLEEP_HARDWARE_STATE: indicate this is sleep related state.
+ * @PIN_CONFIG_SLEW_RATE: if the pin can select slew rate, the argument to
+ *	this parameter (on a custom format) tells the driver which alternative
+ *	slew rate to use.
+ * @PIN_CONFIG_SKEW_DELAY: if the pin has programmable skew rate (on inputs)
+ *	or latch delay (on outputs) this parameter (in a custom format)
+ *	specifies the clock skew or latch delay. It typically controls how
+ *	many double inverters are put in front of the line.
  * @PIN_CONFIG_END: this is the last enumerator for pin configurations, if
  *	you need to pass in custom configurations to the pin controller, use
  *	PIN_CONFIG_END+1 as the base offset.
+ * @PIN_CONFIG_MAX: this is the maximum configuration value that can be
+ *	presented using the packed format.
  */
-#define PIN_CONFIG_BIAS_DISABLE			0
-#define PIN_CONFIG_BIAS_HIGH_IMPEDANCE		1
-#define PIN_CONFIG_BIAS_BUS_HOLD		2
-#define PIN_CONFIG_BIAS_PULL_UP			3
-#define PIN_CONFIG_BIAS_PULL_DOWN		4
-#define PIN_CONFIG_BIAS_PULL_PIN_DEFAULT	5
-#define PIN_CONFIG_DRIVE_PUSH_PULL		6
-#define PIN_CONFIG_DRIVE_OPEN_DRAIN		7
-#define PIN_CONFIG_DRIVE_OPEN_SOURCE		8
-#define PIN_CONFIG_DRIVE_STRENGTH		9
-#define PIN_CONFIG_INPUT_ENABLE			10
-#define PIN_CONFIG_INPUT_SCHMITT_ENABLE		11
-#define PIN_CONFIG_INPUT_SCHMITT		12
-#define PIN_CONFIG_INPUT_DEBOUNCE		13
-#define PIN_CONFIG_POWER_SOURCE			14
-#define PIN_CONFIG_SLEW_RATE			15
-#define PIN_CONFIG_LOW_POWER_MODE		16
-#define PIN_CONFIG_OUTPUT			17
-#define PIN_CONFIG_END				0x7FFF
+enum pin_config_param {
+	PIN_CONFIG_BIAS_BUS_HOLD,
+	PIN_CONFIG_BIAS_DISABLE,
+	PIN_CONFIG_BIAS_HIGH_IMPEDANCE,
+	PIN_CONFIG_BIAS_PULL_DOWN,
+	PIN_CONFIG_BIAS_PULL_PIN_DEFAULT,
+	PIN_CONFIG_BIAS_PULL_UP,
+	PIN_CONFIG_DRIVE_OPEN_DRAIN,
+	PIN_CONFIG_DRIVE_OPEN_SOURCE,
+	PIN_CONFIG_DRIVE_PUSH_PULL,
+	PIN_CONFIG_DRIVE_STRENGTH,
+	PIN_CONFIG_INPUT_DEBOUNCE,
+	PIN_CONFIG_INPUT_ENABLE,
+	PIN_CONFIG_INPUT_SCHMITT,
+	PIN_CONFIG_INPUT_SCHMITT_ENABLE,
+	PIN_CONFIG_LOW_POWER_MODE,
+	PIN_CONFIG_OUTPUT_ENABLE,
+	PIN_CONFIG_OUTPUT,
+	PIN_CONFIG_POWER_SOURCE,
+	PIN_CONFIG_SLEEP_HARDWARE_STATE,
+	PIN_CONFIG_SLEW_RATE,
+	PIN_CONFIG_SKEW_DELAY,
+	PIN_CONFIG_END = 0x7F,
+	PIN_CONFIG_MAX = 0xFF,
+};
 
 #if CONFIG_IS_ENABLED(PINCTRL_GENERIC)
 /**
@@ -314,6 +355,18 @@ int pinctrl_get_periph_id(struct udevice *dev, struct udevice *periph);
 int pinctrl_decode_pin_config(const void *blob, int node);
 
 /**
+ * pinctrl_decode_pin_config_dm() - decode pin configuration flags
+ *
+ * This decodes some of the PIN_CONFIG values into flags, with each value
+ * being (1 << pin_cfg). This does not support things with values like the
+ * slew rate.
+ *
+ * @pinconfig:	Pinconfig udevice
+ * @return decoded flag value, or -ve on error
+ */
+int pinctrl_decode_pin_config_dm(struct udevice *dev);
+
+/**
  * pinctrl_get_gpio_mux() - get the mux value for a particular GPIO
  *
  * This allows the raw mux value for a GPIO to be obtained. It is
@@ -329,4 +382,41 @@ int pinctrl_decode_pin_config(const void *blob, int node);
 */
 int pinctrl_get_gpio_mux(struct udevice *dev, int banknum, int index);
 
+/**
+ * pinctrl_get_pin_muxing() - Returns the muxing description
+ *
+ * This allows to display the muxing description of the given pin for
+ * debug purpose
+ *
+ * @dev:	Pinctrl device to use
+ * @selector	Pin index within pin-controller
+ * @buf		Pin's muxing description
+ * @size	Pin's muxing description length
+ * @return 0 if OK, -ve on error
+ */
+int pinctrl_get_pin_muxing(struct udevice *dev, int selector, char *buf,
+			   int size);
+
+/**
+ * pinctrl_get_pins_count() - display pin-controller pins number
+ *
+ * This allows to know the number of pins owned by a given pin-controller
+ *
+ * @dev:	Pinctrl device to use
+ * @return pins number if OK, -ve on error
+ */
+int pinctrl_get_pins_count(struct udevice *dev);
+
+/**
+ * pinctrl_get_pin_name() - Returns the pin's name
+ *
+ * This allows to display the pin's name for debug purpose
+ *
+ * @dev:	Pinctrl device to use
+ * @selector	Pin index within pin-controller
+ * @buf		Pin's name
+ * @return 0 if OK, -ve on error
+ */
+int pinctrl_get_pin_name(struct udevice *dev, int selector, char *buf,
+			 int size);
 #endif /* __PINCTRL_H */

@@ -1,11 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2001 Sysgo Real-Time Solutions, GmbH <www.elinos.com>
  * Andreas Heppel <aheppel@sysgo.de>
  *
  * (C) Copyright 2002, 2003
  * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
- *
- * SPDX-License-Identifier:	GPL-2.0+
  */
 
 /*
@@ -185,11 +184,8 @@ pci_dev_t pci_find_devices(struct pci_device_id *ids, int index)
 	return -1;
 }
 
-int pci_hose_config_device(struct pci_controller *hose,
-			   pci_dev_t dev,
-			   unsigned long io,
-			   pci_addr_t mem,
-			   unsigned long command)
+static int pci_hose_config_device(struct pci_controller *hose, pci_dev_t dev,
+				  ulong io, pci_addr_t mem, ulong command)
 {
 	u32 bar_response;
 	unsigned int old_command;

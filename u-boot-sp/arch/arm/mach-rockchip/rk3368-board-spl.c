@@ -1,13 +1,11 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2017 Theobroma Systems Design und Consulting GmbH
- *
- * SPDX-License-Identifier:     GPL-2.0+
  */
 
 #include <common.h>
 #include <debug_uart.h>
 #include <dm.h>
-#include <dm/pinctrl.h>
 #include <ram.h>
 #include <spl.h>
 #include <asm/io.h>
@@ -16,8 +14,7 @@
 #include <asm/arch/hardware.h>
 #include <asm/arch/periph.h>
 #include <asm/arch/timer.h>
-
-DECLARE_GLOBAL_DATA_PTR;
+#include <dm/pinctrl.h>
 
 void board_debug_uart_init(void)
 {
@@ -55,11 +52,6 @@ void board_init_f(ulong dummy)
 		debug("DRAM init failed: %d\n", ret);
 		return;
 	}
-}
-
-u32 spl_boot_mode(const u32 boot_device)
-{
-	return MMCSD_MODE_RAW;
 }
 
 u32 spl_boot_device(void)

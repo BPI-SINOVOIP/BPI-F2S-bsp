@@ -149,7 +149,7 @@ gAllocatedSize))
 			{
 				new_address = findRegion (new_address, new_size);
 
-				if (new_address == 0)
+				if (!new_address)
 					return (void*)-1;
 
 				gAddressBase = gNextAddress =
@@ -175,7 +175,7 @@ gAllocatedSize))
 								(size + gNextAddress -
 								 AlignPage (gNextAddress)),
 								MEM_COMMIT, PAGE_READWRITE);
-			if (res == 0)
+			if (!res)
 				return (void*)-1;
 		}
 		tmp = (void*)gNextAddress;
@@ -1265,15 +1265,7 @@ Void_t* mALLOc(bytes) size_t bytes;
     return NULL;
   }
 
-#if 0 /* original uboot code */
   if ((long)bytes < 0) return NULL;
-#else
-  if ((long)bytes <= 0) {
-    printf("\n\n**** WARN: forbid malloc(0) : return_address=0x%x ****\n\n",
-      __builtin_return_address(0));
-    return NULL;
-  }
-#endif
 
   nb = request2size(bytes);  /* padded request size; */
 
@@ -1469,7 +1461,7 @@ Void_t* mALLOc(bytes) size_t bytes;
 #if HAVE_MMAP
     /* If big and would otherwise need to extend, try to use mmap instead */
     if ((unsigned long)nb >= (unsigned long)mmap_threshold &&
-	(victim = mmap_chunk(nb)) != 0)
+	(victim = mmap_chunk(nb)))
       return chunk2mem(victim);
 #endif
 
@@ -1679,7 +1671,10 @@ Void_t* rEALLOc(oldmem, bytes) Void_t* oldmem; size_t bytes;
   mchunkptr fwd;              /* misc temp for linking */
 
 #ifdef REALLOC_ZERO_BYTES_FREES
-  if (bytes == 0) { fREe(oldmem); return 0; }
+  if (!bytes) {
+	fREe(oldmem);
+	return NULL;
+  }
 #endif
 
   if ((long)bytes < 0) return NULL;
@@ -1711,7 +1706,8 @@ Void_t* rEALLOc(oldmem, bytes) Void_t* oldmem; size_t bytes;
     if(oldsize - SIZE_SZ >= nb) return oldmem; /* do nothing */
     /* Must alloc, copy, free. */
     newmem = mALLOc(bytes);
-    if (newmem == 0) return 0; /* propagate failure */
+    if (!newmem)
+	return NULL; /* propagate failure */
     MALLOC_COPY(newmem, oldmem, oldsize - 2*SIZE_SZ);
     munmap_chunk(oldp);
     return newmem;
@@ -1894,6 +1890,13 @@ Void_t* mEMALIGn(alignment, bytes) size_t alignment; size_t bytes;
   long      remainder_size;   /* its size */
 
   if ((long)bytes < 0) return NULL;
+
+#if CONFIG_VAL(SYS_MALLOC_F_LEN)
+	if (!(gd->flags & GD_FLG_FULL_MALLOC_INIT)) {
+		nb = roundup(bytes, alignment);
+		return malloc_simple(nb);
+	}
+#endif
 
   /* If need less alignment than we give anyway, just relay to malloc */
 
