@@ -1,0 +1,99 @@
+if TARGET_PENTAGRAM_COMMON || TARGET_PENTAGRAM_B_BOOT
+
+config SYS_CONFIG_NAME
+	default "pentagram_common"
+	select CMD_TPS_UPD
+
+config SYS_SOC
+	default "pentagram"
+
+config SYS_BOARD
+	default "pentagram_board"
+
+config SYS_VENDOR
+	default "sunplus"
+
+config SYS_TEXT_BASE
+	default 0x200040
+
+config SYS_USE_QKBOOT_HEADER
+	bool "use Sunpls quick boot header"
+	default n
+	help
+	  Enable Sunplus quick boot header
+	  Sunplus quick boot header is the same
+	  as mkimage header. It also has 64 bytes
+	  size with the same fields. We only change
+	  crc and type in generic mkimage header.
+	  It can speed up boot time. If enabled, we
+	  replace mkimage header of kernel image and
+	  also add sunplus-mkimage header on dtb image.
+
+config SRCADDR_KERNEL
+	hex "Linux kernel source address"
+	default 0x0 if SD_BOOT
+	default 0x0 if NAND_BOOT
+	default 0x98600000
+	help
+	  Linux kernel source address
+	  Linux kernel image is stored in this
+	  address. This address can be nand/emmc
+	  address.
+
+config SRCADDR_DTB
+	hex "DTB source address"
+	default 0x0 if SD_BOOT
+	default 0x0 if NAND_BOOT
+	default 0x98020000
+	help
+	  DTB(device tree blob) source address
+	  DTB image is stored in this address.
+	  This address can be nand/emmc address.
+
+config HUSH_PARSER
+	default y
+
+config SP_UTIL_MON
+	bool "enable Sunplus mon util"
+	default y
+	help
+	  Enable Sunplys mon util
+	  It is useful to read/write Sunplus register
+	  group.
+
+config SP_JTAG
+	bool "enable JTAG"
+	default y
+	help
+	  Setup JTAG setting
+	  For CA7, setup SWD config and pinmux.
+	  For arm926, setup JTAG config and pinmux.
+	  Notice that it is necessary to pull IV_MX[6]
+	  for releasing reset pin. IV_MX[6] may be tied
+	  on PCB board.
+
+config CMD_TPS_MD
+	bool "MD button check shell api"
+	default n
+
+config CMD_TPS_UPD
+	bool "Tibbo update command"
+	default y
+
+config TPS_UPD_MMC
+	bool "tps_upd src - mmc"
+	default y if DM_MMC
+
+config TPS_UPD_NAND
+	bool "tps_upd src/dst - nand"
+	default y if NAND
+
+config TPS_UPD_TFTP
+	bool "tps_upd src - tftp"
+	default y if NET
+
+config TPS_UPD_USB
+	bool "tps_upd src - usb"
+	default y if USB
+
+endif

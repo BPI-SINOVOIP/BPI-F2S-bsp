@@ -663,6 +663,13 @@ config ARCH_OMAP2PLUS
 	select SUPPORT_SPL
 	imply FIT
 
+config ARCH_PENTAGRAM
+	bool "Sunplus Pentagram"
+	select OF_CONTROL
+	imply FIT
+	select DM
+	select DM_SERIAL
+
 config ARCH_MESON
 	bool "Amlogic Meson"
 	imply DISTRO_DEFAULTS
@@ -1511,6 +1518,8 @@ source "arch/arm/mach-imx/imx8m/Kconfig"
 source "arch/arm/mach-imx/mxs/Kconfig"
 
 source "arch/arm/mach-omap2/Kconfig"
+
+source "arch/arm/mach-pentagram/Kconfig"
 
 source "arch/arm/cpu/armv8/fsl-layerscape/Kconfig"
 

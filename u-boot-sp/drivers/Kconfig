@@ -93,7 +93,7 @@ source "drivers/rtc/Kconfig"
 source "drivers/scsi/Kconfig"
 
 source "drivers/serial/Kconfig"
-
+source "drivers/soc/Kconfig"
 source "drivers/smem/Kconfig"
 
 source "drivers/sound/Kconfig"

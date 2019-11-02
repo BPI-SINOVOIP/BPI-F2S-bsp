@@ -528,4 +528,13 @@ config MEDIATEK_ETH
 	  This Driver support MediaTek Ethernet GMAC
 	  Say Y to enable support for the MediaTek Ethernet GMAC.
 
+config SUNPLUS_L2SW
+	bool "Sunplus L2SW Ethernet MAC support"
+	depends on DM_ETH
+	select PHYLIB
+	select PHY_GIGE
+	help
+	  This driver supports the Sunplus L2SW Ethernet MAC.
+
+
 endif # NETDEVICES

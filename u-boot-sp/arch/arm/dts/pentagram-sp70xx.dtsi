@@ -1,0 +1,100 @@
+/*
+ * Sunplus Pentagram sc70xx DTS
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
+ */
+
+#include <dt-bindings/pinctrl/sp-q628.h>
+/ {
+	#address-cells = <1>;
+	#size-cells = <1>;
+	compatible = "sunplus,pentagran";
+
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		cpu0: cpu@0 {
+			compatible = "arm,cortex-a9";
+			device_type = "cpu";
+			reg = <0>;
+		};
+	};
+
+	sp_uart0: serial@9c000900 {
+		compatible = "sunplus,sunplus-uart";
+		reg = <0x9c000900 0x80>;
+	};
+
+	sp_emmc: mmc@9C003B00 {
+		compatible = "sunplus,sunplus-q628-emmc";
+		reg = <0x9C003B00 0x180>;
+	};
+
+	sp_sdcard: mmc@9C003E80 {
+		compatible = "sunplus,sunplus-q628-sd";
+		reg = <0x9C003E80 0x280>;
+	};
+
+	sp_spinand: spinand@9c002b80 {
+		compatible = "sunplus,sunplus-q628-spinand";
+		reg-names = "spinand_reg", "bch_reg";
+		reg = <0x9c002b80 0x50>, <0x9c101000 0x20>;
+	};
+
+/* 8388 sp_emmc and sp_sd0 use same pinmux, so don't enable them at the same time */
+/*
+	sp_emmc: mmc@9C003B00 {
+		compatible = "sunplus,sunplus-q610-emmc";
+		reg = <0x9C003B00 0x280>;
+	};
+
+*/
+/*
+	sp_sd0: mmc@9C003B00 {
+		compatible = "sunplus,sunplus-q610-sd0";
+		reg = <0x9C003B00 0x280>;
+	};
+*/
+/*
+	sp_sd1: mmc@9C003E80 {
+		compatible = "sunplus,sunplus-q610-sd1";
+		reg = <0x9C003E80 0x280>;
+	};
+*/
+
+	sp_usb0: usb@9C102100 {
+		compatible = "sunplus,sunplus-q628-usb-ehci0";
+		reg = <0x9C102100 0x68>;
+	};
+
+	sp_usb1: usb@9C103100 {
+		compatible = "sunplus,sunplus-q628-usb-ehci1";
+		reg = <0x9C103100 0x68>;
+	};
+
+	sp_spinor0: spinor@9C000B00 {
+		compatible = "sunplus,sunplus-q628-spi-nor";
+		reg = <0x9C000B00 0x80>;
+		spi-max-frequency = <50000000>;
+		chip-selection = <0>;
+	};
+
+	sp_l2sw: l2sw@0x9c108000 {
+		compatible = "sunplus,sunplus-q628-l2sw";
+		reg = <0x9c108000 0x280>, <0x9c000280 0x80>;
+		reg-names = "l2sw", "moon5";
+		phy0 = <&phy0>;
+		phy1 = <&phy1>;
+		mac-addr1 = <52>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		phy0: ethernet-phy@0 {
+			reg = <0>;
+		};
+		phy1: ethernet-phy@1 {
+			reg = <1>;
+		};
+	};
+
+};

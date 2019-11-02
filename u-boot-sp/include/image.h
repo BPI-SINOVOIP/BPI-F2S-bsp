@@ -284,7 +284,7 @@ enum {
 	IH_TYPE_MTKIMAGE,		/* MediaTek BootROM loadable Image */
 	IH_TYPE_IMX8MIMAGE,		/* Freescale IMX8MBoot Image	*/
 	IH_TYPE_IMX8IMAGE,		/* Freescale IMX8Boot Image	*/
-
+	IH_TYPE_QUICKBOOT,		/* Sunplus Quick Boot Image */
 	IH_TYPE_COUNT,			/* Number of image types */
 };
 

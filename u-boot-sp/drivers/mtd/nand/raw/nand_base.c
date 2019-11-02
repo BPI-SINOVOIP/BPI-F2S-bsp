@@ -897,7 +897,9 @@ static int nand_wait(struct mtd_info *mtd, struct nand_chip *chip)
 
 	status = (int)chip->read_byte(mtd);
 	/* This can happen if in case of timeout or buggy dev_ready */
+#if 0 //sunplus modify
 	WARN_ON(!(status & NAND_STATUS_READY));
+#endif
 	return status;
 }
 
@@ -3689,6 +3691,7 @@ static bool find_full_id_nand(struct mtd_info *mtd, struct nand_chip *chip,
 		chip->ecc_step_ds = NAND_ECC_STEP(type);
 		chip->onfi_timing_mode_default =
 					type->onfi_timing_mode_default;
+		chip->drv_options = type->drv_options;
 
 		*busw = type->options & NAND_BUSWIDTH_16;
 
@@ -4592,6 +4595,8 @@ int nand_scan_tail(struct mtd_info *mtd)
 	 */
 	if (!mtd->bitflip_threshold)
 		mtd->bitflip_threshold = DIV_ROUND_UP(mtd->ecc_strength * 3, 4);
+	chip->scan_bbt(mtd);
+	chip->options |= NAND_BBT_SCANNED;
 
 	return 0;
 }

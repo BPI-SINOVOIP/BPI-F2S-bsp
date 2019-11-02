@@ -28,7 +28,7 @@
 *.su
 *.swp
 *.tab.[ch]
-
+*.bak
 # Build tree
 /build-*
 

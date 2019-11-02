@@ -1,0 +1,48 @@
+/*
+ * Sunplus Pentagram board DTS
+ *
+ * SPDX-License-Identifier:	GPL-2.0+
+ */
+/dts-v1/;
+#include "pentagram-sp70xx.dtsi"
+
+/ {
+	model = "SP7021 TPPg2 board";
+	compatible = "sunplus,pentagram-common", "sunplus,pentagram";
+
+	aliases {
+		serial0 = &sp_uart0;
+		spi0 = &sp_spinor0;
+	};
+
+	chosen {
+		bootargs = "";
+		stdout-path = "serial0:115200n8";
+	};
+
+	sppctl {
+		pinctrl_func: pinmux_func {
+			net_l2sw {
+				pinmux = <PMX_L2SW_CLK_OUT              G_MX63_GPIO_P7_7
+					  PMX_L2SW_MAC_SMI_MDC          G_MX71_GPIO_P8_7
+					  PMX_L2SW_MAC_SMI_MDIO         G_MX64_GPIO_P8_0
+					  PMX_L2SW_P0_MAC_RMII_TXEN     G_MX62_GPIO_P7_6
+					  PMX_L2SW_P0_MAC_RMII_TXD0     G_MX61_GPIO_P7_5
+					  PMX_L2SW_P0_MAC_RMII_TXD1     G_MX60_GPIO_P7_4
+					  PMX_L2SW_P0_MAC_RMII_CRSDV    G_MX59_GPIO_P7_3
+					  PMX_L2SW_P0_MAC_RMII_RXD0     G_MX58_GPIO_P7_2
+					  PMX_L2SW_P0_MAC_RMII_RXD1     G_MX57_GPIO_P7_1
+					  PMX_L2SW_P0_MAC_RMII_RXER     G_MX56_GPIO_P7_0
+					  PMX_L2SW_P1_MAC_RMII_TXEN     G_MX55_GPIO_P6_7
+					  PMX_L2SW_P1_MAC_RMII_TXD0     G_MX54_GPIO_P6_6
+					  PMX_L2SW_P1_MAC_RMII_TXD1     G_MX53_GPIO_P6_5
+					  PMX_L2SW_P1_MAC_RMII_CRSDV    G_MX52_GPIO_P6_4
+					  PMX_L2SW_P1_MAC_RMII_RXD0     G_MX51_GPIO_P6_3
+					  PMX_L2SW_P1_MAC_RMII_RXD1     G_MX50_GPIO_P6_2
+					  PMX_L2SW_P1_MAC_RMII_RXER     G_MX49_GPIO_P6_1
+				>;
+			};
+		};
+	};
+
+};

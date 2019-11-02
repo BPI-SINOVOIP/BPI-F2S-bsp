@@ -182,7 +182,13 @@ config DEBUG_UART
 choice
 	prompt "Select which UART will provide the debug UART"
 	depends on DEBUG_UART
-	default DEBUG_UART_NS16550
+	default DEBUG_UART_SUNPLUS if ARCH_PENTAGRAM
+	default DEBUG_UART_NS16550 if !ARCH_PENTAGRAM
+
+config DEBUG_UART_SUNPLUS
+	bool "Sunplus UART0"
+	help
+	  Select this to enable DEBUG_UART on ARCH_PENTAGRAM
 
 config DEBUG_UART_ALTERA_JTAGUART
 	bool "Altera JTAG UART"
@@ -742,6 +748,12 @@ config MPC8XX_CONS
 	bool "Console driver for MPC8XX"
 	depends on MPC8xx
 	default y
+
+config SUNPLUS_SERIAL
+	bool "Sunplus serial port support"
+	depends on DM_SERIAL
+	help
+	  Select this to enable an serial port for Sunplus devices.
 
 choice
 	prompt "Console port"

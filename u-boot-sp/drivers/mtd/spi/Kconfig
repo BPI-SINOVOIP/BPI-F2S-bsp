@@ -145,6 +145,11 @@ config SPI_FLASH_XMC
 	help
 	  Add support for various XMC (Wuhan Xinxin Semiconductor
 	  Manufacturing Corp.) SPI flash chips (XM25xxx)
+	  
+config SPI_FLASH_SUNPLUS
+	bool "Sunplus SPI flash support list"
+	help
+	 Add for Sunplus SPI flash support list.	  
 
 endif
 

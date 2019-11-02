@@ -1,0 +1,57 @@
+if ARCH_PENTAGRAM
+
+choice
+	prompt "Board select"
+
+config TARGET_PENTAGRAM_COMMON
+	bool "pentagram common board"
+	select CPU_V7A
+	select SYS_THUMB_BUILD
+
+config TARGET_PENTAGRAM_B_BOOT
+	bool "pentagram common board (B boot)"
+	select CPU_ARM926EJS
+
+endchoice
+
+choice
+	prompt "Verification Environment"
+
+config SYS_ENV_ZEBU
+	bool "zebu environment"
+
+config SYS_ENV_8388
+	bool "8388 environment"
+
+config SYS_ENV_SP7021_EVB
+	bool "sp7021 EVB"
+
+endchoice
+
+config SYS_ZMEM_SKIP_RELOC
+	bool "zmem skip reloc"
+	default y
+	depends on SYS_ENV_ZEBU && !SD_BOOT && !NAND_BOOT
+
+config SP_ZMEM_RELOC_ADDR
+	hex "zmem reloc address"
+	default 0x1F00000
+	depends on SYS_ZMEM_SKIP_RELOC
+	help
+	  Fixed reloc address of u-boot on zmem environemnt.
+	  This address is chosen by zmem firmware so follow
+	  the zmem layout to assign this value. Zmem will
+	  put the image with header on this address so the
+	  first word of this address will be first 4 bytes
+	  of header not the ENTRY() of text code.
+
+config SP_TIMER
+	bool "Sunplus timer"
+	default y
+	help
+	  Support Sunplus STC timer
+
+source "board/sunplus/pentagram_board/Kconfig"
+
+endif
+

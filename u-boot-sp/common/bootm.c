@@ -28,6 +28,7 @@
 #include <command.h>
 #include <bootm.h>
 #include <image.h>
+#include "secure/verify/secure_verify.h"
 
 #ifndef CONFIG_SYS_BOOTM_LEN
 /* use 8MByte as default max gunzip size */
@@ -599,6 +600,48 @@ static void fixup_silent_linux(void)
 }
 #endif /* CONFIG_SILENT_CONSOLE */
 
+#ifdef CONFIG_BOOTARGS_WITH_MEM
+__weak 	int dram_get_size(void)
+{
+	return 512<<20;
+}
+
+#define MEMORY_ARG	"mem="
+void bootm_reset_bootargs(void)
+{
+	char *buf=NULL;
+	char *cmdline = env_get("bootargs");
+	
+	extern int dram_get_size(void);
+	int dramsize = dram_get_size();
+	dramsize = dramsize>>20;
+	debug(" before set bootargs = %s  \n",cmdline);
+	if (cmdline && (cmdline[0] != '\0')) 
+	{
+		cmdline = cmdline;
+	}
+	else
+	{
+		cmdline = DEFAULT_BOOTARGS;
+		debug("env_val bootargs = %s  \n",cmdline);
+	}
+	
+	if(strstr(cmdline,MEMORY_ARG) == NULL)
+	{
+		int str_len=strlen(cmdline) +  strlen(MEMORY_ARG) + 10;
+		buf = malloc(str_len);
+		if (!buf) {
+			printf("%s: out of memory\n", __func__);
+			return;
+		}
+		memset(buf,0,str_len);
+		snprintf(buf, str_len,"%s %s%d%s", cmdline, MEMORY_ARG,dramsize,"M");
+		env_set("bootargs", buf);
+		printf(" after set bootargs: %s    \n", buf);
+		free(buf);
+	}
+}
+#endif
 /**
  * Execute selected states of the bootm command.
  *
@@ -703,6 +746,9 @@ int do_bootm_states(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[],
 #if defined(CONFIG_SILENT_CONSOLE) && !defined(CONFIG_SILENT_U_BOOT_ONLY)
 		if (images->os.os == IH_OS_LINUX)
 			fixup_silent_linux();
+#endif
+#ifdef CONFIG_BOOTARGS_WITH_MEM
+		bootm_reset_bootargs();
 #endif
 		ret = boot_fn(BOOTM_STATE_OS_PREP, argc, argv, images);
 	}
@@ -840,6 +886,13 @@ static const void *boot_get_kernel(cmd_tbl_t *cmdtp, int flag, int argc,
 		hdr = image_get_kernel(img_addr, images->verify);
 		if (!hdr)
 			return NULL;
+		/*  verify kernel sign_data */
+		int ret = verify_kernel_signature(hdr);
+		if(ret)
+		{
+			puts(" ## verify kernel fail!!!!\n");
+			return NULL;
+		}
 		bootstage_mark(BOOTSTAGE_ID_CHECK_IMAGETYPE);
 
 		/* get os_data and os_len */

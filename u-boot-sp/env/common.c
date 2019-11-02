@@ -15,6 +15,10 @@
 #include <errno.h>
 #include <malloc.h>
 
+#ifdef CONFIG_ARCH_PENTAGRAM
+#include <asm/arch/sp_bootinfo.h>
+#endif
+
 DECLARE_GLOBAL_DATA_PTR;
 
 /************************************************************************
@@ -107,6 +111,13 @@ int set_default_vars(int nvars, char * const vars[], int flags)
 int env_import(const char *buf, int check)
 {
 	env_t *ep = (env_t *)buf;
+
+#ifdef CONFIG_ARCH_PENTAGRAM
+	if (SP_IS_ISPBOOT()) {
+		set_default_env("!ISP mode",0);
+		return 0;
+	}
+#endif
 
 	if (check) {
 		uint32_t crc;

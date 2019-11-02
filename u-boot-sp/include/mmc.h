@@ -841,7 +841,7 @@ int mmc_get_env_dev(void);
 
 /* Set block count limit because of 16 bit register limit on some hardware*/
 #ifndef CONFIG_SYS_MMC_MAX_BLK_COUNT
-#define CONFIG_SYS_MMC_MAX_BLK_COUNT 65535
+#define CONFIG_SYS_MMC_MAX_BLK_COUNT 128
 #endif
 
 /**

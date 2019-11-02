@@ -377,7 +377,14 @@ static int initr_flash(void)
 	return 0;
 }
 #endif
-
+#ifdef SPEED_UP_SPI_NOR_CLK
+void SPI_nor_speed_up_clk(void);
+static int initr_spi_nor(void)
+{
+	SPI_nor_speed_up_clk();
+	return 0;
+}
+#endif
 #ifdef CONFIG_CMD_NAND
 /* go init the NAND */
 static int initr_nand(void)
@@ -725,6 +732,9 @@ static init_fnc_t init_sequence_r[] = {
 #if defined(CONFIG_PPC) || defined(CONFIG_M68K) || defined(CONFIG_X86)
 	/* initialize higher level parts of CPU like time base and timers */
 	cpu_init_r,
+#endif
+#ifdef SPEED_UP_SPI_NOR_CLK
+	initr_spi_nor,
 #endif
 #ifdef CONFIG_CMD_NAND
 	initr_nand,

@@ -293,6 +293,12 @@ config ZYNQMP_GQSPI
 	  This option is used to enable ZynqMP QSPI controller driver which
 	  is used to communicate with qspi flash devices.
 
+config SUNPLUS_SPI_NOR
+	bool "Sunplus spi nor controller driver"
+	help
+	 Enable the Sunplus spi nor controller driver. This driver
+	 can be used to access the SPI NOR flash on platforms.
+
 endif # if DM_SPI
 
 config SOFT_SPI
