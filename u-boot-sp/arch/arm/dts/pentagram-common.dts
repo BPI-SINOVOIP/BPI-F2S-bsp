@@ -7,7 +7,7 @@
 #include "pentagram-sp70xx.dtsi"
 
 / {
-	model = "Sunplus Pentagram common board";
+	model = "Sunplus Pentagram common board (EFI)";
 	compatible = "sunplus,pentagram-common", "sunplus,pentagram";
 
 	aliases {
@@ -28,7 +28,8 @@
 
 		pinctrl_func: pinmux_func {
 			net_l2sw {
-#if 1 // Ev board
+
+#if 0 // Ev board BPI: 0 for Demo board
 				pinmux = <PMX_L2SW_CLK_OUT              G_MX47_GPIO_P5_7
 					  PMX_L2SW_MAC_SMI_MDC          G_MX41_GPIO_P5_1
 					  PMX_L2SW_LED_FLASH0           G_MX42_GPIO_P5_2

@@ -37,7 +37,8 @@ generate_board_mk() {
 	MACH=$MACH
 	COMPILE_TOOL=$CROSS_COMPILE
 	#UBOOT_CONFIG=${SOC}_${TYPE}_bananapi_defconfig
-	UBOOT_CONFIG=pentagram_sc7021_emmc_defconfig
+	#UBOOT_CONFIG=pentagram_sc7021_emmc_defconfig
+	UBOOT_CONFIG=pentagram_sp7021_emmc_defconfig
 	KERNEL_CONFIG=pentagram_sc7021_achip_emu_bpi_defconfig
 	TARGET_PLATFORM=${TARGET_PLATFORM}
 	EOT

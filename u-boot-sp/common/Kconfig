@@ -232,6 +232,14 @@ config BOOTCOMMAND
 	  This is the string of commands that will be used as bootcmd and if
 	  AUTOBOOT is set, automatically run.
 
+config BOOTCOMMAND2
+	string "bootcmd value"
+	depends on USE_BOOTCOMMAND
+	default "run distro_bootcmd" if DISTRO_DEFAULTS
+	help
+	  This is the string of commands that will be used as bootcmd and if
+	  AUTOBOOT is set, automatically run.
+
 config USE_PREBOOT
 	bool "Enable preboot"
 	help
