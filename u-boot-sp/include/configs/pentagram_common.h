@@ -551,9 +551,9 @@ mmc read 0x2fffc0 0x1422 0xa ; mmc read 0x307fc0 0x1822 0x30f0 ; sp_go 0x308000 
 #define BOOTENV_DEV_MMC_AUTO(devtypeu, devtypel, instance)		\
 	BOOTENV_DEV_MMC(MMC, mmc, 0)					\
 	BOOTENV_DEV_MMC(MMC, mmc, 1)					\
-	"bootcmd_mmc_bpi=set devnum ${mmc_bootdev}; run mmc_boot;\0"	\
-	"bootcmd_mmc0=set devnum 0; run fdtload2; run fdtload; run mmc_boot;\0"			\
-	"bootcmd_mmc1=set devnum 1; run fdtload2; run fdtload; run mmc_boot;\0"			\
+	"bootcmd_mmc_bpi=setenv devnum ${mmc_bootdev}; run mmc_boot;\0"	\
+	"bootcmd_mmc0=setenv devnum 0; run fdtload2; run fdtload; run mmc_boot;\0"			\
+	"bootcmd_mmc1=setenv devnum 1; run fdtload2; run fdtload; run mmc_boot;\0"			\
 	"bootcmd_mmc_auto="						\
 		"if test ${mmc_bootdev} -eq 1; then "			\
 			"run bootcmd_mmc1; "				\
