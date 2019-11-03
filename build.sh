@@ -53,6 +53,11 @@ R="${SD}/BPI-ROOT"
 	#
 	mkdir -p $R/usr/lib/u-boot/bananapi/${board}
 	cp -a $U/*.gz $R/usr/lib/u-boot/bananapi/${board}/
+	#
+	rm -rf $R/boot
+	mkdir -p $R/boot
+	cp -a $T/${BPILINUX}/arch/arm/boot/zImage $R/boot/vmlinuz-6-bpi-4.12-sunplus
+	cp -a $T/${BPILINUX}/arch/arm/boot/dts/pentagram-sc7021-achip-emu.dtb $R/boot/bpi-f2s.dtb
 	rm -rf $R/lib/modules
 	mkdir -p $R/lib/modules
 	cp -a $T/${BPILINUX}/output/lib/modules/${kernel} $R/lib/modules
@@ -62,7 +67,7 @@ R="${SD}/BPI-ROOT"
 	(cd $B ; tar czvf $SD/BPI-BOOT-${board}.tgz .)
 	(cd $R ; tar czvf $SD/${kernel}-net.tgz lib/modules/${kernel}/kernel/net)
 	(cd $R ; mv lib/modules/${kernel}/kernel/net $R/net)
-	(cd $R ; tar czvf $SD/${kernel}.tgz lib/modules)
+	(cd $R ; tar czvf $SD/${kernel}.tgz boot lib/modules)
 	(cd $R ; mv $R/net lib/modules/${kernel}/kernel/net)
 	(cd $R ; tar czvf $SD/BOOTLOADER-${board}.tgz usr/lib/u-boot/bananapi)
 
