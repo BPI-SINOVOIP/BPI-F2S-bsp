@@ -50,7 +50,7 @@ kernel: $(K_DOT_CONFIG)
 	$(Q)$(MAKE) -C linux-sp ARCH=arm CROSS_COMPILE=${K_CROSS_COMPILE} -j$J INSTALL_MOD_PATH=output uImage dtbs
 	$(Q)$(MAKE) -C linux-sp ARCH=arm CROSS_COMPILE=${K_CROSS_COMPILE} -j$J INSTALL_MOD_PATH=output modules
 	$(Q)$(MAKE) -C linux-sp ARCH=arm CROSS_COMPILE=${K_CROSS_COMPILE} -j$J INSTALL_MOD_PATH=output modules_install
-	mkdir $(OUTPUT_DIR)/lib/modules/4.12.14-BPI-F2S-Kernel/kernel/extra
+	mkdir $(OUTPUT_DIR)/lib/modules/4.19.37-BPI-F2S-Kernel/kernel/extra
 #	$(Q)$(MAKE) -C phoenix/system/src/drivers ARCH=arm CROSS_COMPILE=${K_CROSS_COMPILE} TARGET_KDIR=$(TARGET_KDIR) -j$J INSTALL_MOD_PATH=output
 #	$(Q)$(MAKE) -C phoenix/system/src/drivers ARCH=arm CROSS_COMPILE=${K_CROSS_COMPILE} TARGET_KDIR=$(TARGET_KDIR) -j$J INSTALL_MOD_PATH=output install
 #	$(Q)$(MAKE) -C linux-sp ARCH=arm CROSS_COMPILE=${K_CROSS_COMPILE} -j$J INSTALL_MOD_PATH=output _depmod

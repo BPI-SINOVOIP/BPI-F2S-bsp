@@ -39,7 +39,7 @@ generate_board_mk() {
 	#UBOOT_CONFIG=${SOC}_${TYPE}_bananapi_defconfig
 	#UBOOT_CONFIG=pentagram_sc7021_emmc_defconfig
 	UBOOT_CONFIG=pentagram_sp7021_emmc_defconfig
-	KERNEL_CONFIG=pentagram_sc7021_achip_emu_bpi_defconfig
+	KERNEL_CONFIG=pentagram_sp7021_achip_emu_bpi_defconfig
 	TARGET_PLATFORM=${TARGET_PLATFORM}
 	EOT
 
@@ -54,8 +54,8 @@ generate_board_envsh() {
 	export SOC=$SOC
 	export MACH=$MACH
 	export CROSS_COMPILE=arm-linux-gnueabihf-
-	export UBOOT_CONFIG=pentagram_sc7021_emmc_defconfig
-	export KERNEL_CONFIG=pentagram_sc7021_achip_emu_defconfig
+	export UBOOT_CONFIG=pentagram_sp7021_emmc_defconfig
+	export KERNEL_CONFIG=pentagram_sp7021_achip_emu_bpi_defconfig
 	export LICHEE_PLATFORM="linux"
 	export TOPDIR=${TOPDIR}
 	export TARGET_PLATFORM=${TARGET_PLATFORM}

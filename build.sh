@@ -6,7 +6,7 @@ TARGET_PRODUCT="bpi-f2s"
 ALL_SOC="bpi-f2s"
 BOARD=BPI-F2S-720P
 board="bpi-f2s"
-kernel="4.12.14-BPI-F2S-Kernel"
+kernel="4.19.37-BPI-F2S-Kernel"
 MODE=$1
 BPILINUX=linux-sp
 BPIPACK=sp-pack
@@ -44,7 +44,7 @@ R="${SD}/BPI-ROOT"
 	cp -a $T/${BPIPACK}/${BPISOC}/${TARGET_PRODUCT}/configs/default/linux $B/bananapi/${board}/
 	cp -a $T/${BPILINUX}/arch/arm/boot/uImage $B/bananapi/${board}/linux/uImage
 	cp -a $T/${BPILINUX}/arch/arm/boot/dts/*pent*.dtb $B/bananapi/${board}/linux/dtb
-	cp -a $T/${BPILINUX}/arch/arm/boot/dts/pentagram-sc7021-achip-emu.dtb $B/bananapi/${board}/linux/bpi-f2s.dtb
+	cp -a $T/${BPILINUX}/arch/arm/boot/dts/pentagram-sp7021-achip-emu.dtb $B/bananapi/${board}/linux/bpi-f2s.dtb
 	#
 	cp -a $T/u-boot-sp/u-boot.img $B/bananapi/${board}/linux/u-boot-bpi-f2s.img
 	cp -a $T/u-boot-sp/u-boot.img $B
@@ -56,8 +56,8 @@ R="${SD}/BPI-ROOT"
 	#
 	rm -rf $R/boot
 	mkdir -p $R/boot
-	cp -a $T/${BPILINUX}/arch/arm/boot/zImage $R/boot/vmlinuz-6-bpi-4.12-sunplus
-	cp -a $T/${BPILINUX}/arch/arm/boot/dts/pentagram-sc7021-achip-emu.dtb $R/boot/bpi-f2s.dtb
+	cp -a $T/${BPILINUX}/arch/arm/boot/zImage $R/boot/vmlinuz-6-bpi-4.19-sunplus
+	cp -a $T/${BPILINUX}/arch/arm/boot/dts/pentagram-sp7021-achip-emu.dtb $R/boot/bpi-f2s.dtb
 	rm -rf $R/lib/modules
 	mkdir -p $R/lib/modules
 	cp -a $T/${BPILINUX}/output/lib/modules/${kernel} $R/lib/modules
