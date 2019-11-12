@@ -4,6 +4,17 @@
 
 menu "Misc devices"
 
+config SP_ICM
+	tristate "Sunplus Input Capture (ICM) driver"
+	depends on ARCH_PENTAGRAM
+	default n
+
+config SP_ICM_TEST
+	bool "Sunplus Input Capture (ICM) test"
+	depends on SP_ICM
+	help
+	  echo h > /sys/module/sp_icm/parameters/test
+
 config SENSORS_LIS3LV02D
 	tristate
 	depends on INPUT
@@ -525,6 +536,7 @@ source "drivers/misc/mic/Kconfig"
 source "drivers/misc/genwqe/Kconfig"
 source "drivers/misc/echo/Kconfig"
 source "drivers/misc/cxl/Kconfig"
+source "drivers/misc/iop/Kconfig"
 source "drivers/misc/ocxl/Kconfig"
 source "drivers/misc/cardreader/Kconfig"
 endmenu

@@ -93,6 +93,7 @@ EXPORT_SYMBOL_GPL(usb_ep_set_maxpacket_limit);
  */
 int usb_ep_enable(struct usb_ep *ep)
 {
+#if 0
 	int ret = 0;
 
 	if (ep->enabled)
@@ -108,6 +109,9 @@ out:
 	trace_usb_ep_enable(ep, ret);
 
 	return ret;
+#else	/* sunplus USB driver */
+	return ep->ops->enable(ep, ep->desc);
+#endif
 }
 EXPORT_SYMBOL_GPL(usb_ep_enable);
 
@@ -127,6 +131,7 @@ EXPORT_SYMBOL_GPL(usb_ep_enable);
  */
 int usb_ep_disable(struct usb_ep *ep)
 {
+#if 0
 	int ret = 0;
 
 	if (!ep->enabled)
@@ -142,6 +147,9 @@ out:
 	trace_usb_ep_disable(ep, ret);
 
 	return ret;
+#else	/* sunplus USB driver */
+	return ep->ops->disable(ep);
+#endif
 }
 EXPORT_SYMBOL_GPL(usb_ep_disable);
 
@@ -260,6 +268,7 @@ EXPORT_SYMBOL_GPL(usb_ep_free_request);
 int usb_ep_queue(struct usb_ep *ep,
 			       struct usb_request *req, gfp_t gfp_flags)
 {
+#if 0
 	int ret = 0;
 
 	if (WARN_ON_ONCE(!ep->enabled && ep->address)) {
@@ -273,6 +282,9 @@ out:
 	trace_usb_ep_queue(ep, req, ret);
 
 	return ret;
+#else	/* sunplus USB driver */
+	return ep->ops->queue(ep, req, gfp_flags);
+#endif
 }
 EXPORT_SYMBOL_GPL(usb_ep_queue);
 
@@ -295,12 +307,16 @@ EXPORT_SYMBOL_GPL(usb_ep_queue);
  */
 int usb_ep_dequeue(struct usb_ep *ep, struct usb_request *req)
 {
+#if 0
 	int ret;
 
 	ret = ep->ops->dequeue(ep, req);
 	trace_usb_ep_dequeue(ep, req, ret);
 
 	return ret;
+#else	/* sunplus USB driver */
+	return ep->ops->dequeue(ep, req);
+#endif
 }
 EXPORT_SYMBOL_GPL(usb_ep_dequeue);
 
@@ -996,8 +1012,10 @@ static void usb_gadget_state_work(struct work_struct *work)
 void usb_gadget_set_state(struct usb_gadget *gadget,
 		enum usb_device_state state)
 {
+#if 0	/* sunplus USB driver */
 	gadget->state = state;
 	schedule_work(&gadget->work);
+#endif
 }
 EXPORT_SYMBOL_GPL(usb_gadget_set_state);
 
@@ -1080,7 +1098,11 @@ static inline int usb_gadget_udc_start(struct usb_udc *udc)
  */
 static inline void usb_gadget_udc_stop(struct usb_udc *udc)
 {
+#if 0
 	udc->gadget->ops->udc_stop(udc->gadget);
+#else	/* sunplus USB driver */
+	udc->gadget->ops->udc_stop(udc->driver);
+#endif
 }
 
 /**
@@ -1269,7 +1291,47 @@ EXPORT_SYMBOL_GPL(usb_get_gadget_udc_name);
  */
 int usb_add_gadget_udc(struct device *parent, struct usb_gadget *gadget)
 {
+#if 0
 	return usb_add_gadget_udc_release(parent, gadget, NULL);
+#else	/* sunplus USB driver */
+	struct usb_udc		*udc;
+	int			ret = -ENOMEM;
+
+	udc = kzalloc(sizeof(*udc), GFP_KERNEL);
+	if (!udc)
+		goto err1;
+
+	device_initialize(&udc->dev);
+	udc->dev.release = usb_udc_release;
+	udc->dev.class = udc_class;
+	udc->dev.groups = usb_udc_attr_groups;
+	udc->dev.parent = parent;
+	ret = dev_set_name(&udc->dev, "%s", kobject_name(&parent->kobj));
+	if (ret)
+		goto err2;
+
+	udc->gadget = gadget;
+
+	mutex_lock(&udc_lock);
+	list_add_tail(&udc->list, &udc_list);
+
+	ret = device_add(&udc->dev);
+	if (ret)
+		goto err3;
+
+	mutex_unlock(&udc_lock);
+
+	return 0;
+err3:
+	list_del(&udc->list);
+	mutex_unlock(&udc_lock);
+
+err2:
+	put_device(&udc->dev);
+
+err1:
+	return ret;
+#endif
 }
 EXPORT_SYMBOL_GPL(usb_add_gadget_udc);
 
@@ -1299,6 +1361,7 @@ static void usb_gadget_remove_driver(struct usb_udc *udc)
  */
 void usb_del_gadget_udc(struct usb_gadget *gadget)
 {
+#if 0
 	struct usb_udc *udc = gadget->udc;
 
 	if (!udc)
@@ -1322,6 +1385,31 @@ void usb_del_gadget_udc(struct usb_gadget *gadget)
 	device_unregister(&udc->dev);
 	device_unregister(&gadget->dev);
 	memset(&gadget->dev, 0x00, sizeof(gadget->dev));
+#else	/* sunplus USB driver */
+		struct usb_udc		*udc = NULL;
+	
+		mutex_lock(&udc_lock);
+		list_for_each_entry(udc, &udc_list, list)
+			if (udc->gadget == gadget)
+				goto found;
+	
+		dev_err(gadget->dev.parent, "gadget not registered.\n");
+		mutex_unlock(&udc_lock);
+	
+		return;
+	
+	found:
+		dev_vdbg(gadget->dev.parent, "unregistering gadget\n");
+	
+		list_del(&udc->list);
+		mutex_unlock(&udc_lock);
+	
+		if (udc->driver)
+			usb_gadget_remove_driver(udc);
+	
+		kobject_uevent(&udc->dev.kobj, KOBJ_REMOVE);
+		device_unregister(&udc->dev);
+#endif
 }
 EXPORT_SYMBOL_GPL(usb_del_gadget_udc);
 
@@ -1336,6 +1424,8 @@ static int udc_bind_to_driver(struct usb_udc *udc, struct usb_gadget_driver *dri
 
 	udc->driver = driver;
 	udc->dev.driver = &driver->driver;
+
+#if 0	/* sunplus USB driver */
 	udc->gadget->dev.driver = &driver->driver;
 
 	usb_gadget_udc_set_speed(udc, driver->max_speed);
@@ -1343,13 +1433,15 @@ static int udc_bind_to_driver(struct usb_udc *udc, struct usb_gadget_driver *dri
 	ret = driver->bind(udc->gadget, driver);
 	if (ret)
 		goto err1;
+#endif
+
 	ret = usb_gadget_udc_start(udc);
 	if (ret) {
 		driver->unbind(udc->gadget);
 		goto err1;
 	}
-	usb_udc_connect_control(udc);
 
+	usb_udc_connect_control(udc);
 	kobject_uevent(&udc->dev.kobj, KOBJ_CHANGE);
 	return 0;
 err1:

@@ -1528,6 +1528,9 @@ config SERIAL_OWL_CONSOLE
 	  Say 'Y' here if you wish to use Actions Semiconductor S500/S900 UART
 	  as the system console.
 
+config SERIAL_SP_UART
+	bool "Sunplus UART serial port support"
+
 endmenu
 
 config SERIAL_MCTRL_GPIO

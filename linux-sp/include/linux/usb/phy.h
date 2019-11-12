@@ -91,6 +91,9 @@ struct usb_phy {
 	unsigned int		 flags;
 
 	enum usb_phy_type	type;
+#ifdef CONFIG_USB_SUNPLUS_OTG	/* sunplus USB driver */
+	enum usb_otg_state	state;
+#endif
 	enum usb_phy_events	last_event;
 
 	struct usb_otg		*otg;
@@ -156,6 +159,37 @@ struct usb_phy {
 	 */
 	enum usb_charger_type (*charger_detect)(struct usb_phy *x);
 };
+
+#if 1	/* sunplus USB driver */
+struct usb_otg {
+	u8			default_a;
+
+	struct usb_phy		*phy;
+	/* old usb_phy interface */
+	struct usb_phy		*usb_phy;
+	struct usb_bus		*host;
+	struct usb_gadget	*gadget;
+
+	enum usb_otg_state	state;
+
+	/* bind/unbind the host controller */
+	int	(*set_host)(struct usb_otg *otg, struct usb_bus *host);
+
+	/* bind/unbind the peripheral controller */
+	int	(*set_peripheral)(struct usb_otg *otg,
+					struct usb_gadget *gadget);
+
+	/* effective for A-peripheral, ignored for B devices */
+	int	(*set_vbus)(struct usb_otg *otg, bool enabled);
+
+	/* for B devices only:  start session with A-Host */
+	int	(*start_srp)(struct usb_otg *otg);
+
+	/* start or continue HNP role switch */
+	int	(*start_hnp)(struct usb_otg *otg);
+
+};
+#endif
 
 /* for board-specific init logic */
 extern int usb_add_phy(struct usb_phy *, enum usb_phy_type type);

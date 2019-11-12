@@ -1,0 +1,13 @@
+#
+# IOP subsystem configuration
+#
+
+menu "Q TEST CBDMA"
+
+config SUNPLUS_QTEST_CBDMA
+	tristate "QTEST CBDMA"
+	default n
+	help
+		QTEST CBDMA
+
+endmenu

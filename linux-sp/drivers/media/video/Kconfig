@@ -1,0 +1,107 @@
+menuconfig SUNPLUS_VIDEO_SENSOR_SUPPORT
+	bool "Sunplus Video Sensor Support"
+	help
+	  Enable video sensor support.
+	  If you have such devices, say Y.
+
+if SUNPLUS_VIDEO_SENSOR_SUPPORT
+
+config VIDEO_SENSOR_GC0310
+	tristate "Video Sensor (GC0310) Driver"
+	default n
+	---help---
+	  Supports video sensor GC0310.
+
+choice
+	prompt "Selected Mode"
+	depends on VIDEO_SENSOR_GC0310
+	---help---
+	  Press Enter to select mode if this is not you want.
+
+config GC0310_RAW8
+	bool "Bayer RAW8"
+	---help---
+	  In this mode, GC0310 outputs Bayer RAW8 video stream.
+
+config GC0310_YUY2
+	bool "YUY2/YUYV"
+	---help---
+	  In this mode, GC0310 outputs YUY2/YUYV (YUV422/8bit) video stream.
+
+endchoice
+
+config VIDEO_SENSOR_IMX219
+	tristate "Video Sensor (IMX219) Driver"
+	default n
+	---help---
+	  Supports video sensor IMX219.
+
+choice
+	prompt "Selected Inage Size"
+	depends on VIDEO_SENSOR_IMX219
+	---help---
+	  Press Enter to select image size if this is not you want.
+
+config IMX219_3280x2464
+	bool "3280x2464"
+	---help---
+	  In this mode, IMX219 output image size 3280x2464.
+
+config IMX219_1920x1080
+	bool "1920x1080"
+	---help---
+	  In this mode, IMX219 output image size 1920x1080.
+endchoice
+
+config VIDEO_SENSOR_OV5647
+	tristate "Video Sensor (OV5647) Driver"
+	default n
+	---help---
+	  Supports video sensor OV5647.
+
+choice
+	prompt "Selected Inage Size"
+	depends on VIDEO_SENSOR_OV5647
+	---help---
+	  Press Enter to select image size if this is not you want.
+
+config OV5647_640x480
+	bool "640x480"
+	---help---
+	  In this mode, OV5647 output image size 640x480.
+
+config OV5647_1280x720
+	bool "1280x720"
+	---help---
+	  In this mode, OV5647 output image size 1280x720.
+
+config OV5647_1280x960
+	bool "1280x960"
+	---help---
+	  In this mode, OV5647 output image size 1280x960.
+
+config OV5647_2592x1944
+	bool "2592x1944"
+	---help---
+	  In this mode, OV5647 output image size 2592x1944.
+
+endchoice
+
+config VIDEO_SENSOR_OV9281
+	tristate "Video Sensor (OV9281) Driver"
+	default n
+	---help---
+	  Supports video sensor OV9281.
+
+config VIDEO_SENSOR_OV9281_ISP
+	tristate "Video Sensor (OV9281_ISP) Driver"
+	default n
+	---help---
+	  Supports SunplusIT 3D Eye-tracker (video sensor OV9281 + ISP) board.
+	  This driver does not support auto sensor detection.
+	  It will be loaded in unconditionally when it is enabled.
+	  Please disable other video sensor drivers.
+
+
+
+endif

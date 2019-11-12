@@ -433,7 +433,11 @@ struct usb_bus {
 					 * Does the host controller use PIO
 					 * for control transfers?
 					 */
+#if 1	/* sunplus USB driver */
+	u8 otg_port:1; 		 	/* 0, or number of OTG/HNP port */
+#else
 	u8 otg_port;			/* 0, or number of OTG/HNP port */
+#endif
 	unsigned is_b_host:1;		/* true during some HNP roleswitches */
 	unsigned b_hnp_enable:1;	/* OTG: did A-Host enable HNP? */
 	unsigned no_stop_on_short:1;    /*
@@ -709,6 +713,17 @@ struct usb_device {
 	unsigned lpm_disable_count;
 
 	u16 hub_delay;
+#if 1	/* sunplus USB driver */
+	#ifdef	CONFIG_RETRY_TIMES
+	int reset_count;
+	struct timespec t_prev;
+	#endif
+	struct urb* current_urb;
+	#ifdef CONFIG_USB_SUNPLUS_OTG
+	bool device_support_hnp_flag;
+	struct task_struct		*hnp_polling_timer;
+	#endif
+#endif
 };
 #define	to_usb_device(d) container_of(d, struct usb_device, dev)
 
@@ -1579,6 +1594,9 @@ struct urb {
 	usb_complete_t complete;	/* (in) completion routine */
 	struct usb_iso_packet_descriptor iso_frame_desc[0];
 					/* (in) ISO ONLY */
+#if 1	/* sunplus USB driver */
+	u8 uphy_stuck_flag;
+#endif
 };
 
 /* ----------------------------------------------------------------------- */
@@ -1789,6 +1807,11 @@ extern int usb_get_descriptor(struct usb_device *dev, unsigned char desctype,
 	unsigned char descindex, void *buf, int size);
 extern int usb_get_status(struct usb_device *dev,
 	int recip, int type, int target, void *data);
+
+#if 1	/* sunplus USB driver */
+extern int usb_get_sts(struct usb_device *dev,
+	int type, int target, void *data);
+#endif
 
 static inline int usb_get_std_status(struct usb_device *dev,
 	int recip, int target, void *data)

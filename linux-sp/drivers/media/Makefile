@@ -34,3 +34,6 @@ obj-$(CONFIG_CEC_CORE) += cec/
 obj-y += common/ platform/ pci/ usb/ mmc/ firewire/ spi/
 obj-$(CONFIG_VIDEO_DEV) += radio/
 
+# SP video out driver and sensor driver
+obj-y 	+=video/
+obj-y 	+=sp-mipi/

@@ -1,0 +1,158 @@
+/dts-v1/;
+
+#include "pentagram-sp7021-common.dtsi"
+
+#include <dt-bindings/clock/sp-q628.h>
+#include <dt-bindings/memory/sp-q628-mem.h>
+#include <dt-bindings/interrupt-controller/irq.h>
+
+//#define ENABLE_QTEST_CBDMA
+/ {
+	model = "Sunplus SP7021 (ARM926)";
+	compatible = "sunplus,sp7021-bchip";
+
+	interrupt-parent = <&intc>;
+
+
+#ifdef ENABLE_QTEST_CBDMA
+	sp_qtest_cbdma_tst0: sp_qtest_cbdma_tst@9c000d00 {
+		compatible = "sunplus,sp_qtest_cbdma";
+		reg = <0x9c000d00 0x80>;
+		interrupt-parent = <&intc>;
+		interrupts = <128 IRQ_TYPE_LEVEL_HIGH>;
+	};
+	sp_qtest_cbdma_tst1: sp_qtest_cbdma_tst@9c000d80 {
+		compatible = "sunplus,sp_qtest_cbdma";
+		reg = <0x9c000d80 0x80>;
+		interrupt-parent = <&intc>;
+		interrupts = <129 IRQ_TYPE_LEVEL_HIGH>;
+	};
+#endif
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		cpu0: cpu@0 {
+			compatible = "arm,arm926ej-s";
+			device_type = "cpu";
+			reg = <0>;
+		};
+	};
+
+
+
+	soc@B {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		intc: interrupt-controller@G9 {
+			compatible = "sunplus,sp-intc";
+			interrupt-controller;
+			#interrupt-cells = <2>;
+			reg = <0x9c000480 0x80>, /* G9  */
+			      <0x9c000500 0x80>; /* G10 */
+		};
+
+/* Timer tests: */
+/* 1. Enable device tree for timers. */
+/* 2. Enable sp_timer_test in drivers/misc/Makefile */
+#if 0
+		sp_tmr_tst0: sp_tmr_tst@9c000600 {
+			compatible = "sunplus,sp-tmr-tst";
+			reg = <0x9c000600 0x80>;
+			interrupt-parent = <&intc>;
+			interrupts =
+				<151 IRQ_TYPE_EDGE_RISING>, /* timer0 */
+				<152 IRQ_TYPE_EDGE_RISING>, /* timer1 */
+				<153 IRQ_TYPE_EDGE_RISING>, /* timer2 */
+				<154 IRQ_TYPE_EDGE_RISING>, /* timer3 */
+				<150 IRQ_TYPE_LEVEL_HIGH>; /* watchdog */
+		};
+
+		sp_tmr_tst1: sp_tmr_tst@9c003000 {
+			compatible = "sunplus,sp-tmr-tst";
+			reg = <0x9c003000 0x80>;
+			interrupt-parent = <&intc>;
+			interrupts =
+				<155 IRQ_TYPE_EDGE_RISING>, /* timer0 */
+				<156 IRQ_TYPE_EDGE_RISING>, /* timer1 */
+				<157 IRQ_TYPE_EDGE_RISING>, /* timer2 */
+				<158 IRQ_TYPE_EDGE_RISING>, /* timer3 */
+				<168 IRQ_TYPE_LEVEL_HIGH>; /* watchdog */
+		};
+
+		sp_tmr_tst2: sp_tmr_tst@9c003080 {
+			compatible = "sunplus,sp-tmr-tst";
+			reg = <0x9c003080 0x80>;
+			interrupt-parent = <&intc>;
+			interrupts =
+				<159 IRQ_TYPE_EDGE_RISING>, /* timer0 */
+				<160 IRQ_TYPE_EDGE_RISING>, /* timer1 */
+				<161 IRQ_TYPE_EDGE_RISING>, /* timer2 */
+				<162 IRQ_TYPE_EDGE_RISING>; /* timer3 */
+		};
+
+#if 0	/* this timer is used as system tick in B-Chip's kernel */
+		sp_tmr_tst3: sp_tmr_tst@9c003180 {
+			compatible = "sunplus,sp-tmr-tst";
+			reg = <0x9c003180 0x80>;
+			interrupt-parent = <&intc>;
+			interrupts =
+				<164 IRQ_TYPE_EDGE_RISING>, /* timer0 */
+				<165 IRQ_TYPE_EDGE_RISING>, /* timer1 */
+				<166 IRQ_TYPE_EDGE_RISING>, /* timer2 */
+				<167 IRQ_TYPE_EDGE_RISING>; /* timer3 */
+		};
+#endif
+#endif
+		/* STC_AV2 */
+		timer: timer@G99 {
+			compatible = "sunplus,sp-stc";
+			reg = <0x9c003180 0x80>;
+			interrupt-parent = <&intc>;
+			interrupts =
+				<164 IRQ_TYPE_EDGE_RISING>, /* AV2 timer0 */
+				<165 IRQ_TYPE_EDGE_RISING>, /* AV2 timer1 */
+				<166 IRQ_TYPE_EDGE_RISING>, /* AV2 timer2 */
+				<167 IRQ_TYPE_EDGE_RISING>; /* AV2 timer3 */
+		};
+
+/* CBDMA tests: */
+/* 1. Enable device tree for CBDMA. */
+/* 2. Enable sp_cbdma_test in drivers/misc/Makefile */
+#if 0
+#if 1
+		sp_cbdma_tst0: sp_cbdma_tst@9c000d00 {
+			compatible = "sunplus,sp-cbdma-tst";
+			reg = <0x9c000d00 0x80>;
+			interrupt-parent = <&intc>;
+			interrupts = <128 IRQ_TYPE_LEVEL_HIGH>;
+		};
+#endif
+#if 1
+		sp_cbdma_tst1: sp_cbdma_tst@9c000d80 {
+			compatible = "sunplus,sp-cbdma-tst";
+			reg = <0x9c000d80 0x80>;
+			interrupt-parent = <&intc>;
+			interrupts = <129 IRQ_TYPE_LEVEL_HIGH>;
+		};
+#endif
+#endif
+
+/* RTC ISR tests: */
+/* 1. Enable device tree for RTC ISR test. */
+/* 2. Enable sp_rct_isr_test in drivers/misc/Makefile */
+#if 0
+		sp_rtc_isr_tst0: sp_rtc_isr_tst@9c003a00 {
+			compatible = "sunplus,sp-rtc-isr-tst";
+			reg = <0x9c003a00 0x80>;
+			interrupt-parent = <&intc>;
+			interrupts = <163 IRQ_TYPE_EDGE_RISING>;
+		};
+#endif
+
+
+	};
+};

@@ -20,6 +20,9 @@
 #include <linux/usb/hcd.h>	/* for usbcore internals */
 #include <linux/usb/of.h>
 #include <asm/byteorder.h>
+#if 1	/* sunplus USB driver */
+#include <linux/usb/sp_usb.h>
+#endif
 
 #include "usb.h"
 
@@ -50,6 +53,15 @@ static int usb_start_wait_urb(struct urb *urb, int timeout, int *actual_length)
 	struct api_context ctx;
 	unsigned long expire;
 	int retval;
+#if 1	/* sunplus USB driver */
+	struct usb_device *dev;
+	#ifdef CONFIG_USB_HOST_NOT_FINISH_QTD_WHEN_DISC_WORKAROUND
+	struct usb_hcd *hcd = bus_to_hcd(urb->dev->bus);
+	#endif
+
+	dev = urb->dev;
+	dev->current_urb = urb;
+#endif
 
 	init_completion(&ctx.done);
 	urb->context = &ctx;
@@ -57,6 +69,42 @@ static int usb_start_wait_urb(struct urb *urb, int timeout, int *actual_length)
 	retval = usb_submit_urb(urb, GFP_NOIO);
 	if (unlikely(retval))
 		goto out;
+
+#ifdef CONFIG_USB_HOST_NOT_FINISH_QTD_WHEN_DISC_WORKAROUND	/* sunplus USB driver */
+	do {
+		if (hcd->enum_msg_flag && hcd->hub_thread == current) {
+			int port_status;
+
+			hcd->current_active_urb = urb;
+			if (hcd->driver->get_port_status_from_register) {
+				port_status = hcd->driver->get_port_status_from_register(hcd);
+				if (hcd->driver->relinquish_port) {
+					if ((!(port_status & CURRENT_CONNECT_STATUS))
+					    || (port_status & EHCI_CONNECT_STATUS_CHANGE)) {
+						printk(KERN_NOTICE
+						       "\ndev disc after submit urb, ps:%x\n",
+						       port_status);
+						hcd->current_active_urb = NULL;
+						retval = -ENOTCONN;
+						usb_kill_urb(urb);
+						goto out;
+					}
+				} else {
+					if ((!(port_status & CURRENT_CONNECT_STATUS))
+					    || (port_status & OHCI_CONNECT_STATUS_CHANGE)) {
+						printk(KERN_NOTICE
+						       "\ndev disc after submit urb,ps:%x\n",
+						       port_status);
+						hcd->current_active_urb = NULL;
+						retval = -ENOTCONN;
+						usb_kill_urb(urb);
+						goto out;
+					}
+				}
+			}
+		}
+	} while (0);
+#endif
 
 	expire = timeout ? msecs_to_jiffies(timeout) : MAX_SCHEDULE_TIMEOUT;
 	if (!wait_for_completion_timeout(&ctx.done, expire)) {
@@ -70,9 +118,28 @@ static int usb_start_wait_urb(struct urb *urb, int timeout, int *actual_length)
 			usb_urb_dir_in(urb) ? "in" : "out",
 			urb->actual_length,
 			urb->transfer_buffer_length);
-	} else
+	} else {
 		retval = ctx.status;
+	
+#ifdef CONFIG_USB_HOST_NOT_FINISH_QTD_WHEN_DISC_WORKAROUND	/* sunplus USB driver */
+		if (-ENOTCONN_IRQ == retval) {
+			printk(KERN_NOTICE "\n***Warn, stop urb wait***\n");
+			retval = -ENOTCONN;
+			usb_kill_urb(urb);
+		}
+#endif
+	}
+	
+#ifdef CONFIG_USB_HOST_NOT_FINISH_QTD_WHEN_DISC_WORKAROUND	/* sunplus USB driver */
+	if (hcd->enum_msg_flag && hcd->hub_thread == current)
+		hcd->current_active_urb = NULL;
+#endif
+
 out:
+#if 1	/* sunplus USB driver */
+	dev->current_urb = NULL;
+#endif
+
 	if (actual_length)
 		*actual_length = urb->actual_length;
 
@@ -1024,6 +1091,31 @@ int usb_get_status(struct usb_device *dev, int recip, int type, int target,
 	return ret;
 }
 EXPORT_SYMBOL_GPL(usb_get_status);
+
+#if 1	/* sunplus USB driver */
+int usb_get_sts(struct usb_device *dev, int type, int target, void *data)
+{
+	int ret;
+	__le16 *status = kmalloc(sizeof(*status), GFP_KERNEL);
+
+	if (!status)
+		return -ENOMEM;
+
+	ret = usb_control_msg(dev, usb_rcvctrlpipe(dev, 0),
+		USB_REQ_GET_STATUS, USB_DIR_IN | type, 0, target, status,
+		sizeof(*status), USB_CTRL_GET_TIMEOUT);
+
+	if (ret == 2) {
+		*(u16 *) data = le16_to_cpu(*status);
+		ret = 0;
+	} else if (ret >= 0) {
+		ret = -EIO;
+	}
+	kfree(status);
+	return ret;
+}
+EXPORT_SYMBOL_GPL(usb_get_sts);
+#endif
 
 /**
  * usb_clear_halt - tells device to clear endpoint halt/stall condition

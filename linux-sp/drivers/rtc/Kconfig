@@ -887,6 +887,13 @@ config RTC_DRV_CMOS
 	  This driver can also be built as a module. If so, the module
 	  will be called rtc-cmos.
 
+config RTC_DRV_SUNPLUS
+	bool "RTC for Sunplus Pentagram Platform"
+	depends on ARCH_PENTAGRAM
+	default y
+	help
+	  RTC for Sunplus Pentagram platform.
+
 config RTC_DRV_ALPHA
 	bool "Alpha PC-style CMOS"
 	depends on ALPHA

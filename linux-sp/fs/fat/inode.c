@@ -1780,7 +1780,10 @@ int fat_fill_super(struct super_block *sb, void *data, int silent, int isvfat,
 		if (!silent)
 			fat_msg(sb, KERN_ERR, "count of clusters too big (%u)",
 			       total_clusters);
-		goto out_invalid;
+		if(sbi->fat_bits != 16) {
+			brelse(bh);
+			goto out_invalid;
+		}
 	}
 
 	sbi->max_cluster = total_clusters + FAT_START_ENT;

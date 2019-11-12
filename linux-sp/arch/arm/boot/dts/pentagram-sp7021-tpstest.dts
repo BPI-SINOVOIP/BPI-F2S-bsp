@@ -1,0 +1,302 @@
+/dts-v1/;
+
+#include "pentagram-sp7021-achip.dtsi"
+
+#include <dt-bindings/interrupt-controller/arm-gic.h>
+
+/ {
+	model = "SP7021 TPS test dts";
+	compatible = "sunplus,sp7021-achip";
+
+	chosen {
+		bootargs = "console=ttyS0,115200 root=/dev/ram rw loglevel=8 earlyprintk";
+	};
+
+	memory {
+		reg = <0x00000000 0x20000000>; /* 512MB */
+	};
+};
+
+&rtc {  charging-mode = <0x0E>;  };
+
+&sp_spinor0 {  status = "disabled";  };
+
+&sdio {
+ max-frequency = <52000000>; bus-width = <4>; keep-power-in-suspend;
+ brcmf1: bcrmf@1 {
+   reg = <1>;
+   compatible = "android,bcmdhd_wlan"/*"brcm,bcm43xx-fmac"*/;
+ };
+};
+
+&sp_uphy0 {
+  pinctrl-names = "default";
+  pinctrl-0 = <&pins_vbus_usb0>;
+  vbus-gpio = <&pctl 90 GPIO_ACTIVE_HIGH>;
+};
+
+&sp_uphy1 {
+  pinctrl-names = "default";
+  pinctrl-0 = <&pins_vbus_usb1>;
+  vbus-gpio = <&pctl 91 GPIO_ACTIVE_HIGH>;
+};
+
+&l2sw {
+ pinctrl-names = "default";
+ pinctrl-0 = <&ethA_pins &eth0_pins &eth1_pins>;
+};
+
+&mmc1 {
+ cd-gpio = <&pctl 0 GPIO_ACTIVE_LOW>;
+};
+
+&hdmitx {
+ pinctrl-names = "default";
+ pinctrl-0 = <&hdmi_A_tx1>;
+};
+
+&uart1 {
+ pinctrl-names = "default";
+ pinctrl-0 = <&pins_uart1>;
+};
+&uart2 {
+ pinctrl-names = "default";
+ pinctrl-0 = <&pins_uart2>;
+};
+&uart3 {
+ pinctrl-names = "default";
+ pinctrl-0 = <&pins_uart3>;
+};
+&uart4 {
+ pinctrl-names = "default";
+ /* pinctrl-0 = <&pins_uart4>; */
+ pinctrl-0 = <&pins_btuart &pins_bt_reset>;
+};
+
+&pctl {
+ /*** all non-device binded that you want to set mode ***/
+ pinctrl-names = "default";
+ pinctrl-0 = <&pins_iopp_nobinded &pins_gpio_nobinded &func_zero>;
+
+ /* detouch any preset pins from this functions */
+ func_zero: func_zero {
+   sppctl,zero_func = <
+     MUXF_L2SW_LED_FLASH0
+     MUXF_L2SW_LED_ON0
+     MUXF_L2SW_LED_FLASH1
+     MUXF_L2SW_LED_ON1
+   >;
+ };
+ 
+ pins_iopp_nobinded: pins_iopp_nobinded {
+    sppctl,pins = <
+    /* SP7021_IOPAD(97,SP7021_PCTL_G_IOPP,0,0) */
+    >;
+ };
+ pins_gpio_nobinded: pins_gpio_nobinded {
+    sppctl,pins = <
+      SP7021_IOPAD(42,SP7021_PCTL_G_GPIO,0,0)   /* was L2SW_LED_FLASH0 */
+      SP7021_IOPAD(51,SP7021_PCTL_G_GPIO,0,0)   /* was L2SW_LED_ON0 */
+      SP7021_IOPAD(30,SP7021_PCTL_G_GPIO,0,0)   /* was L2SW_LED_FLASH1 */
+      SP7021_IOPAD(39,SP7021_PCTL_G_GPIO,0,0)   /* was L2SW_LED_ON1  */
+    >;
+ };
+
+ pins_vbus_usb0: pins_vbus_usb0 {
+	sppctl,pins = <
+	  SP7021_IOPAD(90,SP7021_PCTL_G_GPIO,0,SP7021_PCTL_L_OUT)
+	>;
+ };
+ pins_vbus_usb1: pins_vbus_usb1 {
+    sppctl,pins = <
+	  SP7021_IOPAD(91,SP7021_PCTL_G_GPIO,0,SP7021_PCTL_L_OUT)
+	>;
+ };
+
+ leds_s0_def: user_leds_s0_def {
+    sppctl,pins = <
+      SP7021_IOPAD(6,SP7021_PCTL_G_GPIO,MUXF_GPIO,SP7021_PCTL_L_INV)
+      SP7021_IOPAD(7,SP7021_PCTL_G_GPIO,0,SP7021_PCTL_L_INV)
+    >;
+ };
+ leds_s0_slp: user_leds_s0_slp {
+    sppctl,pins = <
+      SP7021_IOPAD(6,SP7021_PCTL_G_GPIO,0,0)
+      SP7021_IOPAD(7,SP7021_PCTL_G_GPIO,0,0)
+    >;
+ };
+ tpsleds_pins: user_tpsleds_pins {
+    sppctl,pins = <
+      SP7021_IOPAD(4,SP7021_PCTL_G_GPIO,0,0)
+      SP7021_IOPAD(5,SP7021_PCTL_G_GPIO,0,0)
+    >;
+ };
+ pins_uart1: pins_uart1 {
+    sppctl,pins = <
+      SP7021_IOPAD(8,SP7021_PCTL_G_PMUX,MUXF_UA1_TX,0)
+      SP7021_IOPAD(9,SP7021_PCTL_G_PMUX,MUXF_UA1_RX,0)
+      SP7021_IOPAD(10,SP7021_PCTL_G_PMUX,MUXF_UA1_RTS,0)
+      SP7021_IOPAD(11,SP7021_PCTL_G_PMUX,MUXF_UA1_CTS,0)
+    >;
+ };
+ pins_uart2: pins_uart2 {
+    sppctl,pins = <
+      SP7021_IOPAD(12,SP7021_PCTL_G_PMUX,MUXF_UA2_TX,0)
+      SP7021_IOPAD(13,SP7021_PCTL_G_PMUX,MUXF_UA2_RX,0)
+      SP7021_IOPAD(14,SP7021_PCTL_G_PMUX,MUXF_UA2_RTS,0)
+      SP7021_IOPAD(15,SP7021_PCTL_G_PMUX,MUXF_UA2_CTS,0)
+    >;
+ };
+ pins_uart3: pins_uart3 {
+    sppctl,pins = <
+      SP7021_IOPAD(16,SP7021_PCTL_G_PMUX,MUXF_UA3_TX,0)
+      SP7021_IOPAD(17,SP7021_PCTL_G_PMUX,MUXF_UA3_RX,0)
+      SP7021_IOPAD(18,SP7021_PCTL_G_PMUX,MUXF_UA3_RTS,0)
+      SP7021_IOPAD(19,SP7021_PCTL_G_PMUX,MUXF_UA3_CTS,0)
+    >;
+ };
+ pins_uart4: pins_uart4 {
+    sppctl,pins = <
+      SP7021_IOPAD(20,SP7021_PCTL_G_PMUX,MUXF_UA4_TX,0)
+      SP7021_IOPAD(21,SP7021_PCTL_G_PMUX,MUXF_UA4_RX,0)
+      SP7021_IOPAD(22,SP7021_PCTL_G_PMUX,MUXF_UA4_RTS,0)
+      SP7021_IOPAD(23,SP7021_PCTL_G_PMUX,MUXF_UA4_CTS,0)
+    >;
+ };
+ pins_btuart: pins_btuart {
+    sppctl,pins = <
+      SP7021_IOPAD(40,SP7021_PCTL_G_PMUX,MUXF_UA4_RX,0)
+      SP7021_IOPAD(41,SP7021_PCTL_G_PMUX,MUXF_UA4_TX,0)
+      SP7021_IOPAD(82,SP7021_PCTL_G_PMUX,MUXF_UA4_RTS,SP7021_PCTL_L_ONV)
+      SP7021_IOPAD(83,SP7021_PCTL_G_PMUX,MUXF_UA4_CTS,0)
+    >;
+ };
+ pins_bt_reset: pins_bt_reset {
+    sppctl,pins = <
+      SP7021_IOPAD(36,SP7021_PCTL_G_GPIO,0,0)
+    >;
+ };
+ buzzer0_pins: user_buzzer0_pins {
+    sppctl,pins = <
+      SP7021_IOPAD(48,SP7021_PCTL_G_PMUX,MUXF_PWM0,0)
+    >;
+ };
+ pins_i2ctps: pins_i2ctps {
+    sppctl,pins = <
+      SP7021_IOPAD(1,SP7021_PCTL_G_GPIO,0,SP7021_PCTL_L_OUT|SP7021_PCTL_L_ONV|SP7021_PCTL_L_ODR)
+      SP7021_IOPAD(2,SP7021_PCTL_G_GPIO,0,SP7021_PCTL_L_OUT|SP7021_PCTL_L_ONV|SP7021_PCTL_L_ODR)
+    >;
+ };
+ hdmi_A_tx1: hdmi_A_tx1_pins {
+    sppctl,groups = "HDMI_TX1";
+    sppctl,function = "HDMI_TX";
+ };
+ /* for all eth */
+ ethA_pins: pinmux_ethA_pins {
+  sppctl,pins = <
+       SP7021_IOPAD(63,SP7021_PCTL_G_PMUX,MUXF_L2SW_CLK_OUT,0)
+       SP7021_IOPAD(71,SP7021_PCTL_G_PMUX,MUXF_L2SW_MAC_SMI_MDC,0)
+       SP7021_IOPAD(64,SP7021_PCTL_G_PMUX,MUXF_L2SW_MAC_SMI_MDIO,0)
+  >;
+ };
+ eth0_pins: pinmux_eth0_pins {
+  sppctl,pins = <
+       SP7021_IOPAD(62,SP7021_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_TXEN,0)
+       SP7021_IOPAD(61,SP7021_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_TXD0,0)
+       SP7021_IOPAD(60,SP7021_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_TXD1,0)
+       SP7021_IOPAD(59,SP7021_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_CRSDV,0)
+       SP7021_IOPAD(58,SP7021_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_RXD0,0)
+       SP7021_IOPAD(57,SP7021_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_RXD1,0)
+       SP7021_IOPAD(56,SP7021_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_RXER,0)
+  >;
+ };
+ eth1_pins: pinmux_eth1_pins {
+  sppctl,pins = <
+       SP7021_IOPAD(55,SP7021_PCTL_G_PMUX,MUXF_L2SW_P1_MAC_RMII_TXEN,0)
+       SP7021_IOPAD(54,SP7021_PCTL_G_PMUX,MUXF_L2SW_P1_MAC_RMII_TXD0,0)
+       SP7021_IOPAD(53,SP7021_PCTL_G_PMUX,MUXF_L2SW_P1_MAC_RMII_TXD1,0)
+       SP7021_IOPAD(52,SP7021_PCTL_G_PMUX,MUXF_L2SW_P1_MAC_RMII_CRSDV,0)
+       SP7021_IOPAD(51,SP7021_PCTL_G_PMUX,MUXF_L2SW_P1_MAC_RMII_RXD0,0)
+       SP7021_IOPAD(50,SP7021_PCTL_G_PMUX,MUXF_L2SW_P1_MAC_RMII_RXD1,0)
+       SP7021_IOPAD(49,SP7021_PCTL_G_PMUX,MUXF_L2SW_P1_MAC_RMII_RXER,0)
+  >;
+ };
+
+ mmc1_mux: mmc1_mux {
+	sppctl,groups = "SD_CARD";
+	sppctl,function = "SD_CARD";
+	sppctl,pins = < SP7021_IOPAD(0,SP7021_PCTL_G_GPIO,0,0) >;
+ };
+ pins_sdio: pins_sdio {
+	sppctl,pins = <
+		SP7021_IOPAD(44,SP7021_PCTL_G_PMUX,MUXF_SDIO_D1,0)
+		SP7021_IOPAD(45,SP7021_PCTL_G_PMUX,MUXF_SDIO_D0,0)
+		SP7021_IOPAD(46,SP7021_PCTL_G_PMUX,MUXF_SDIO_CLK,0)
+		SP7021_IOPAD(47,SP7021_PCTL_G_PMUX,MUXF_SDIO_CMD,0)
+		SP7021_IOPAD(42,SP7021_PCTL_G_PMUX,MUXF_SDIO_D3,0)
+		SP7021_IOPAD(43,SP7021_PCTL_G_PMUX,MUXF_SDIO_D2,0) >;
+ };
+
+};
+
+/ {
+	soc@B {
+		tpsid {
+        	    compatible = "tpsid";
+		    nvmem-cell-names = "mac_addr0";
+		    nvmem-cells = <&mac_addr0>;
+		};
+		leds {
+		    pinctrl-names = "default", "sleep";
+		    pinctrl-0 = <&leds_s0_def>;
+		    pinctrl-1 = <&leds_s0_slp>;
+		    compatible = "gpio-leds";
+		    led@1 {
+			label = "SR";
+			gpios = <&pctl 6 GPIO_ACTIVE_HIGH>;
+			linux,default-trigger = "heartbeat";
+			default-state = "off";
+		    };
+		    led@2 {
+			label = "SG";
+			gpios = <&pctl 7 GPIO_ACTIVE_HIGH>;
+			linux,default-trigger = "mmc0";
+			default-state = "off";
+		    };
+		};
+		tpsleds: tpsleds {
+		    compatible = "tpsleds";
+		    pinctrl-names = "default";
+		    pinctrl-0 = <&tpsleds_pins>;
+		    status = "okay";
+		    init-val = <0x0>;
+		    gpios = <&pctl 5 GPIO_ACTIVE_HIGH
+			     &pctl 4 GPIO_ACTIVE_HIGH
+		    >;
+		};
+		buzzer0 {
+		    compatible = "pwm-beeper";
+		    pinctrl-names = "default";
+		    pinctrl-0 = <&buzzer0_pins>;
+		    pwms = <&pwm 0 1000000 0>;
+		};
+		i2c_tps: i2c-tps { /* eeprom */
+		    compatible = "i2c-gpio";
+		    i2c-gpio,scl-open-drain;
+		    i2c-gpio,sda-open-drain;
+		    i2c-gpio,delay-us = <1>;/* ~100 kHz */
+		    #address-cells = <1>;
+		    #size-cells = <0>;
+		    pinctrl-names = "default";
+		    pinctrl-0 = <&pins_i2ctps>;
+		    gpios = <&pctl 2 GPIO_ACTIVE_HIGH     /* SDA */
+			     &pctl 1 GPIO_ACTIVE_HIGH     /* SCL */
+                    >;
+		    eeprom: eeprom@50 {
+			compatible = "at,24c16";
+			reg = <0x50>;
+			pagesize = <16>;
+		    };
+		};
+	};
+};

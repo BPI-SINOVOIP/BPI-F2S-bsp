@@ -1,0 +1,496 @@
+/dts-v1/;
+
+#include "skeleton.dtsi"
+
+#include <dt-bindings/clock/sp-q628.h>
+#include <dt-bindings/interrupt-controller/irq.h>
+
+/* #define ENABLE_DMARX0 */
+/* #define ENABLE_DMARX1 */
+#define ENABLE_HW_BUF_UA0
+#define ENABLE_HW_BUF_UA1
+
+/ {
+	model = "Sunplus SP7021 (ARM926)";
+	compatible = "sunplus,sp7021-bchip";
+
+	interrupt-parent = <&intc>;
+
+	aliases {
+#ifdef ENABLE_DMARX0
+		serial10 = &uartdmarx0;
+#endif
+#ifdef ENABLE_DMARX1
+		serial11 = &uartdmarx1;
+#endif
+#ifdef ENABLE_HW_BUF_UA0
+		serial20 = &uarthwbuf0;
+#endif
+#ifdef ENABLE_HW_BUF_UA1
+		serial21 = &uarthwbuf1;
+#endif
+
+		serial0 = &uart0;
+		serial1 = &uart1;
+		serial2 = &uart2;
+		serial3 = &uart3;
+		serial4 = &uart4;
+
+		i2c0 = &i2cm0;
+		i2c1 = &i2cm1;
+		i2c2 = &i2cm2;
+		i2c3 = &i2cm3;
+
+		#if 0
+		i2c10 = &i2cdma0;
+		i2c11 = &i2cdma1;
+		i2c12 = &i2cdma2;
+		i2c13 = &i2cdma3;
+		#endif
+	};
+
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		cpu0: cpu@0 {
+			compatible = "arm,arm926ej-s";
+			device_type = "cpu";
+			reg = <0>;
+		};
+	};
+
+	clocks {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		extclk: clk@osc0 {
+			#clock-cells = <0>;
+			compatible = "fixed-clock";
+			clock-frequency = <27000000>;
+			clock-output-names = "extclk";
+		};
+
+		divextclk: clk@0 {
+			#clock-cells = <0>;
+			compatible = "fixed-factor-clock";
+			clocks  = <&extclk>;
+			clock-mult = <1>;
+			clock-div = <2>;
+			clock-output-names = "extdivclk";
+		};
+
+		A_pll0: clk@A_pll0 {
+			#clock-cells = <0>;
+			compatible = "fixed-clock";
+			clock-frequency = <2000000000>;
+			clock-output-names = "A_pll0";
+		};
+
+		clkc: clkc@0 {
+			#clock-cells = <1>;
+			compatible = "sunplus,sp-clkc";
+		};
+	};
+
+	soc@B {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		intc: interrupt-controller@G9 {
+			compatible = "sunplus,sp-intc";
+			interrupt-controller;
+			#interrupt-cells = <2>;
+			reg = <0x9c000480 0x80>, /* G9  */
+			      <0x9c000500 0x80>; /* G10 */
+		};
+
+/* Timer tests: */
+/* 1. Enable device tree for timers. */
+/* 2. Enable sp_timer_test in drivers/misc/Makefile */
+#if 0
+		sp_tmr_tst0: sp_tmr_tst@9c000600 {
+			compatible = "sunplus,sp-tmr-tst";
+			reg = <0x9c000600 0x80>;
+			interrupt-parent = <&intc>;
+			interrupts =
+				<151 IRQ_TYPE_EDGE_RISING>, /* timer0 */
+				<152 IRQ_TYPE_EDGE_RISING>, /* timer1 */
+				<153 IRQ_TYPE_EDGE_RISING>, /* timer2 */
+				<154 IRQ_TYPE_EDGE_RISING>, /* timer3 */
+				<150 IRQ_TYPE_LEVEL_HIGH>; /* watchdog */
+		};
+
+		sp_tmr_tst1: sp_tmr_tst@9c003000 {
+			compatible = "sunplus,sp-tmr-tst";
+			reg = <0x9c003000 0x80>;
+			interrupt-parent = <&intc>;
+			interrupts =
+				<155 IRQ_TYPE_EDGE_RISING>, /* timer0 */
+				<156 IRQ_TYPE_EDGE_RISING>, /* timer1 */
+				<157 IRQ_TYPE_EDGE_RISING>, /* timer2 */
+				<158 IRQ_TYPE_EDGE_RISING>, /* timer3 */
+				<168 IRQ_TYPE_LEVEL_HIGH>; /* watchdog */
+		};
+
+		sp_tmr_tst2: sp_tmr_tst@9c003080 {
+			compatible = "sunplus,sp-tmr-tst";
+			reg = <0x9c003080 0x80>;
+			interrupt-parent = <&intc>;
+			interrupts =
+				<159 IRQ_TYPE_EDGE_RISING>, /* timer0 */
+				<160 IRQ_TYPE_EDGE_RISING>, /* timer1 */
+				<161 IRQ_TYPE_EDGE_RISING>, /* timer2 */
+				<162 IRQ_TYPE_EDGE_RISING>; /* timer3 */
+		};
+
+#if 0	/* this timer is used as system tick in B-Chip's kernel */
+		sp_tmr_tst3: sp_tmr_tst@9c003180 {
+			compatible = "sunplus,sp-tmr-tst";
+			reg = <0x9c003180 0x80>;
+			interrupt-parent = <&intc>;
+			interrupts =
+				<164 IRQ_TYPE_EDGE_RISING>, /* timer0 */
+				<165 IRQ_TYPE_EDGE_RISING>, /* timer1 */
+				<166 IRQ_TYPE_EDGE_RISING>, /* timer2 */
+				<167 IRQ_TYPE_EDGE_RISING>; /* timer3 */
+		};
+#endif
+#endif
+		/* STC_AV2 */
+		timer: timer@G99 {
+			compatible = "sunplus,sp-stc";
+			reg = <0x9c003180 0x80>;
+			interrupt-parent = <&intc>;
+			interrupts =
+				<164 IRQ_TYPE_EDGE_RISING>, /* AV2 timer0 */
+				<165 IRQ_TYPE_EDGE_RISING>, /* AV2 timer1 */
+				<166 IRQ_TYPE_EDGE_RISING>, /* AV2 timer2 */
+				<167 IRQ_TYPE_EDGE_RISING>; /* AV2 timer3 */
+		};
+
+/* CBDMA tests: */
+/* 1. Enable device tree for CBDMA. */
+/* 2. Enable sp_cbdma_test in drivers/misc/Makefile */
+#if 0
+#if 1
+		sp_cbdma_tst0: sp_cbdma_tst@9c000d00 {
+			compatible = "sunplus,sp-cbdma-tst";
+			reg = <0x9c000d00 0x80>;
+			interrupt-parent = <&intc>;
+			interrupts = <128 IRQ_TYPE_LEVEL_HIGH>;
+		};
+#endif
+#if 1
+		sp_cbdma_tst1: sp_cbdma_tst@9c000d80 {
+			compatible = "sunplus,sp-cbdma-tst";
+			reg = <0x9c000d80 0x80>;
+			interrupt-parent = <&intc>;
+			interrupts = <129 IRQ_TYPE_LEVEL_HIGH>;
+		};
+#endif
+#endif
+
+/* RTC ISR tests: */
+/* 1. Enable device tree for RTC ISR test. */
+/* 2. Enable sp_rct_isr_test in drivers/misc/Makefile */
+#if 0
+		sp_rtc_isr_tst0: sp_rtc_isr_tst@9c003a00 {
+			compatible = "sunplus,sp-rtc-isr-tst";
+			reg = <0x9c003a00 0x80>;
+			interrupt-parent = <&intc>;
+			interrupts = <163 IRQ_TYPE_EDGE_RISING>;
+		};
+#endif
+
+#ifdef ENABLE_DMARX0
+		/* DMA Rx for UARTx */
+		uartdmarx0: serial@sp_uartdmarx0 {
+			compatible = "sunplus,sp-uart";
+			reg = <0x9c008980 0x40>;
+			interrupt-parent = <&intc>;
+			interrupts = <138 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&extclk>;
+			which-uart = <3>;
+		};
+#endif
+#ifdef ENABLE_DMARX1
+		uartdmarx1: serial@sp_uartdmarx1 {
+			compatible = "sunplus,sp-uart";
+			reg = <0x9c0089c0 0x40>;
+			interrupt-parent = <&intc>;
+			interrupts = <139 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&extclk>;
+			which-uart = <4>;
+		};
+#endif
+#ifdef ENABLE_HW_BUF_UA0
+		uarthwbuf0: serial@sp_uarthwbuf0 {
+			compatible = "sunplus,sp-uart";
+			reg = <0x9c008a00 0x40>,
+			      <0x9c008880 0x80>;
+			clocks = <&extclk>;
+			which-uart = <2>;
+			tx-1-rx-0 = <0>;
+		};
+#endif
+#ifdef ENABLE_HW_BUF_UA1
+		uarthwbuf1: serial@sp_uarthwbuf1 {
+			compatible = "sunplus,sp-uart";
+			reg = <0x9c008a40 0x40>,
+			      <0x9c008900 0x80>;
+			clocks = <&extclk>;
+			which-uart = <1>;
+			tx-1-rx-0 = <1>;
+		};
+#endif
+
+
+		uart0: serial@sp_uart0 {
+			compatible = "sunplus,sp-uart";
+			reg = <0x9c000900 0x80>;
+			interrupt-parent = <&intc>;
+			interrupts = <53 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&extclk>;
+		};
+
+		uart1: serial@sp_uart1 {
+			compatible = "sunplus,sp-uart";
+			reg = <0x9c000980 0x80>;
+			interrupt-parent = <&intc>;
+			interrupts = <54 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&extclk>;
+		};
+
+		uart2: serial@sp_uart2 {
+			compatible = "sunplus,sp-uart";
+			reg = <0x9c000800 0x80>;
+			interrupt-parent = <&intc>;
+			interrupts = <55 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&extclk>;
+		};
+
+		uart3: serial@sp_uart3 {
+			compatible = "sunplus,sp-uart";
+			reg = <0x9c000880 0x80>;
+			interrupt-parent = <&intc>;
+			interrupts = <56 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&extclk>;
+		};
+
+		uart4: serial@sp_uart4 {
+			compatible = "sunplus,sp-uart";
+			reg = <0x9c008780 0x80>;
+			interrupt-parent = <&intc>;
+			interrupts = <134 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&extclk>;
+		};
+
+		icm: icm@G81 {
+			compatible = "sunplus,sp-icm";
+			clocks = <&clkc ICM>;
+			/* clken format: (group << 16) | (index << 8) | shift */
+			clken = <0x00000a08>; /* 0.10.8 */
+			reg = <0x9c002880 0x80>;
+			interrupt-parent = <&intc>;
+			interrupts =
+				<92 IRQ_TYPE_EDGE_RISING>, /* icm0 */
+				<93 IRQ_TYPE_EDGE_RISING>, /* icm1 */
+				<94 IRQ_TYPE_EDGE_RISING>, /* icm2 */
+				<95 IRQ_TYPE_EDGE_RISING>; /* icm3 */
+		};
+
+		crypto: crypto@G84 {
+			compatible = "sunplus,sp-crypto";
+			reg = <0x9c002a00 0x100>; /* G84 ~ G85 */
+			interrupt-parent = <&intc>;
+			interrupts = <148 IRQ_TYPE_LEVEL_HIGH>;
+		};
+
+		mmc0: mmc@emmc {
+			compatible = "sunplus,sp-emmc";
+			reg = <0x9c003b00 0x180>;
+			interrupts = <20 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&clkc CARD_CTL0>;
+		};
+
+		mmc1: mmc@sdcard {
+			compatible = "sunplus,sp-card1";
+			reg = <0x9c003e80 0x280>;
+			interrupts = <21 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&clkc CARD_CTL1>;
+			sense-gpio = <71>;
+		};
+
+		sdio: sdio@sdcard {
+			compatible = "sunplus,sp-sdio";
+			reg = <0x9c008400 0x280>;
+			interrupts = <22 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&clkc CARD_CTL4>;
+		};
+
+		spinor0: spinor@sp_spinor {
+			compatible = "sunplus,pentagram-spi-nor";
+			reg = <0x9C000B00 0x80>;
+			spi-max-frequency = <50000000>;
+		};
+
+		spinand0: spinand@sp_spinand {
+			compatible = "sunplus,sp_spinand";
+			reg = <0x9c000AE0 0x50>;
+			interrupt-parent = <&intc>;
+			interrupts = <149 IRQ_TYPE_LEVEL_HIGH>;
+		};
+
+		bch0: bch@sp_bch {
+			compatible = "sunplus,sp_bch";
+			reg = <0x9c101000 0x20>;
+			interrupt-parent = <&intc>;
+			interrupts = <58 IRQ_TYPE_LEVEL_HIGH>;
+		};
+
+		i2cm0: i2c@sp_i2cm0 {
+			compatible = "sunplus,sp_i2cm";
+			reg = <0x9c004600 0x80>, <0x9c000000 0x80>, <0x9c000180 0x80>;
+			reg-names = "i2cm", "moon0", "moon3";
+			interrupt-parent = <&intc>;
+			interrupts = <174 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&extclk>;
+		};
+
+		i2cm1: i2c@sp_i2cm1 {
+			compatible = "sunplus,sp_i2cm";
+			reg = <0x9c004700 0x80>;
+			reg-names = "i2cm";
+			interrupt-parent = <&intc>;
+			interrupts = <175 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&extclk>;
+		};
+
+		i2cm2: i2c@sp_i2cm2 {
+			compatible = "sunplus,sp_i2cm";
+			reg = <0x9c004800 0x80>;
+			reg-names = "i2cm";
+			interrupt-parent = <&intc>;
+			interrupts = <176 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&extclk>;
+		};
+
+		i2cm3: i2c@sp_i2cm3 {
+			compatible = "sunplus,sp_i2cm";
+			reg = <0x9c004900 0x80>;
+			reg-names = "i2cm";
+			interrupt-parent = <&intc>;
+			interrupts = <177 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&extclk>;
+		};
+
+		#if 0
+		i2cdma0: i2c@sp_i2cdma0 {
+			compatible = "sunplus,sp_i2cm";
+			reg = <0x9c004680 0x80>;
+			clocks = <&extclk>;
+		};
+
+		i2cdma1: i2c@sp_i2cdma1 {
+			compatible = "sunplus,sp_i2cm";
+			reg = <0x9c004780 0x80>;
+			clocks = <&extclk>;
+		};
+
+		i2cdma2: i2c@sp_i2cdma2 {
+			compatible = "sunplus,sp_i2cm";
+			reg = <0x9c004880 0x80>;
+			clocks = <&extclk>;
+		};
+
+		i2cdma3: i2c@sp_i2cdma3 {
+			compatible = "sunplus,sp_i2cm";
+			reg = <0x9c004980 0x80>;
+			clocks = <&extclk>;
+		};
+		#endif
+
+		sp_uphy0: uphy@0x9C004A80 {
+			compatible = "sunplus,sunplus-usb-phy0";
+			reg = <0x9C004A80 0x80>;
+			interrupt-parent = <&intc>;
+			interrupts = <36 IRQ_TYPE_LEVEL_HIGH>;
+		};
+
+		sp_uphy1: uphy@0x9C004B00 {
+			compatible = "sunplus,sunplus-usb-phy1";
+			reg = <0x9C004B00 0x80>;
+			interrupt-parent = <&intc>;
+			interrupts = <37 IRQ_TYPE_LEVEL_HIGH>;
+		};
+
+		sp_ehci0: usb@9C102100 {
+			compatible = "sunplus,sunplus-q628-usb-ehci0";
+			reg = <0x9C102100 0x68>;
+			interrupt-parent = <&intc>;
+			interrupts = <14 IRQ_TYPE_LEVEL_HIGH>;
+		};
+
+		sp_ehci1: usb@9C103100 {
+			compatible = "sunplus,sunplus-q628-usb-ehci1";
+			reg = <0x9C103100 0x68>;
+			interrupt-parent = <&intc>;
+			interrupts = <17 IRQ_TYPE_LEVEL_HIGH>;
+		};
+
+		sp_ohci0: usb@0x9C102080 {
+			compatible = "sunplus,sunplus-q628-usb-ohci0";
+			reg = <0x9C102080 0x68>;
+			interrupt-parent = <&intc>;
+			interrupts = <15 IRQ_TYPE_LEVEL_HIGH>;
+		};
+
+		sp_ohci1: usb@0x9C103080 {
+			compatible = "sunplus,sunplus-q628-usb-ohci1";
+			reg = <0x9C103080 0x68>;
+			interrupt-parent = <&intc>;
+			interrupts = <18 IRQ_TYPE_LEVEL_HIGH>;
+		};
+
+		sp_udc0: usb@0x9c102800 {
+			compatible = "sunplus,sunplus-q628-usb-udc0";
+			reg = <0x9c102800 0x400>;
+			interrupt-parent = <&intc>;
+			interrupts = <13 IRQ_TYPE_LEVEL_HIGH>;
+		};
+
+
+		l2sw: l2sw@0x9c108000 {
+			compatible = "sunplus,sp-l2sw";
+			reg = <0x9c108000 0x400>;
+			interrupt-parent = <&intc>;
+			interrupts = <66 IRQ_TYPE_LEVEL_HIGH>;
+		};
+
+		sp_udc1: usb@0x9c103800 {
+			compatible = "sunplus,sunplus-q628-usb-udc1";
+			reg = <0x9c103800 0x400>;
+			interrupt-parent = <&intc>;
+			interrupts = <16 IRQ_TYPE_LEVEL_HIGH>;
+		};
+
+		gpio: gpio@0x9C000300 {
+			compatible = "sunplus,sp_gpio";
+			reg = <0x9C000300 0x80>, <0x9C000380 0x80>, <0x9C0032e4 0x80>;
+			interrupt-parent = <&intc>;
+			interrupts =
+				<120 IRQ_TYPE_LEVEL_HIGH>,
+				<121 IRQ_TYPE_LEVEL_HIGH>,
+				<122 IRQ_TYPE_LEVEL_HIGH>,
+				<123 IRQ_TYPE_LEVEL_HIGH>,
+				<124 IRQ_TYPE_LEVEL_HIGH>,
+				<125 IRQ_TYPE_LEVEL_HIGH>,
+				<126 IRQ_TYPE_LEVEL_HIGH>,
+				<127 IRQ_TYPE_LEVEL_HIGH>;
+		};
+	};
+};

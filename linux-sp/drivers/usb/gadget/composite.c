@@ -1790,6 +1790,14 @@ composite_setup(struct usb_gadget *gadget, const struct usb_ctrlrequest *ctrl)
 	case USB_REQ_SET_FEATURE:
 		if (!gadget_is_superspeed(gadget))
 			goto unknown;
+
+#ifdef CONFIG_USB_SUNPLUS_OTG	/* sunplus USB driver */
+		if((0 == ctrl->bRequestType) && (3 == ctrl->wValue) && (0 == ctrl->wIndex) && (0 == ctrl->wLength)){
+			value = 0;
+			break;
+		}
+#endif
+
 		if (ctrl->bRequestType != (USB_DIR_OUT | USB_RECIP_INTERFACE))
 			goto unknown;
 		switch (w_value) {
@@ -1975,16 +1983,31 @@ void composite_disconnect(struct usb_gadget *gadget)
 	/* REVISIT:  should we have config and device level
 	 * disconnect callbacks?
 	 */
+	
+	#if 1	/* sunplus USB driver */
+	if(cdev){
+		spin_lock_irqsave(&cdev->lock, flags);
+		if (cdev->config){
+			reset_config(cdev);
+		}
+
+		if (cdev->driver->disconnect){
+			cdev->driver->disconnect(cdev);
+		}
+		spin_unlock_irqrestore(&cdev->lock, flags);
+	}
+	#else
 	spin_lock_irqsave(&cdev->lock, flags);
 	if (cdev->config)
 		reset_config(cdev);
 	if (cdev->driver->disconnect)
 		cdev->driver->disconnect(cdev);
 	spin_unlock_irqrestore(&cdev->lock, flags);
+	#endif
 }
 
 /*-------------------------------------------------------------------------*/
-
+#if 0	/* sunplus USB driver */
 static ssize_t suspended_show(struct device *dev, struct device_attribute *attr,
 			      char *buf)
 {
@@ -1994,6 +2017,7 @@ static ssize_t suspended_show(struct device *dev, struct device_attribute *attr,
 	return sprintf(buf, "%d\n", cdev->suspended);
 }
 static DEVICE_ATTR_RO(suspended);
+#endif
 
 static void __composite_unbind(struct usb_gadget *gadget, bool unbind_driver)
 {
@@ -2001,30 +2025,32 @@ static void __composite_unbind(struct usb_gadget *gadget, bool unbind_driver)
 	struct usb_gadget_strings	*gstr = cdev->driver->strings[0];
 	struct usb_string		*dev_str = gstr->strings;
 
-	/* composite_disconnect() must already have been called
-	 * by the underlying peripheral controller driver!
-	 * so there's no i/o concurrency that could affect the
-	 * state protected by cdev->lock.
-	 */
-	WARN_ON(cdev->config);
+	if(cdev){	/* sunplus USB driver */
+		/* composite_disconnect() must already have been called
+		 * by the underlying peripheral controller driver!
+		 * so there's no i/o concurrency that could affect the
+		 * state protected by cdev->lock.
+		 */
+		WARN_ON(cdev->config);
 
-	while (!list_empty(&cdev->configs)) {
-		struct usb_configuration	*c;
-		c = list_first_entry(&cdev->configs,
-				struct usb_configuration, list);
-		remove_config(cdev, c);
+		while (!list_empty(&cdev->configs)) {
+			struct usb_configuration	*c;
+			c = list_first_entry(&cdev->configs,
+					struct usb_configuration, list);
+			remove_config(cdev, c);
+		}
+		if (cdev->driver->unbind && unbind_driver)
+			cdev->driver->unbind(cdev);
+
+		composite_dev_cleanup(cdev);
+
+		if (dev_str[USB_GADGET_MANUFACTURER_IDX].s == cdev->def_manufacturer)
+			dev_str[USB_GADGET_MANUFACTURER_IDX].s = "";
+
+		kfree(cdev->def_manufacturer);
+		kfree(cdev);
+		set_gadget_data(gadget, NULL);
 	}
-	if (cdev->driver->unbind && unbind_driver)
-		cdev->driver->unbind(cdev);
-
-	composite_dev_cleanup(cdev);
-
-	if (dev_str[USB_GADGET_MANUFACTURER_IDX].s == cdev->def_manufacturer)
-		dev_str[USB_GADGET_MANUFACTURER_IDX].s = "";
-
-	kfree(cdev->def_manufacturer);
-	kfree(cdev);
-	set_gadget_data(gadget, NULL);
 }
 
 static void composite_unbind(struct usb_gadget *gadget)
@@ -2085,10 +2111,12 @@ int composite_dev_prepare(struct usb_composite_driver *composite,
 	if (!cdev->req->buf)
 		goto fail;
 
+#if 0	/* sunplus USB driver */
 	ret = device_create_file(&gadget->dev, &dev_attr_suspended);
 	if (ret)
 		goto fail_dev;
-
+#endif
+	
 	cdev->req->complete = composite_setup_complete;
 	cdev->req->context = cdev;
 	gadget->ep0->driver_data = cdev;
@@ -2109,8 +2137,11 @@ int composite_dev_prepare(struct usb_composite_driver *composite,
 	 */
 	usb_ep_autoconfig_reset(gadget);
 	return 0;
+
+#if 0	/* sunplus USB driver */
 fail_dev:
 	kfree(cdev->req->buf);
+#endif
 fail:
 	usb_ep_free_request(gadget->ep0, cdev->req);
 	cdev->req = NULL;
@@ -2165,7 +2196,10 @@ void composite_dev_cleanup(struct usb_composite_dev *cdev)
 		usb_ep_free_request(cdev->gadget->ep0, cdev->req);
 	}
 	cdev->next_string_id = 0;
+
+#if 0	/* sunplus USB driver */
 	device_remove_file(&cdev->gadget->dev, &dev_attr_suspended);
+#endif
 
 	/*
 	 * Some UDC backends have a dynamic EP allocation scheme.

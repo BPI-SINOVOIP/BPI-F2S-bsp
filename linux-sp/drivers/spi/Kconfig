@@ -749,8 +749,14 @@ config SPI_ZYNQMP_GQSPI
 	help
 	  Enables Xilinx GQSPI controller driver for Zynq UltraScale+ MPSoC.
 
+config SPI_SUNPLUS_SPI_CONTROLLER
+	tristate "Sunplus SPI controller"
+	depends on ARCH_PENTAGRAM
+	help
+	  Enable the Sunplus spi controller driver.
+
 #
-# Add new SPI master controllers in alphabetical order above this line
+# Add new SPI controllers in alphabetical order above this line
 #
 
 #

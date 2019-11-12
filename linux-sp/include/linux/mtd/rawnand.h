@@ -26,6 +26,16 @@
 
 struct nand_flash_dev;
 
+#if 1 // kernel 4.12
+/*
+ * Separate phases of nand_scan(), allowing board driver to intervene
+ * and override command or ECC setup according to flash type.
+ */
+int nand_scan_ident(struct mtd_info *mtd, int max_chips,
+			   struct nand_flash_dev *table);
+int nand_scan_tail(struct mtd_info *mtd);
+#endif
+
 /* Scan and identify a NAND device */
 int nand_scan_with_ids(struct mtd_info *mtd, int max_chips,
 		       struct nand_flash_dev *ids);
@@ -1363,6 +1373,8 @@ struct nand_chip {
 		const struct nand_manufacturer *desc;
 		void *priv;
 	} manufacturer;
+
+	unsigned int drv_options; // SP additional variable
 };
 
 static inline int nand_exec_op(struct nand_chip *chip,
@@ -1517,6 +1529,7 @@ struct nand_flash_dev {
 		uint16_t step_ds;
 	} ecc;
 	int onfi_timing_mode_default;
+	unsigned int drv_options; // SP additional variable
 };
 
 /**

@@ -481,6 +481,14 @@ config ZX2967_THERMAL
 	  the primitive temperature sensor embedded in zx2967 SoCs.
 	  This sensor generates the real time die temperature.
 
+config SP7021_THERMAL
+	tristate "Sunplus thermal controller"
+	depends on ARCH_PENTAGRAM
+	help
+	  Enable the Sunplus on-chip thermal driver.The driver supports CPU thermal zone temperature
+	  reporting and a couple of trip points.
+
+
 config UNIPHIER_THERMAL
 	tristate "Socionext UniPhier thermal driver"
 	depends on ARCH_UNIPHIER || COMPILE_TEST

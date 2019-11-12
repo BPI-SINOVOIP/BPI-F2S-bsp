@@ -258,6 +258,20 @@ struct ehci_hcd {			/* one per controller */
 	unsigned long		priv[0] __aligned(sizeof(s64));
 };
 
+#ifdef CONFIG_USB_HOST_RESET_SP	/* sunplus USB driver */
+struct ehci_hcd_sp {
+	/* must be 1st member here for hcd_to_ehci() to work */
+	struct ehci_hcd ehci;
+
+	struct task_struct	  	*reset_thread;
+	struct notifier_block 	 ehci_notifier;
+
+	u32 dum[3];
+
+	u32 flag;
+};
+#endif
+
 /* convert between an HCD pointer and the corresponding EHCI_HCD */
 static inline struct ehci_hcd *hcd_to_ehci(struct usb_hcd *hcd)
 {

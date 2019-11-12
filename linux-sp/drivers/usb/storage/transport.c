@@ -1100,6 +1100,10 @@ int usb_stor_Bulk_max_lun(struct us_data *us)
 	return 0;
 }
 
+#ifdef CONFIG_USB_HOST_RESET_SP	/* sunplus USB driver */
+extern void Usb_dev_power_reset(struct usb_device *udev,int delayms);
+#endif
+
 int usb_stor_Bulk_transport(struct scsi_cmnd *srb, struct us_data *us)
 {
 	struct bulk_cb_wrap *bcb = (struct bulk_cb_wrap *) us->iobuf;
@@ -1160,6 +1164,17 @@ int usb_stor_Bulk_transport(struct scsi_cmnd *srb, struct us_data *us)
 				us->recv_bulk_pipe : us->send_bulk_pipe;
 		result = usb_stor_bulk_srb(us, pipe, srb);
 		usb_stor_dbg(us, "Bulk data transfer result 0x%x\n", result);
+
+#ifdef CONFIG_USB_HOST_RESET_SP	/* sunplus USB driver */
+		//printk("CMD=0x%x result=%d \n",srb->cmnd[0],result);
+		if ( (result == USB_STOR_XFER_STALLED)/*||(result == USB_STOR_XFER_ERROR)*/){
+			if ((srb->cmnd[0] == READ_10)||(srb->cmnd[0] == WRITE_10)){
+				printk(KERN_NOTICE "\n\n SCSI:%x stall \n",srb->cmnd[0]);
+				Usb_dev_power_reset(us->pusb_dev,2000);
+			}
+		}
+#endif
+
 		if (result == USB_STOR_XFER_ERROR)
 			return USB_STOR_TRANSPORT_ERROR;
 

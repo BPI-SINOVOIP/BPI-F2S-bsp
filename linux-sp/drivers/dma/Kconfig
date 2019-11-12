@@ -44,7 +44,9 @@ config DMA_ENGINE
 	bool
 
 config DMA_VIRTUAL_CHANNELS
-	tristate
+	tristate "DMA virtual channel support"
+	help
+	  This is a option to support DMA virtual channels.
 
 config DMA_ACPI
 	def_bool y
@@ -634,6 +636,8 @@ source "drivers/dma/hsu/Kconfig"
 source "drivers/dma/sh/Kconfig"
 
 source "drivers/dma/ti/Kconfig"
+
+source "drivers/dma/sp-cbdma/Kconfig"
 
 # clients
 comment "DMA Clients"

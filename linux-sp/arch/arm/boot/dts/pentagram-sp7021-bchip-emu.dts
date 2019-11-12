@@ -1,0 +1,16 @@
+/dts-v1/;
+
+#include "pentagram-sp7021-bchip.dtsi"
+
+/ {
+	model = "Sunplus SP7021 EMU (ARM926)";
+	compatible = "sunplus,sp7021-bchip";
+
+	chosen {
+		bootargs = "console=ttyS0,115200 root=/dev/ram rw loglevel=8 earlyprintk";
+	};
+
+	memory {
+		reg = <0x00000000 0x20000000>; /* 512MB */
+	};
+};

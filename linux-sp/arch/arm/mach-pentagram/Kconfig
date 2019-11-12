@@ -1,0 +1,86 @@
+if ARCH_PENTAGRAM
+
+choice
+	prompt "Sunplus Pentagram SOC"
+	default MACH_PENTAGRAM_SP7021_ACHIP
+
+config MACH_PENTAGRAM_8388_ACHIP
+        bool "8388 A support"
+        select CPU_V7
+        select ARM_GIC
+	select HAVE_SMP
+	select MIGHT_HAVE_CACHE_L2X0
+	select CLKSRC_SP_TIMER
+
+config MACH_PENTAGRAM_8388_BCHIP
+        bool "8388 B support"
+        select CPU_ARM926T
+        select SP_INTC
+	select CLKSRC_SP_TIMER
+
+config MACH_PENTAGRAM_I136_ACHIP
+        bool "I136 A+B support"
+        select CPU_V7
+        select ARM_GIC
+	select SP_INTC
+	select HAVE_SMP
+	select HAVE_ARM_ARCH_TIMER
+	select CLKSRC_SP_TIMER
+
+config MACH_PENTAGRAM_I137_BCHIP
+        bool "I137 B support"
+        select CPU_ARM926T
+        select SP_INTC
+	select CLKSRC_SP_TIMER
+
+config MACH_PENTAGRAM_3502_ACHIP
+	bool "3502 A support"
+	select CPU_V7
+	select ARM_GIC
+	select HAVE_SMP
+	select MIGHT_HAVE_CACHE_L2X0
+	select CLKSRC_SP_TIMER
+	select HAVE_ARM_SCU
+	select ARM_GLOBAL_TIMER
+
+config MACH_PENTAGRAM_SP7021_ACHIP
+        bool "SP7021 A+B support"
+        select CPU_V7
+        select ARM_GIC
+        select SP_INTC
+	select HAVE_SMP
+    select COMMON_CLK_SP7021
+	select CLKSRC_SP_TIMER
+	select PINCTRL
+	select PINCTRL_SPPCTL
+	select OF_OVERLAY
+
+config MACH_PENTAGRAM_SP7021_BCHIP
+        bool "SP7021 B support"
+        select CPU_ARM926T
+        select SP_INTC
+    select COMMON_CLK_SP7021
+	select CLKSRC_SP_TIMER
+	select PINCTRL
+	select PINCTRL_SPPCTL
+
+endchoice
+
+menu "Pentagram options"
+
+config SP_PARTIAL_CLKEN
+	bool "Use partial clken to save power"
+	default y
+	help
+	  Only enable partial clken in moon settings to save power.
+	  Device drivers should enable their own clken during driver init.
+
+config SP_MON
+	bool "Sunplus MON (SysRq:a)"
+	select MAGIC_SYSRQ
+	help
+	  Enable Sunplus MON shell in SysRq.
+
+endmenu
+
+endif

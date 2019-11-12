@@ -362,6 +362,9 @@ config GOLDFISH_PIC
          Say yes here to enable Goldfish interrupt controller driver used
          for Goldfish based virtual platforms.
 
+config SP_INTC
+	bool "Sunplus interrupt controller"
+
 config QCOM_PDC
 	bool "QCOM PDC"
 	depends on ARCH_QCOM

@@ -329,6 +329,9 @@ struct usb_device_descriptor {
 #define USB_CLASS_MISC			0xef
 #define USB_CLASS_APP_SPEC		0xfe
 #define USB_CLASS_VENDOR_SPEC		0xff
+#if 1	/* sunplus USB driver */
+#define USB_CLASS_DEVICE_NOT_SUPPORT	0x1f
+#endif
 
 #define USB_SUBCLASS_VENDOR_SPEC	0xff
 

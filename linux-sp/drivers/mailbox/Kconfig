@@ -205,4 +205,16 @@ config MTK_CMDQ_MBOX
 	  mailbox driver. The CMDQ is used to help read/write registers with
 	  critical time limitation, such as updating display configuration
 	  during the vblank.
+
+config SP_IPC
+	tristate "Sunplus Mailbox (IPC) driver"
+	depends on ARCH_PENTAGRAM
+	default n
+
+config SP_IPC_TEST
+	bool "Sunplus Mailbox (IPC) test"
+	depends on SP_IPC
+	help
+	  echo 0 > /sys/module/sp_ipc/parameters/test
+	  
 endif

@@ -1,0 +1,40 @@
+config VIDEO_SP_HDMITX
+	tristate "SUNPLUS HDMITX Driver"
+	select PINCTRL
+	select PINCTRL_SPPCTL
+	default y
+	---help---
+	  Support for the SUNPLUS SP7021 display.
+		
+config HPD_DETECTION
+	bool "Hot Plug Detection"
+	depends on VIDEO_SP_HDMITX
+	default n
+
+config EDID_READ
+	bool "Support EDID Read"
+	depends on HPD_DETECTION
+	default y
+
+if !EDID_READ && VIDEO_SP_HDMITX
+
+config MODE_SELECT
+	bool "Mode Select"
+	default y
+	
+choice
+	prompt "Select Mode"
+
+config HDMI_MODE
+	bool "HDMI Mode"
+	---help---
+	   Support HDMI mode.
+
+config DVI_MODE
+	bool "DVI Mode"
+	---help---
+	   Support DVI mode
+
+endchoice
+
+endif

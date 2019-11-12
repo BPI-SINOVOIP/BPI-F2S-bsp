@@ -103,6 +103,7 @@ struct usb_hcd {
 	 * other external phys should be software-transparent
 	 */
 	struct usb_phy		*usb_phy;
+	//struct phy		*phy;		/* sunplus USB driver */
 	struct usb_phy_roothub	*phy_roothub;
 
 	/* Flags that need to be manipulated atomically because they can
@@ -150,6 +151,7 @@ struct usb_hcd {
 	unsigned		rh_pollable:1;	/* may we poll the root hub? */
 	unsigned		msix_enabled:1;	/* driver has MSI-X enabled? */
 	unsigned		msi_enabled:1;	/* driver has MSI enabled? */
+	//unsigned		remove_phy:1;	/* auto-remove USB phy */	/* sunplus USB driver */
 	/*
 	 * do not manage the PHY state in the HCD core, instead let the driver
 	 * handle this (for example if the PHY can only be turned on after a
@@ -210,6 +212,31 @@ struct usb_hcd {
 
 #define	HC_IS_RUNNING(state) ((state) & __ACTIVE)
 #define	HC_IS_SUSPENDED(state) ((state) & __SUSPEND)
+
+#if 1	/* sunplus USB driver */
+	#ifdef CONFIG_USB_HOST_RESET_SP
+			wait_queue_head_t reset_queue;
+			u32 *ptr_flag;
+			u32 idle;
+#define RESET_UPHY_SIGN	(1<<0)
+#define	RESET_HC_SIGN	(1<<1)
+#define RESET_HC_DEAD	(1<<2)
+#define RESET_HC_CNT	(1<<3)
+#define RESET_HC_IPHONE	(1<<30)
+#define RESET_SENDER	(1<<31)
+	#endif
+		
+	u8 enum_msg_flag;
+	int uphy_irq_num;
+	int hub_port_num;
+	int enum_port_status;
+	
+	bool *enum_flag;
+	u32 *uphy_disconnect_level;
+	struct task_struct *hub_thread;
+	struct urb *current_active_urb;
+	struct tasklet_struct host_irq_tasklet;
+#endif
 
 	/* more shared queuing code would be good; it should support
 	 * smarter scheduling, handle transaction translators, etc;
@@ -282,6 +309,11 @@ struct hc_driver {
 
 	/* shutdown HCD */
 	void	(*shutdown) (struct usb_hcd *hcd);
+
+#ifdef CONFIG_USB_LOGO_TEST	/* sunplus USB driver */
+	/*  remon add for usb logo test */
+	int 	(*usb_logo_test) (struct usb_hcd * hcd, int idProduct);
+#endif
 
 	/* return current frame number */
 	int	(*get_frame_number) (struct usb_hcd *hcd);
@@ -406,7 +438,7 @@ struct hc_driver {
 	int	(*find_raw_port_number)(struct usb_hcd *, int);
 	/* Call for power on/off the port if necessary */
 	int	(*port_power)(struct usb_hcd *hcd, int portnum, bool enable);
-
+	int 	(*get_port_status_from_register) (struct usb_hcd * hcd);	/* sunplus USB driver */
 };
 
 static inline int hcd_giveback_urb_in_bh(struct usb_hcd *hcd)
@@ -464,6 +496,17 @@ extern int usb_hcd_find_raw_port_number(struct usb_hcd *hcd, int port1);
 
 struct platform_device;
 extern void usb_hcd_platform_shutdown(struct platform_device *dev);
+
+#if 1	/* sunplus USB driver */
+#include <linux/platform_device.h>
+static inline int usb_hcd_get_pl_id(struct usb_hcd *hcd)
+{
+	struct platform_device *pdev;
+
+	pdev = to_platform_device(hcd->self.controller);
+	return pdev->id;
+}
+#endif
 
 #ifdef CONFIG_USB_PCI
 struct pci_dev;

@@ -1,0 +1,22 @@
+config PINCTRL_SPPCTL
+	bool "SunPlus SP7021 pinmux and gpio driver"
+	depends on ARCH_PENTAGRAM
+	select PINMUX
+	select GENERIC_PINCTRL_GROUPS
+	select CONFIG_GENERIC_PINMUX_FUNCTIONS
+	select PINCONF
+	select GENERIC_PINCONF
+	select OF_GPIO
+	select GPIOLIB
+	select GPIO_SYSFS
+	select GENERIC_IRQ_CHIP
+	select GPIOLIB_IRQCHIP
+	help
+	    Say Y here to support SunPlus SP7021 pinmux controller.
+	    GPIO is provided by the same driver.
+
+config PINCTRL_SPPCTL_DEBUG
+	bool "SunPlus SP7021 mux specific debug"
+	depends on ARCH_PENTAGRAM && DEBUG_PINCTRL
+	help
+	    Say Y if you need to debug SP7021 mux driver in-depth.

@@ -637,7 +637,23 @@ config ARCH_OMAP1
 	help
 	  Support for older TI OMAP1 (omap7xx, omap15xx or omap16xx)
 
+config ARCH_PENTAGRAM
+	bool "Sunplus Pentagram architectures"
+	select CLKSRC_OF
+	select COMMON_CLK
+	select GENERIC_CLOCKEVENTS
+	select GENERIC_IRQ_CHIP
+	select GENERIC_IRQ_MULTI_HANDLER
+	select SERIAL_CORE
+	select SERIAL_CORE_CONSOLE
+	select SERIAL_SP_UART
+	select USE_OF
+	select RTC_CLASS
+    select SUNPLUS_SP7021_RESET
+
 endchoice
+
+source "arch/arm/mach-pentagram/Kconfig"
 
 menu "Multiple platform selection"
 	depends on ARCH_MULTIPLATFORM

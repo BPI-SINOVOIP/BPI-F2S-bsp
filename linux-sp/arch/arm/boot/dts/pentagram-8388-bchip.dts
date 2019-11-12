@@ -1,0 +1,127 @@
+/dts-v1/;
+
+#include "skeleton.dtsi"
+
+#include <dt-bindings/interrupt-controller/irq.h>
+
+/ {
+	model = "Sunplus 8388 (ARM926)";
+	compatible = "sunplus,8388-bchip";
+
+	interrupt-parent = <&intc>;
+
+	aliases {
+		serial0 = &uart0;
+
+		i2c0 = &i2cm0;
+		i2c1 = &i2cm1;
+	};
+
+	chosen {
+		bootargs = "console=ttyS0,115200 root=/dev/ram rw loglevel=8 earlyprintk";
+	};
+
+	memory {
+		reg = <0x00000000 0x04000000>;
+	};
+
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		cpu0: cpu@0 {
+			compatible = "arm,arm926ej-s";
+			device_type = "cpu";
+			reg = <0>;
+		};
+	};
+
+	clocks {
+                #address-cells = <1>;
+                #size-cells = <1>;
+                ranges;
+
+		extclk: clk@osc0 {
+			#clock-cells = <0>;
+			compatible = "fixed-clock";
+			clock-frequency = <27000000>;
+			clock-output-names = "extclk";
+		};
+
+		divextclk: clk@0 {
+			#clock-cells = <0>;
+			compatible = "fixed-factor-clock";
+			clocks  = <&extclk>;
+			clock-mult = <1>;
+			clock-div = <2>;
+			clock-output-names = "extdivclk";
+		};
+
+		sysslow: clk@sys0 {
+			#clock-cells = <0>;
+			compatible = "fixed-clock";
+			clock-frequency = <270000000>;
+			clock-output-names = "sysslow";
+		};
+	};
+
+	soc@B {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		intc: interrupt-controller@G9 {
+			compatible = "sunplus,sp-intc";
+			interrupt-controller;
+			#interrupt-cells = <2>;
+			reg = <0x9c000480 0x80>, /* G9  */
+			      <0x9c000500 0x80>; /* G10 */
+		};
+
+		/* STC_AV2 */
+		timer: timer@G99 {
+			compatible = "sunplus,sp-stc";
+			reg = <0x9c003180 0x80>;
+			interrupt-parent = <&intc>;
+			interrupts =
+				<164 IRQ_TYPE_EDGE_RISING>, /* AV2 timer0 */
+				<165 IRQ_TYPE_EDGE_RISING>, /* AV2 timer1 */
+				<166 IRQ_TYPE_EDGE_RISING>, /* AV2 timer2 */
+				<167 IRQ_TYPE_EDGE_RISING>; /* AV2 timer3 */
+		};
+
+		uart0: serial@G18 {
+			compatible = "sunplus,sp-uart";
+			reg = <0x9c000900 0x80>;
+			interrupt-parent = <&intc>;
+			interrupts = <53 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&sysslow>;
+		};
+
+		pwm: pwm@0x9c007480 {
+			#pwm-cells = <2>;
+			compatible = "sunplus,sp7021-pwm";
+			reg = <0x9c007480 0x80>;
+			clocks = <&sysslow>;
+		};
+
+		i2cm0: i2c@sp_i2cm0 {
+			compatible = "sunplus,sp_i2cm";
+			reg = <0x9C001C80 0x80>, <0x9C000000 0x80>, <0x9C000080 0x80>;
+			reg-names = "i2cm", "moon0", "moon1";
+			interrupt-parent = <&intc>;
+			interrupts = <146 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&extclk>;
+		};
+
+		i2cm1: i2c@sp_i2cm1 {
+			compatible = "sunplus,sp_i2cm";
+			reg = <0x9C001D00 0x80>;
+			reg-names = "i2cm";
+			interrupt-parent = <&intc>;
+			interrupts = <147 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&extclk>;
+		};
+	};
+};

@@ -428,7 +428,7 @@ void mmc_wait_for_req_done(struct mmc_host *host, struct mmc_request *mrq)
 
 		mmc_retune_recheck(host);
 
-		pr_debug("%s: req failed (CMD%u): %d, retrying...\n",
+		pr_debug("%s: req retune (CMD%u): %d, tuning...\n",
 			 mmc_hostname(host), cmd->opcode, cmd->error);
 		cmd->retries--;
 		cmd->error = 0;

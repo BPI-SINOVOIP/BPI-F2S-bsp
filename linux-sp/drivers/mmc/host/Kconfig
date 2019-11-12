@@ -12,6 +12,22 @@ config MMC_DEBUG
 	  say N here. This enables MMC host driver debugging. And further
 	  added host drivers please don't invent their private macro for
 	  debugging.
+	  
+config SP_SDV2
+    tristate "Sunplus Gemini SoC SD Host Controller support"
+    default m
+    help
+	  If you say yes here, you will get support for the Secure Digital Host
+	  Interface on Sunplus SoCs. This includes support for SD cards.
+	  If unsure, say N.	  
+	  
+config SP_EMMC
+	tristate "Sunplus Gemini eMMC Host Controller v4.51 support"
+	default y
+	help
+		If you say yes here, you will get support for eMMC host interface 
+		on sunplus Socs.
+		If unsure, say N.
 
 config MMC_ARMMMCI
 	tristate "ARM AMBA Multimedia Card Interface support"

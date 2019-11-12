@@ -561,4 +561,10 @@ config MTD_NAND_TEGRA
 	  is supported. Extra OOB bytes when using HW ECC are currently
 	  not supported.
 
+config MTD_SPINAND_SP
+	tristate "Support for SPI NAND controller on SUNPLUS SoCs"
+	help
+	  Enables support for SPI NAND controller on SUNPLUS SoCs.
+	  This controller is found on Sunplus SoCs.
+
 endif # MTD_NAND

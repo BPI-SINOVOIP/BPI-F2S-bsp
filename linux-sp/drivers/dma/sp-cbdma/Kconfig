@@ -1,0 +1,17 @@
+#
+# CBDMA subsystem configuration
+#
+
+menu "Sunplus CBDMA"
+
+config SUNPLUS_CBDMA
+	tristate "CBDMA driver support"
+	help
+	  This is a option to support Sunplus CBDMA device.
+
+config SUNPLUS_CBDMA_PROXY
+	tristate "CBDMA proxy driver support"
+	help
+	  This is a option to support Sunplus CBDMA proxy device.
+
+endmenu

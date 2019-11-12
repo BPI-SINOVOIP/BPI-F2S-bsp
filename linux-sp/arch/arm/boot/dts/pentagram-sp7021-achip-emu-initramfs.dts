@@ -1,0 +1,70 @@
+/dts-v1/;
+
+#include "pentagram-sp7021-achip.dtsi"
+
+#include <dt-bindings/interrupt-controller/arm-gic.h>
+
+/ {
+	model = "Sunplus SP7021 EMU (CA7)";
+	compatible = "sunplus,sp7021-achip";
+
+	chosen {
+		bootargs = "console=ttyS0,115200 root=/dev/ram rw loglevel=8 user_debug=255 earlyprintk";
+	};
+
+	memory {
+		reg = <0x00000000 0x20000000>; /* 512MB */
+	};
+};
+
+&i2cm0{
+ pinctrl-names = "default";
+ pinctrl-0 = <&i2cm0_pins>;
+};
+
+
+&spi_controller0 {
+ pinctrl-names = "default";
+ pinctrl-0 = <&spim0_pins>;
+};
+
+&uart4{
+ pinctrl-names = "default";
+ pinctrl-0 = <&uart4_pins>;
+};
+
+
+&pctl {
+
+ i2cm0_pins: i2cm0_pins {                                   
+  sppctl,pins = <                                            
+       SP7021_IOPAD(14,SP7021_PCTL_G_PMUX,MUXF_I2CM0_CK,0) 
+       SP7021_IOPAD(15,SP7021_PCTL_G_PMUX,MUXF_I2CM0_DAT,0)        
+  >;                                                        
+ }; 
+ 
+ /*** non-device binded ***/
+ spim0_pins: spim0_pins {                                   
+  sppctl,pins = <                                           
+       SP7021_IOPAD(8,SP7021_PCTL_G_PMUX,MUXF_SPIM0_INT,0)  
+       SP7021_IOPAD(9,SP7021_PCTL_G_PMUX,MUXF_SPIM0_CLK,0)  
+       SP7021_IOPAD(10,SP7021_PCTL_G_PMUX,MUXF_SPIM0_EN,0)  
+       SP7021_IOPAD(11,SP7021_PCTL_G_PMUX,MUXF_SPIM0_DO,0)  
+       SP7021_IOPAD(12,SP7021_PCTL_G_PMUX,MUXF_SPIM0_DI,0)  
+  >;                                                        
+ };                                                         
+                                                                                                               
+  /*** non-device binded ***/
+			uart4_pins: uart4_pins {
+				sppctl,pins = <
+					SP7021_IOPAD(17,SP7021_PCTL_G_PMUX,MUXF_UA4_TX,0)
+					SP7021_IOPAD(19,SP7021_PCTL_G_PMUX,MUXF_UA4_RX,0)
+					SP7021_IOPAD(21,SP7021_PCTL_G_PMUX,MUXF_UA4_RTS,0)
+					SP7021_IOPAD(23,SP7021_PCTL_G_PMUX,MUXF_UA4_CTS,0)
+				>;
+			};
+ 
+ };
+
+
+

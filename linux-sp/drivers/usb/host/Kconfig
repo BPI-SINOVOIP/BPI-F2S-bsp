@@ -3,6 +3,26 @@
 #
 comment "USB Host Controller Drivers"
 
+config USB_LOGO_TEST
+	bool "GEMINI USB Logo Test support"
+	depends on USB
+	select USB_BAD_DEVICE_INFO
+
+# workaround hw bug that randomly happen abnormal when host controller send packet
+config USB_HOST_RESET_SP
+	bool "Enable Reset SUNPLUS usb host controllor with wait_event"
+	depends on USB
+	select PINCTRL_SPPCTL
+
+config USB_OHCI_MSI_WORKAROUND
+	bool "Enable Workaround USB Ohci Msi Problem"
+	depends on USB
+
+config USB_USE_PLATFORM_RESOURCE
+	bool "GEMINI Use USB Platfrom Resource"
+	depends on USB
+	default n
+
 config USB_C67X00_HCD
 	tristate "Cypress C67x00 HCD support"
 	depends on HAS_IOMEM

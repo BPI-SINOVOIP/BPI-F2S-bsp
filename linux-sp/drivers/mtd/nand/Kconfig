@@ -1,7 +1,17 @@
-config MTD_NAND_CORE
-	tristate
+menuconfig MTD_NAND_CORE
+	tristate "SPI-NAND device support"
+	depends on MTD
+	help
+	  This enables support for accessing all type of NAND flash
+	  devices. For further information see
+	  <http://www.linux-mtd.infradead.org/doc/nand.html>.
+
+if MTD_NAND_CORE
 
 source "drivers/mtd/nand/onenand/Kconfig"
 
 source "drivers/mtd/nand/raw/Kconfig"
+
 source "drivers/mtd/nand/spi/Kconfig"
+
+endif # MTD_NAND_CORE

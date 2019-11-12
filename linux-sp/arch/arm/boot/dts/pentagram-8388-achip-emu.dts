@@ -1,0 +1,16 @@
+/dts-v1/;
+
+#include "pentagram-8388-achip.dtsi"
+
+/ {
+	model = "Sunplus 8388 EVM (CA9)";
+	compatible = "sunplus,8388-achip";
+
+	chosen {
+		bootargs = "console=ttyS0,115200 root=/dev/ram rw loglevel=8 earlyprintk";
+	};
+
+	memory {
+		reg = <0x00000000 0x04000000>;
+	};
+};

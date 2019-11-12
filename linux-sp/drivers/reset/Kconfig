@@ -144,6 +144,15 @@ config RESET_TI_SYSCON
 	  you wish to use the reset framework for such memory-mapped devices,
 	  say Y here. Otherwise, say N.
 
+config SUNPLUS_SP7021_RESET
+	tristate "SUNPLUS SP7021 Reset Driver"
+	depends on HAS_IOMEM
+	help
+	  This enables the reset driver support for SUNPLUS devices with
+	  memory-mapped reset registers as part of a syscon device node. If
+	  you wish to use the reset framework for such memory-mapped devices,
+	  say Y here. Otherwise, say N.
+
 config RESET_UNIPHIER
 	tristate "Reset controller driver for UniPhier SoCs"
 	depends on ARCH_UNIPHIER || COMPILE_TEST

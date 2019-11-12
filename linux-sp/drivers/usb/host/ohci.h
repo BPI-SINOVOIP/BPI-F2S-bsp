@@ -432,9 +432,10 @@ struct ohci_hcd {
 
 	struct dentry		*debug_dir;
 
+#if 0	/* sunplus USB driver */
 	/* platform-specific data -- must come last */
 	unsigned long           priv[0] __aligned(sizeof(s64));
-
+#endif
 };
 
 #ifdef CONFIG_USB_PCI

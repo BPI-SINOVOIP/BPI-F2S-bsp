@@ -631,4 +631,18 @@ config RISCV_TIMER
 	  is accessed via both the SBI and the rdcycle instruction.  This is
 	  required for all RISC-V systems.
 
+config CLKSRC_SP_TIMER
+	bool "Clocksource using Sunplus STC timer"
+    select TIMER_PROBE
+    select TIMER_OF
+
+config SP_TIMER_IRQ_LATENCY_TEST
+	bool "Test IRQ latency with STC Timer2"
+	depends on CLKSRC_SP_TIMER
+	default n
+	help
+	  Use stc timer2 to generate periodic interrupts. Measure irq latency
+	  by comparing latched stc counter value in timer irq handler and expected
+	  stc counter value.
+
 endmenu
