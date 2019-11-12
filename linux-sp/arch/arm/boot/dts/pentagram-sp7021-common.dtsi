@@ -529,9 +529,11 @@
 			interrupts = <175 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&clkc I2CM1>;
 			resets = <&rstc RST_I2CM1>;
-#if 0 // Demo board V3
+#if 1 // Demo board V3
+#if 0
 			pinctrl-names = "default";
 			pinctrl-0 = <&i2cm1_tpm_pins>;
+#endif
 			#address-cells = <1>;
 			#size-cells = <0>;
 			st33htpi: st33htpi@0{
@@ -610,10 +612,8 @@
 			reg = <0x9C00BE00 0x3FC>, <0x9C000200 0x80>, <0x9C000280 0x80>, <0x9C000080 0x80>;
 			interrupt-parent = <&intc>;
 			interrupts = <105 IRQ_TYPE_LEVEL_HIGH>;
-/*
 			pinctrl-names = "default";
 			pinctrl-0 = <&hdmi_A_tx3>;
-*/
 		};
 
 		sp_ehci0: usb@9C102100 {
@@ -1109,8 +1109,8 @@
 
 			mipicsi0_pins: pinmux_mipicsi0_pins {
 				sppctl,pins = <
-					SP7021_IOPAD(11,SP7021_PCTL_G_PMUX,MUXF_I2CM1_DAT,0)
-					SP7021_IOPAD(12,SP7021_PCTL_G_PMUX,MUXF_I2CM1_CK,0)
+					SP7021_IOPAD(64,SP7021_PCTL_G_PMUX,MUXF_I2CM1_DAT,0)
+					SP7021_IOPAD(61,SP7021_PCTL_G_PMUX,MUXF_I2CM1_CK,0)
 #if 0
 					SP7021_IOPAD(14,SP7021_PCTL_G_GPIO,0,1)
 					SP7021_IOPAD(15,SP7021_PCTL_G_GPIO,0,1)	
