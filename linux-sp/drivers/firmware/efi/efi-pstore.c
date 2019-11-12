@@ -4,7 +4,7 @@
 #include <linux/slab.h>
 #include <linux/ucs2_string.h>
 
-#define DUMP_NAME_LEN 52
+#define DUMP_NAME_LEN 66
 
 static bool efivars_pstore_disable =
 	IS_ENABLED(CONFIG_EFI_VARS_PSTORE_DEFAULT_DISABLE);
@@ -28,10 +28,9 @@ static int efi_pstore_close(struct pstore_info *psi)
 	return 0;
 }
 
-static inline u64 generic_id(unsigned long timestamp,
-			     unsigned int part, int count)
+static inline u64 generic_id(u64 timestamp, unsigned int part, int count)
 {
-	return ((u64) timestamp * 100 + part) * 1000 + count;
+	return (timestamp * 100 + part) * 1000 + count;
 }
 
 static int efi_pstore_read_func(struct efivar_entry *entry,
@@ -42,7 +41,8 @@ static int efi_pstore_read_func(struct efivar_entry *entry,
 	int i;
 	int cnt;
 	unsigned int part;
-	unsigned long time, size;
+	unsigned long size;
+	u64 time;
 
 	if (efi_guidcmp(entry->var.VendorGuid, vendor))
 		return 0;
@@ -50,7 +50,7 @@ static int efi_pstore_read_func(struct efivar_entry *entry,
 	for (i = 0; i < DUMP_NAME_LEN; i++)
 		name[i] = entry->var.VariableName[i];
 
-	if (sscanf(name, "dump-type%u-%u-%d-%lu-%c",
+	if (sscanf(name, "dump-type%u-%u-%d-%llu-%c",
 		   &record->type, &part, &cnt, &time, &data_type) == 5) {
 		record->id = generic_id(time, part, cnt);
 		record->part = part;
@@ -62,7 +62,7 @@ static int efi_pstore_read_func(struct efivar_entry *entry,
 		else
 			record->compressed = false;
 		record->ecc_notice_size = 0;
-	} else if (sscanf(name, "dump-type%u-%u-%d-%lu",
+	} else if (sscanf(name, "dump-type%u-%u-%d-%llu",
 		   &record->type, &part, &cnt, &time) == 4) {
 		record->id = generic_id(time, part, cnt);
 		record->part = part;
@@ -71,7 +71,7 @@ static int efi_pstore_read_func(struct efivar_entry *entry,
 		record->time.tv_nsec = 0;
 		record->compressed = false;
 		record->ecc_notice_size = 0;
-	} else if (sscanf(name, "dump-type%u-%u-%lu",
+	} else if (sscanf(name, "dump-type%u-%u-%llu",
 			  &record->type, &part, &time) == 3) {
 		/*
 		 * Check if an old format,
@@ -244,15 +244,16 @@ static int efi_pstore_write(struct pstore_record *record)
 	efi_guid_t vendor = LINUX_EFI_CRASH_GUID;
 	int i, ret = 0;
 
-	record->time.tv_sec = get_seconds();
-	record->time.tv_nsec = 0;
-
 	record->id = generic_id(record->time.tv_sec, record->part,
 				record->count);
 
-	snprintf(name, sizeof(name), "dump-type%u-%u-%d-%lu-%c",
+	/* Since we copy the entire length of name, make sure it is wiped. */
+	memset(name, 0, sizeof(name));
+
+	snprintf(name, sizeof(name), "dump-type%u-%u-%d-%lld-%c",
 		 record->type, record->part, record->count,
-		 record->time.tv_sec, record->compressed ? 'C' : 'D');
+		 (long long)record->time.tv_sec,
+		 record->compressed ? 'C' : 'D');
 
 	for (i = 0; i < DUMP_NAME_LEN; i++)
 		efi_name[i] = name[i];
@@ -267,44 +268,20 @@ static int efi_pstore_write(struct pstore_record *record)
 	return ret;
 };
 
-struct pstore_erase_data {
-	struct pstore_record *record;
-	efi_char16_t *name;
-};
-
 /*
  * Clean up an entry with the same name
  */
 static int efi_pstore_erase_func(struct efivar_entry *entry, void *data)
 {
-	struct pstore_erase_data *ed = data;
+	efi_char16_t *efi_name = data;
 	efi_guid_t vendor = LINUX_EFI_CRASH_GUID;
-	efi_char16_t efi_name_old[DUMP_NAME_LEN];
-	efi_char16_t *efi_name = ed->name;
-	unsigned long ucs2_len = ucs2_strlen(ed->name);
-	char name_old[DUMP_NAME_LEN];
-	int i;
+	unsigned long ucs2_len = ucs2_strlen(efi_name);
 
 	if (efi_guidcmp(entry->var.VendorGuid, vendor))
 		return 0;
 
-	if (ucs2_strncmp(entry->var.VariableName,
-			  efi_name, (size_t)ucs2_len)) {
-		/*
-		 * Check if an old format, which doesn't support
-		 * holding multiple logs, remains.
-		 */
-		snprintf(name_old, sizeof(name_old), "dump-type%u-%u-%lu",
-			ed->record->type, ed->record->part,
-			ed->record->time.tv_sec);
-
-		for (i = 0; i < DUMP_NAME_LEN; i++)
-			efi_name_old[i] = name_old[i];
-
-		if (ucs2_strncmp(entry->var.VariableName, efi_name_old,
-				  ucs2_strlen(efi_name_old)))
-			return 0;
-	}
+	if (ucs2_strncmp(entry->var.VariableName, efi_name, (size_t)ucs2_len))
+		return 0;
 
 	if (entry->scanning) {
 		/*
@@ -321,35 +298,48 @@ static int efi_pstore_erase_func(struct efivar_entry *entry, void *data)
 	return 1;
 }
 
-static int efi_pstore_erase(struct pstore_record *record)
+static int efi_pstore_erase_name(const char *name)
 {
-	struct pstore_erase_data edata;
 	struct efivar_entry *entry = NULL;
-	char name[DUMP_NAME_LEN];
 	efi_char16_t efi_name[DUMP_NAME_LEN];
 	int found, i;
 
-	snprintf(name, sizeof(name), "dump-type%u-%u-%d-%lu",
-		 record->type, record->part, record->count,
-		 record->time.tv_sec);
-
-	for (i = 0; i < DUMP_NAME_LEN; i++)
+	for (i = 0; i < DUMP_NAME_LEN; i++) {
 		efi_name[i] = name[i];
-
-	edata.record = record;
-	edata.name = efi_name;
+		if (name[i] == '\0')
+			break;
+	}
 
 	if (efivar_entry_iter_begin())
 		return -EINTR;
-	found = __efivar_entry_iter(efi_pstore_erase_func, &efivar_sysfs_list, &edata, &entry);
 
-	if (found && !entry->scanning) {
-		efivar_entry_iter_end();
+	found = __efivar_entry_iter(efi_pstore_erase_func, &efivar_sysfs_list,
+				    efi_name, &entry);
+	efivar_entry_iter_end();
+
+	if (found && !entry->scanning)
 		efivar_unregister(entry);
-	} else
-		efivar_entry_iter_end();
 
-	return 0;
+	return found ? 0 : -ENOENT;
+}
+
+static int efi_pstore_erase(struct pstore_record *record)
+{
+	char name[DUMP_NAME_LEN];
+	int ret;
+
+	snprintf(name, sizeof(name), "dump-type%u-%u-%d-%lld",
+		 record->type, record->part, record->count,
+		 (long long)record->time.tv_sec);
+	ret = efi_pstore_erase_name(name);
+	if (ret != -ENOENT)
+		return ret;
+
+	snprintf(name, sizeof(name), "dump-type%u-%u-%lld",
+		record->type, record->part, (long long)record->time.tv_sec);
+	ret = efi_pstore_erase_name(name);
+
+	return ret;
 }
 
 static struct pstore_info efi_pstore_info = {

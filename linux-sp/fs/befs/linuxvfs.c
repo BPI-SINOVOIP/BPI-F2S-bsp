@@ -20,6 +20,7 @@
 #include <linux/sched.h>
 #include <linux/cred.h>
 #include <linux/exportfs.h>
+#include <linux/seq_file.h>
 
 #include "befs.h"
 #include "btree.h"
@@ -53,6 +54,7 @@ static int befs_nls2utf(struct super_block *sb, const char *in, int in_len,
 static void befs_put_super(struct super_block *);
 static int befs_remount(struct super_block *, int *, char *);
 static int befs_statfs(struct dentry *, struct kstatfs *);
+static int befs_show_options(struct seq_file *, struct dentry *);
 static int parse_options(char *, struct befs_mount_options *);
 static struct dentry *befs_fh_to_dentry(struct super_block *sb,
 				struct fid *fid, int fh_len, int fh_type);
@@ -66,7 +68,7 @@ static const struct super_operations befs_sops = {
 	.put_super	= befs_put_super,	/* uninit super */
 	.statfs		= befs_statfs,	/* statfs */
 	.remount_fs	= befs_remount,
-	.show_options	= generic_show_options,
+	.show_options	= befs_show_options,
 };
 
 /* slab cache for befs_inode_info objects */
@@ -196,23 +198,16 @@ befs_lookup(struct inode *dir, struct dentry *dentry, unsigned int flags)
 
 	if (ret == BEFS_BT_NOT_FOUND) {
 		befs_debug(sb, "<--- %s %pd not found", __func__, dentry);
-		d_add(dentry, NULL);
-		return ERR_PTR(-ENOENT);
-
+		inode = NULL;
 	} else if (ret != BEFS_OK || offset == 0) {
 		befs_error(sb, "<--- %s Error", __func__);
-		return ERR_PTR(-ENODATA);
+		inode = ERR_PTR(-ENODATA);
+	} else {
+		inode = befs_iget(dir->i_sb, (ino_t) offset);
 	}
-
-	inode = befs_iget(dir->i_sb, (ino_t) offset);
-	if (IS_ERR(inode))
-		return ERR_CAST(inode);
-
-	d_add(dentry, inode);
-
 	befs_debug(sb, "<--- %s", __func__);
 
-	return NULL;
+	return d_splice_alias(inode, dentry);
 }
 
 static int
@@ -442,11 +437,15 @@ unacquire_none:
 static int __init
 befs_init_inodecache(void)
 {
-	befs_inode_cachep = kmem_cache_create("befs_inode_cache",
-					      sizeof (struct befs_inode_info),
-					      0, (SLAB_RECLAIM_ACCOUNT|
-						SLAB_MEM_SPREAD|SLAB_ACCOUNT),
-					      init_once);
+	befs_inode_cachep = kmem_cache_create_usercopy("befs_inode_cache",
+				sizeof(struct befs_inode_info), 0,
+				(SLAB_RECLAIM_ACCOUNT|SLAB_MEM_SPREAD|
+					SLAB_ACCOUNT),
+				offsetof(struct befs_inode_info,
+					i_data.symlink),
+				sizeof_field(struct befs_inode_info,
+					i_data.symlink),
+				init_once);
 	if (befs_inode_cachep == NULL)
 		return -ENOMEM;
 
@@ -771,6 +770,24 @@ parse_options(char *options, struct befs_mount_options *opts)
 	return 1;
 }
 
+static int befs_show_options(struct seq_file *m, struct dentry *root)
+{
+	struct befs_sb_info *befs_sb = BEFS_SB(root->d_sb);
+	struct befs_mount_options *opts = &befs_sb->mount_opts;
+
+	if (!uid_eq(opts->uid, GLOBAL_ROOT_UID))
+		seq_printf(m, ",uid=%u",
+			   from_kuid_munged(&init_user_ns, opts->uid));
+	if (!gid_eq(opts->gid, GLOBAL_ROOT_GID))
+		seq_printf(m, ",gid=%u",
+			   from_kgid_munged(&init_user_ns, opts->gid));
+	if (opts->iocharset)
+		seq_printf(m, ",charset=%s", opts->iocharset);
+	if (opts->debug)
+		seq_puts(m, ",debug");
+	return 0;
+}
+
 /* This function has the responsibiltiy of getting the
  * filesystem ready for unmounting.
  * Basically, we free everything that we allocated in
@@ -804,8 +821,6 @@ befs_fill_super(struct super_block *sb, void *data, int silent)
 	const off_t x86_sb_off = 512;
 	int blocksize;
 
-	save_mount_options(sb, data);
-
 	sb->s_fs_info = kzalloc(sizeof(*befs_sb), GFP_KERNEL);
 	if (sb->s_fs_info == NULL)
 		goto unacquire_none;
@@ -820,10 +835,10 @@ befs_fill_super(struct super_block *sb, void *data, int silent)
 
 	befs_debug(sb, "---> %s", __func__);
 
-	if (!(sb->s_flags & MS_RDONLY)) {
+	if (!sb_rdonly(sb)) {
 		befs_warning(sb,
 			     "No write support. Marking filesystem read-only");
-		sb->s_flags |= MS_RDONLY;
+		sb->s_flags |= SB_RDONLY;
 	}
 
 	/*
@@ -930,7 +945,7 @@ static int
 befs_remount(struct super_block *sb, int *flags, char *data)
 {
 	sync_filesystem(sb);
-	if (!(*flags & MS_RDONLY))
+	if (!(*flags & SB_RDONLY))
 		return -EINVAL;
 	return 0;
 }

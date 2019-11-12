@@ -9,58 +9,118 @@
 
 #include "dice.h"
 
+static int dice_rate_constraint(struct snd_pcm_hw_params *params,
+				struct snd_pcm_hw_rule *rule)
+{
+	struct snd_pcm_substream *substream = rule->private;
+	struct snd_dice *dice = substream->private_data;
+	unsigned int index = substream->pcm->device;
+
+	const struct snd_interval *c =
+		hw_param_interval_c(params, SNDRV_PCM_HW_PARAM_CHANNELS);
+	struct snd_interval *r =
+		hw_param_interval(params, SNDRV_PCM_HW_PARAM_RATE);
+	struct snd_interval rates = {
+		.min = UINT_MAX, .max = 0, .integer = 1
+	};
+	unsigned int *pcm_channels;
+	enum snd_dice_rate_mode mode;
+	unsigned int i, rate;
+
+	if (substream->stream == SNDRV_PCM_STREAM_CAPTURE)
+		pcm_channels = dice->tx_pcm_chs[index];
+	else
+		pcm_channels = dice->rx_pcm_chs[index];
+
+	for (i = 0; i < ARRAY_SIZE(snd_dice_rates); ++i) {
+		rate = snd_dice_rates[i];
+		if (snd_dice_stream_get_rate_mode(dice, rate, &mode) < 0)
+			continue;
+
+		if (!snd_interval_test(c, pcm_channels[mode]))
+			continue;
+
+		rates.min = min(rates.min, rate);
+		rates.max = max(rates.max, rate);
+	}
+
+	return snd_interval_refine(r, &rates);
+}
+
+static int dice_channels_constraint(struct snd_pcm_hw_params *params,
+				    struct snd_pcm_hw_rule *rule)
+{
+	struct snd_pcm_substream *substream = rule->private;
+	struct snd_dice *dice = substream->private_data;
+	unsigned int index = substream->pcm->device;
+
+	const struct snd_interval *r =
+		hw_param_interval_c(params, SNDRV_PCM_HW_PARAM_RATE);
+	struct snd_interval *c =
+		hw_param_interval(params, SNDRV_PCM_HW_PARAM_CHANNELS);
+	struct snd_interval channels = {
+		.min = UINT_MAX, .max = 0, .integer = 1
+	};
+	unsigned int *pcm_channels;
+	enum snd_dice_rate_mode mode;
+	unsigned int i, rate;
+
+	if (substream->stream == SNDRV_PCM_STREAM_CAPTURE)
+		pcm_channels = dice->tx_pcm_chs[index];
+	else
+		pcm_channels = dice->rx_pcm_chs[index];
+
+	for (i = 0; i < ARRAY_SIZE(snd_dice_rates); ++i) {
+		rate = snd_dice_rates[i];
+		if (snd_dice_stream_get_rate_mode(dice, rate, &mode) < 0)
+			continue;
+
+		if (!snd_interval_test(r, rate))
+			continue;
+
+		channels.min = min(channels.min, pcm_channels[mode]);
+		channels.max = max(channels.max, pcm_channels[mode]);
+	}
+
+	return snd_interval_refine(c, &channels);
+}
+
 static int limit_channels_and_rates(struct snd_dice *dice,
 				    struct snd_pcm_runtime *runtime,
 				    enum amdtp_stream_direction dir,
-				    unsigned int index, unsigned int size)
+				    unsigned int index)
 {
 	struct snd_pcm_hardware *hw = &runtime->hw;
-	struct amdtp_stream *stream;
-	unsigned int rate;
-	__be32 reg;
-	int err;
+	unsigned int *pcm_channels;
+	unsigned int i;
 
-	/*
-	 * Retrieve current Multi Bit Linear Audio data channel and limit to
-	 * it.
-	 */
-	if (dir == AMDTP_IN_STREAM) {
-		stream = &dice->tx_stream[index];
-		err = snd_dice_transaction_read_tx(dice,
-				size * index + TX_NUMBER_AUDIO,
-				&reg, sizeof(reg));
-	} else {
-		stream = &dice->rx_stream[index];
-		err = snd_dice_transaction_read_rx(dice,
-				size * index + RX_NUMBER_AUDIO,
-				&reg, sizeof(reg));
+	if (dir == AMDTP_IN_STREAM)
+		pcm_channels = dice->tx_pcm_chs[index];
+	else
+		pcm_channels = dice->rx_pcm_chs[index];
+
+	hw->channels_min = UINT_MAX;
+	hw->channels_max = 0;
+
+	for (i = 0; i < ARRAY_SIZE(snd_dice_rates); ++i) {
+		enum snd_dice_rate_mode mode;
+		unsigned int rate, channels;
+
+		rate = snd_dice_rates[i];
+		if (snd_dice_stream_get_rate_mode(dice, rate, &mode) < 0)
+			continue;
+		hw->rates |= snd_pcm_rate_to_rate_bit(rate);
+
+		channels = pcm_channels[mode];
+		if (channels == 0)
+			continue;
+		hw->channels_min = min(hw->channels_min, channels);
+		hw->channels_max = max(hw->channels_max, channels);
 	}
-	if (err < 0)
-		return err;
 
-	hw->channels_min = hw->channels_max = be32_to_cpu(reg);
-
-	/* Retrieve current sampling transfer frequency and limit to it. */
-	err = snd_dice_transaction_get_rate(dice, &rate);
-	if (err < 0)
-		return err;
-
-	hw->rates = snd_pcm_rate_to_rate_bit(rate);
 	snd_pcm_limit_hw_rates(runtime);
 
 	return 0;
-}
-
-static void limit_period_and_buffer(struct snd_pcm_hardware *hw)
-{
-	hw->periods_min = 2;			/* SNDRV_PCM_INFO_BATCH */
-	hw->periods_max = UINT_MAX;
-
-	hw->period_bytes_min = 4 * hw->channels_max;    /* byte for a frame */
-
-	/* Just to prevent from allocating much pages. */
-	hw->period_bytes_max = hw->period_bytes_min * 2048;
-	hw->buffer_bytes_max = hw->period_bytes_max * hw->periods_min;
 }
 
 static int init_hw_info(struct snd_dice *dice,
@@ -68,46 +128,36 @@ static int init_hw_info(struct snd_dice *dice,
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct snd_pcm_hardware *hw = &runtime->hw;
+	unsigned int index = substream->pcm->device;
 	enum amdtp_stream_direction dir;
 	struct amdtp_stream *stream;
-	__be32 reg[2];
-	unsigned int count, size;
 	int err;
-
-	hw->info = SNDRV_PCM_INFO_MMAP |
-		   SNDRV_PCM_INFO_MMAP_VALID |
-		   SNDRV_PCM_INFO_BATCH |
-		   SNDRV_PCM_INFO_INTERLEAVED |
-		   SNDRV_PCM_INFO_JOINT_DUPLEX |
-		   SNDRV_PCM_INFO_BLOCK_TRANSFER;
 
 	if (substream->stream == SNDRV_PCM_STREAM_CAPTURE) {
 		hw->formats = AM824_IN_PCM_FORMAT_BITS;
 		dir = AMDTP_IN_STREAM;
-		stream = &dice->tx_stream[substream->pcm->device];
-		err = snd_dice_transaction_read_tx(dice, TX_NUMBER, reg,
-						   sizeof(reg));
+		stream = &dice->tx_stream[index];
 	} else {
 		hw->formats = AM824_OUT_PCM_FORMAT_BITS;
 		dir = AMDTP_OUT_STREAM;
-		stream = &dice->rx_stream[substream->pcm->device];
-		err = snd_dice_transaction_read_rx(dice, RX_NUMBER, reg,
-						   sizeof(reg));
+		stream = &dice->rx_stream[index];
 	}
 
-	if (err < 0)
-		return err;
-
-	count = min_t(unsigned int, be32_to_cpu(reg[0]), MAX_STREAMS);
-	if (substream->pcm->device >= count)
-		return -ENXIO;
-
-	size = be32_to_cpu(reg[1]) * 4;
 	err = limit_channels_and_rates(dice, substream->runtime, dir,
-				       substream->pcm->device, size);
+				       index);
 	if (err < 0)
 		return err;
-	limit_period_and_buffer(hw);
+
+	err = snd_pcm_hw_rule_add(runtime, 0, SNDRV_PCM_HW_PARAM_RATE,
+				  dice_rate_constraint, substream,
+				  SNDRV_PCM_HW_PARAM_CHANNELS, -1);
+	if (err < 0)
+		return err;
+	err = snd_pcm_hw_rule_add(runtime, 0, SNDRV_PCM_HW_PARAM_CHANNELS,
+				  dice_channels_constraint, substream,
+				  SNDRV_PCM_HW_PARAM_RATE, -1);
+	if (err < 0)
+		return err;
 
 	return amdtp_am824_add_pcm_hw_constraints(stream, runtime);
 }
@@ -115,6 +165,8 @@ static int init_hw_info(struct snd_dice *dice,
 static int pcm_open(struct snd_pcm_substream *substream)
 {
 	struct snd_dice *dice = substream->private_data;
+	unsigned int source;
+	bool internal;
 	int err;
 
 	err = snd_dice_stream_lock_try(dice);
@@ -124,6 +176,43 @@ static int pcm_open(struct snd_pcm_substream *substream)
 	err = init_hw_info(dice, substream);
 	if (err < 0)
 		goto err_locked;
+
+	err = snd_dice_transaction_get_clock_source(dice, &source);
+	if (err < 0)
+		goto err_locked;
+	switch (source) {
+	case CLOCK_SOURCE_AES1:
+	case CLOCK_SOURCE_AES2:
+	case CLOCK_SOURCE_AES3:
+	case CLOCK_SOURCE_AES4:
+	case CLOCK_SOURCE_AES_ANY:
+	case CLOCK_SOURCE_ADAT:
+	case CLOCK_SOURCE_TDIF:
+	case CLOCK_SOURCE_WC:
+		internal = false;
+		break;
+	default:
+		internal = true;
+		break;
+	}
+
+	/*
+	 * When source of clock is not internal or any PCM streams are running,
+	 * available sampling rate is limited at current sampling rate.
+	 */
+	if (!internal ||
+	    amdtp_stream_pcm_running(&dice->tx_stream[0]) ||
+	    amdtp_stream_pcm_running(&dice->tx_stream[1]) ||
+	    amdtp_stream_pcm_running(&dice->rx_stream[0]) ||
+	    amdtp_stream_pcm_running(&dice->rx_stream[1])) {
+		unsigned int rate;
+
+		err = snd_dice_transaction_get_rate(dice, &rate);
+		if (err < 0)
+			goto err_locked;
+		substream->runtime->hw.rate_min = rate;
+		substream->runtime->hw.rate_max = rate;
+	}
 
 	snd_pcm_set_sync(substream);
 end:
@@ -146,7 +235,6 @@ static int capture_hw_params(struct snd_pcm_substream *substream,
 			     struct snd_pcm_hw_params *hw_params)
 {
 	struct snd_dice *dice = substream->private_data;
-	struct amdtp_stream *stream = &dice->tx_stream[substream->pcm->device];
 	int err;
 
 	err = snd_pcm_lib_alloc_vmalloc_buffer(substream,
@@ -159,8 +247,6 @@ static int capture_hw_params(struct snd_pcm_substream *substream,
 		dice->substreams_counter++;
 		mutex_unlock(&dice->mutex);
 	}
-
-	amdtp_am824_set_pcm_format(stream, params_format(hw_params));
 
 	return 0;
 }
@@ -168,7 +254,6 @@ static int playback_hw_params(struct snd_pcm_substream *substream,
 			      struct snd_pcm_hw_params *hw_params)
 {
 	struct snd_dice *dice = substream->private_data;
-	struct amdtp_stream *stream = &dice->rx_stream[substream->pcm->device];
 	int err;
 
 	err = snd_pcm_lib_alloc_vmalloc_buffer(substream,
@@ -181,8 +266,6 @@ static int playback_hw_params(struct snd_pcm_substream *substream,
 		dice->substreams_counter++;
 		mutex_unlock(&dice->mutex);
 	}
-
-	amdtp_am824_set_pcm_format(stream, params_format(hw_params));
 
 	return 0;
 }
@@ -300,6 +383,22 @@ static snd_pcm_uframes_t playback_pointer(struct snd_pcm_substream *substream)
 	return amdtp_stream_pcm_pointer(stream);
 }
 
+static int capture_ack(struct snd_pcm_substream *substream)
+{
+	struct snd_dice *dice = substream->private_data;
+	struct amdtp_stream *stream = &dice->tx_stream[substream->pcm->device];
+
+	return amdtp_stream_pcm_ack(stream);
+}
+
+static int playback_ack(struct snd_pcm_substream *substream)
+{
+	struct snd_dice *dice = substream->private_data;
+	struct amdtp_stream *stream = &dice->rx_stream[substream->pcm->device];
+
+	return amdtp_stream_pcm_ack(stream);
+}
+
 int snd_dice_create_pcm(struct snd_dice *dice)
 {
 	static const struct snd_pcm_ops capture_ops = {
@@ -311,8 +410,8 @@ int snd_dice_create_pcm(struct snd_dice *dice)
 		.prepare   = capture_prepare,
 		.trigger   = capture_trigger,
 		.pointer   = capture_pointer,
+		.ack       = capture_ack,
 		.page      = snd_pcm_lib_get_vmalloc_page,
-		.mmap      = snd_pcm_lib_mmap_vmalloc,
 	};
 	static const struct snd_pcm_ops playback_ops = {
 		.open      = pcm_open,
@@ -323,40 +422,22 @@ int snd_dice_create_pcm(struct snd_dice *dice)
 		.prepare   = playback_prepare,
 		.trigger   = playback_trigger,
 		.pointer   = playback_pointer,
+		.ack       = playback_ack,
 		.page      = snd_pcm_lib_get_vmalloc_page,
-		.mmap      = snd_pcm_lib_mmap_vmalloc,
 	};
-	__be32 reg;
 	struct snd_pcm *pcm;
-	unsigned int i, max_capture, max_playback, capture, playback;
+	unsigned int capture, playback;
+	int i, j;
 	int err;
-
-	/* Check whether PCM substreams are required. */
-	if (dice->force_two_pcms) {
-		max_capture = max_playback = 2;
-	} else {
-		max_capture = max_playback = 0;
-		err = snd_dice_transaction_read_tx(dice, TX_NUMBER, &reg,
-						   sizeof(reg));
-		if (err < 0)
-			return err;
-		max_capture = min_t(unsigned int, be32_to_cpu(reg), MAX_STREAMS);
-
-		err = snd_dice_transaction_read_rx(dice, RX_NUMBER, &reg,
-						   sizeof(reg));
-		if (err < 0)
-			return err;
-		max_playback = min_t(unsigned int, be32_to_cpu(reg), MAX_STREAMS);
-	}
 
 	for (i = 0; i < MAX_STREAMS; i++) {
 		capture = playback = 0;
-		if (i < max_capture)
-			capture = 1;
-		if (i < max_playback)
-			playback = 1;
-		if (capture == 0 && playback == 0)
-			break;
+		for (j = 0; j < SND_DICE_RATE_MODE_COUNT; ++j) {
+			if (dice->tx_pcm_chs[i][j] > 0)
+				capture = 1;
+			if (dice->rx_pcm_chs[i][j] > 0)
+				playback = 1;
+		}
 
 		err = snd_pcm_new(dice->card, "DICE", i, playback, capture,
 				  &pcm);

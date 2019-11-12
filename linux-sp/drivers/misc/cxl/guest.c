@@ -89,7 +89,7 @@ static ssize_t guest_collect_vpd(struct cxl *adapter, struct cxl_afu *afu,
 		mod = 0;
 	}
 
-	vpd_buf = kzalloc(entries * sizeof(unsigned long *), GFP_KERNEL);
+	vpd_buf = kcalloc(entries, sizeof(unsigned long *), GFP_KERNEL);
 	if (!vpd_buf)
 		return -ENOMEM;
 
@@ -267,6 +267,7 @@ static int guest_reset(struct cxl *adapter)
 	int i, rc;
 
 	pr_devel("Adapter reset request\n");
+	spin_lock(&adapter->afu_list_lock);
 	for (i = 0; i < adapter->slices; i++) {
 		if ((afu = adapter->afu[i])) {
 			pci_error_handlers(afu, CXL_ERROR_DETECTED_EVENT,
@@ -283,6 +284,7 @@ static int guest_reset(struct cxl *adapter)
 			pci_error_handlers(afu, CXL_RESUME_EVENT, 0);
 		}
 	}
+	spin_unlock(&adapter->afu_list_lock);
 	return rc;
 }
 
@@ -623,9 +625,6 @@ static int guest_attach_process(struct cxl_context *ctx, bool kernel, u64 wed, u
 {
 	pr_devel("in %s\n", __func__);
 
-	if (ctx->real_mode)
-		return -EPERM;
-
 	ctx->kernel = kernel;
 	if (ctx->afu->current_mode == CXL_MODE_DIRECTED)
 		return attach_afu_directed(ctx, wed, amr);
@@ -913,11 +912,6 @@ static int afu_properties_look_ok(struct cxl_afu *afu)
 
 	if (afu->max_procs_virtualised < 1) {
 		dev_err(&afu->dev, "Unexpected max number of processes virtualised value\n");
-		return -EINVAL;
-	}
-
-	if (afu->crs_len < 0) {
-		dev_err(&afu->dev, "Unexpected configuration record size value\n");
 		return -EINVAL;
 	}
 

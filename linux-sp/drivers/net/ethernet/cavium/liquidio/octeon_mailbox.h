@@ -20,16 +20,17 @@
 
 /* Macros for Mail Box Communication */
 
-#define OCTEON_MBOX_DATA_MAX	32
+#define OCTEON_MBOX_DATA_MAX		32
 
 #define OCTEON_VF_ACTIVE		0x1
 #define OCTEON_VF_FLR_REQUEST		0x2
 #define OCTEON_PF_CHANGED_VF_MACADDR	0x4
+#define OCTEON_GET_VF_STATS		0x8
 
 /*Macro for Read acknowldgement*/
-#define OCTEON_PFVFACK			0xffffffffffffffff
-#define OCTEON_PFVFSIG			0x1122334455667788
-#define OCTEON_PFVFERR			0xDEADDEADDEADDEAD
+#define OCTEON_PFVFACK			0xffffffffffffffffULL
+#define OCTEON_PFVFSIG			0x1122334455667788ULL
+#define OCTEON_PFVFERR			0xDEADDEADDEADDEADULL
 
 #define LIO_MBOX_WRITE_WAIT_CNT         1000
 #define LIO_MBOX_WRITE_WAIT_TIME        msecs_to_jiffies(1)
@@ -74,8 +75,8 @@ enum octeon_mbox_state {
 	OCTEON_MBOX_STATE_REQUEST_RECEIVED = 4,
 	OCTEON_MBOX_STATE_RESPONSE_PENDING = 8,
 	OCTEON_MBOX_STATE_RESPONSE_RECEIVING = 16,
-	OCTEON_MBOX_STATE_RESPONSE_RECEIVED = 16,
-	OCTEON_MBOX_STATE_ERROR = 32
+	OCTEON_MBOX_STATE_RESPONSE_RECEIVED = 32,
+	OCTEON_MBOX_STATE_ERROR = 64
 };
 
 struct octeon_mbox {
@@ -107,9 +108,15 @@ struct octeon_mbox {
 
 };
 
+struct oct_vf_stats_ctx {
+	atomic_t status;
+	struct oct_vf_stats *stats;
+};
+
 int octeon_mbox_read(struct octeon_mbox *mbox);
 int octeon_mbox_write(struct octeon_device *oct,
 		      struct octeon_mbox_cmd *mbox_cmd);
 int octeon_mbox_process_message(struct octeon_mbox *mbox);
+int octeon_mbox_cancel(struct octeon_device *oct, int q_no);
 
 #endif

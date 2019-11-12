@@ -571,12 +571,17 @@ static irqreturn_t cp_interrupt (int irq, void *dev_instance)
 	struct cp_private *cp;
 	int handled = 0;
 	u16 status;
+	u16 mask;
 
 	if (unlikely(dev == NULL))
 		return IRQ_NONE;
 	cp = netdev_priv(dev);
 
 	spin_lock(&cp->lock);
+
+	mask = cpr16(IntrMask);
+	if (!mask)
+		goto out_unlock;
 
 	status = cpr16(IntrStatus);
 	if (!status || (status == 0xFFFF))
@@ -748,8 +753,8 @@ static netdev_tx_t cp_start_xmit (struct sk_buff *skb,
 	mss = skb_shinfo(skb)->gso_size;
 
 	if (mss > MSSMask) {
-		WARN_ONCE(1, "Net bug: GSO size %d too large for 8139CP\n",
-			  mss);
+		netdev_WARN_ONCE(dev, "Net bug: GSO size %d too large for 8139CP\n",
+				 mss);
 		goto out_dma_error;
 	}
 
@@ -1410,14 +1415,13 @@ static int cp_get_link_ksettings(struct net_device *dev,
 				 struct ethtool_link_ksettings *cmd)
 {
 	struct cp_private *cp = netdev_priv(dev);
-	int rc;
 	unsigned long flags;
 
 	spin_lock_irqsave(&cp->lock, flags);
-	rc = mii_ethtool_get_link_ksettings(&cp->mii_if, cmd);
+	mii_ethtool_get_link_ksettings(&cp->mii_if, cmd);
 	spin_unlock_irqrestore(&cp->lock, flags);
 
-	return rc;
+	return 0;
 }
 
 static int cp_set_link_ksettings(struct net_device *dev,

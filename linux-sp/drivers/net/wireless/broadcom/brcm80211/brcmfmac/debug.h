@@ -78,6 +78,7 @@ do {								\
 #define BRCMF_EVENT_ON()	(brcmf_msg_level & BRCMF_EVENT_VAL)
 #define BRCMF_FIL_ON()		(brcmf_msg_level & BRCMF_FIL_VAL)
 #define BRCMF_FWCON_ON()	(brcmf_msg_level & BRCMF_FWCON_VAL)
+#define BRCMF_SCAN_ON()		(brcmf_msg_level & BRCMF_SCAN_VAL)
 
 #else /* defined(DEBUG) || defined(CONFIG_BRCM_TRACING) */
 
@@ -96,6 +97,7 @@ do {								\
 #define BRCMF_EVENT_ON()	0
 #define BRCMF_FIL_ON()		0
 #define BRCMF_FWCON_ON()	0
+#define BRCMF_SCAN_ON()		0
 
 #endif /* defined(DEBUG) || defined(CONFIG_BRCM_TRACING) */
 
@@ -111,29 +113,12 @@ extern int brcmf_msg_level;
 struct brcmf_bus;
 struct brcmf_pub;
 #ifdef DEBUG
-void brcmf_debugfs_init(void);
-void brcmf_debugfs_exit(void);
-int brcmf_debug_attach(struct brcmf_pub *drvr);
-void brcmf_debug_detach(struct brcmf_pub *drvr);
 struct dentry *brcmf_debugfs_get_devdir(struct brcmf_pub *drvr);
 int brcmf_debugfs_add_entry(struct brcmf_pub *drvr, const char *fn,
 			    int (*read_fn)(struct seq_file *seq, void *data));
 int brcmf_debug_create_memdump(struct brcmf_bus *bus, const void *data,
 			       size_t len);
 #else
-static inline void brcmf_debugfs_init(void)
-{
-}
-static inline void brcmf_debugfs_exit(void)
-{
-}
-static inline int brcmf_debug_attach(struct brcmf_pub *drvr)
-{
-	return 0;
-}
-static inline void brcmf_debug_detach(struct brcmf_pub *drvr)
-{
-}
 static inline
 int brcmf_debugfs_add_entry(struct brcmf_pub *drvr, const char *fn,
 			    int (*read_fn)(struct seq_file *seq, void *data))

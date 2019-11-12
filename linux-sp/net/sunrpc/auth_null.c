@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * linux/net/sunrpc/auth_null.c
  *
@@ -18,7 +19,7 @@ static struct rpc_auth null_auth;
 static struct rpc_cred null_cred;
 
 static struct rpc_auth *
-nul_create(struct rpc_auth_create_args *args, struct rpc_clnt *clnt)
+nul_create(const struct rpc_auth_create_args *args, struct rpc_clnt *clnt)
 {
 	atomic_inc(&null_auth.au_count);
 	return &null_auth;

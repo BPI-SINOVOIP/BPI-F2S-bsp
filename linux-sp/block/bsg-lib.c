@@ -27,28 +27,114 @@
 #include <linux/bsg-lib.h>
 #include <linux/export.h>
 #include <scsi/scsi_cmnd.h>
+#include <scsi/sg.h>
+
+#define uptr64(val) ((void __user *)(uintptr_t)(val))
+
+static int bsg_transport_check_proto(struct sg_io_v4 *hdr)
+{
+	if (hdr->protocol != BSG_PROTOCOL_SCSI  ||
+	    hdr->subprotocol != BSG_SUB_PROTOCOL_SCSI_TRANSPORT)
+		return -EINVAL;
+	if (!capable(CAP_SYS_RAWIO))
+		return -EPERM;
+	return 0;
+}
+
+static int bsg_transport_fill_hdr(struct request *rq, struct sg_io_v4 *hdr,
+		fmode_t mode)
+{
+	struct bsg_job *job = blk_mq_rq_to_pdu(rq);
+
+	job->request_len = hdr->request_len;
+	job->request = memdup_user(uptr64(hdr->request), hdr->request_len);
+
+	return PTR_ERR_OR_ZERO(job->request);
+}
+
+static int bsg_transport_complete_rq(struct request *rq, struct sg_io_v4 *hdr)
+{
+	struct bsg_job *job = blk_mq_rq_to_pdu(rq);
+	int ret = 0;
+
+	/*
+	 * The assignments below don't make much sense, but are kept for
+	 * bug by bug backwards compatibility:
+	 */
+	hdr->device_status = job->result & 0xff;
+	hdr->transport_status = host_byte(job->result);
+	hdr->driver_status = driver_byte(job->result);
+	hdr->info = 0;
+	if (hdr->device_status || hdr->transport_status || hdr->driver_status)
+		hdr->info |= SG_INFO_CHECK;
+	hdr->response_len = 0;
+
+	if (job->result < 0) {
+		/* we're only returning the result field in the reply */
+		job->reply_len = sizeof(u32);
+		ret = job->result;
+	}
+
+	if (job->reply_len && hdr->response) {
+		int len = min(hdr->max_response_len, job->reply_len);
+
+		if (copy_to_user(uptr64(hdr->response), job->reply, len))
+			ret = -EFAULT;
+		else
+			hdr->response_len = len;
+	}
+
+	/* we assume all request payload was transferred, residual == 0 */
+	hdr->dout_resid = 0;
+
+	if (rq->next_rq) {
+		unsigned int rsp_len = job->reply_payload.payload_len;
+
+		if (WARN_ON(job->reply_payload_rcv_len > rsp_len))
+			hdr->din_resid = 0;
+		else
+			hdr->din_resid = rsp_len - job->reply_payload_rcv_len;
+	} else {
+		hdr->din_resid = 0;
+	}
+
+	return ret;
+}
+
+static void bsg_transport_free_rq(struct request *rq)
+{
+	struct bsg_job *job = blk_mq_rq_to_pdu(rq);
+
+	kfree(job->request);
+}
+
+static const struct bsg_ops bsg_transport_ops = {
+	.check_proto		= bsg_transport_check_proto,
+	.fill_hdr		= bsg_transport_fill_hdr,
+	.complete_rq		= bsg_transport_complete_rq,
+	.free_rq		= bsg_transport_free_rq,
+};
 
 /**
- * bsg_destroy_job - routine to teardown/delete a bsg job
- * @job: bsg_job that is to be torn down
+ * bsg_teardown_job - routine to teardown a bsg job
+ * @kref: kref inside bsg_job that is to be torn down
  */
-static void bsg_destroy_job(struct kref *kref)
+static void bsg_teardown_job(struct kref *kref)
 {
 	struct bsg_job *job = container_of(kref, struct bsg_job, kref);
-	struct request *rq = job->req;
-
-	blk_end_request_all(rq, scsi_req(rq)->result);
+	struct request *rq = blk_mq_rq_from_pdu(job);
 
 	put_device(job->dev);	/* release reference for the request */
 
 	kfree(job->request_payload.sg_list);
 	kfree(job->reply_payload.sg_list);
-	kfree(job);
+
+	blk_end_request_all(rq, BLK_STS_OK);
 }
 
 void bsg_job_put(struct bsg_job *job)
 {
-	kref_put(&job->kref, bsg_destroy_job);
+	kref_put(&job->kref, bsg_teardown_job);
 }
 EXPORT_SYMBOL_GPL(bsg_job_put);
 
@@ -69,28 +155,9 @@ EXPORT_SYMBOL_GPL(bsg_job_get);
 void bsg_job_done(struct bsg_job *job, int result,
 		  unsigned int reply_payload_rcv_len)
 {
-	struct request *req = job->req;
-	struct request *rsp = req->next_rq;
-	struct scsi_request *rq = scsi_req(req);
-	int err;
-
-	err = scsi_req(job->req)->result = result;
-	if (err < 0)
-		/* we're only returning the result field in the reply */
-		rq->sense_len = sizeof(u32);
-	else
-		rq->sense_len = job->reply_len;
-	/* we assume all request payload was transferred, residual == 0 */
-	rq->resid_len = 0;
-
-	if (rsp) {
-		WARN_ON(reply_payload_rcv_len > scsi_req(rsp)->resid_len);
-
-		/* set reply (bidi) residual */
-		scsi_req(rsp)->resid_len -=
-			min(reply_payload_rcv_len, scsi_req(rsp)->resid_len);
-	}
-	blk_complete_request(req);
+	job->result = result;
+	job->reply_payload_rcv_len = reply_payload_rcv_len;
+	blk_complete_request(blk_mq_rq_from_pdu(job));
 }
 EXPORT_SYMBOL_GPL(bsg_job_done);
 
@@ -100,7 +167,7 @@ EXPORT_SYMBOL_GPL(bsg_job_done);
  */
 static void bsg_softirq_done(struct request *rq)
 {
-	struct bsg_job *job = rq->special;
+	struct bsg_job *job = blk_mq_rq_to_pdu(rq);
 
 	bsg_job_put(job);
 }
@@ -115,40 +182,24 @@ static int bsg_map_buffer(struct bsg_buffer *buf, struct request *req)
 	if (!buf->sg_list)
 		return -ENOMEM;
 	sg_init_table(buf->sg_list, req->nr_phys_segments);
-	scsi_req(req)->resid_len = blk_rq_bytes(req);
 	buf->sg_cnt = blk_rq_map_sg(req->q, req, buf->sg_list);
 	buf->payload_len = blk_rq_bytes(req);
 	return 0;
 }
 
 /**
- * bsg_create_job - create the bsg_job structure for the bsg request
+ * bsg_prepare_job - create the bsg_job structure for the bsg request
  * @dev: device that is being sent the bsg request
  * @req: BSG request that needs a job structure
  */
-static int bsg_create_job(struct device *dev, struct request *req)
+static bool bsg_prepare_job(struct device *dev, struct request *req)
 {
 	struct request *rsp = req->next_rq;
-	struct request_queue *q = req->q;
-	struct scsi_request *rq = scsi_req(req);
-	struct bsg_job *job;
+	struct bsg_job *job = blk_mq_rq_to_pdu(req);
 	int ret;
 
-	BUG_ON(req->special);
+	job->timeout = req->timeout;
 
-	job = kzalloc(sizeof(struct bsg_job) + q->bsg_job_size, GFP_KERNEL);
-	if (!job)
-		return -ENOMEM;
-
-	req->special = job;
-	job->req = req;
-	if (q->bsg_job_size)
-		job->dd_data = (void *)&job[1];
-	job->request = rq->cmd;
-	job->request_len = rq->cmd_len;
-	job->reply = rq->sense;
-	job->reply_len = SCSI_SENSE_BUFFERSIZE;	/* Size of sense buffer
-						 * allocated */
 	if (req->bio) {
 		ret = bsg_map_buffer(&job->request_payload, req);
 		if (ret)
@@ -163,13 +214,13 @@ static int bsg_create_job(struct device *dev, struct request *req)
 	/* take a reference for the request */
 	get_device(job->dev);
 	kref_init(&job->kref);
-	return 0;
+	return true;
 
 failjob_rls_rqst_payload:
 	kfree(job->request_payload.sg_list);
 failjob_rls_job:
-	kfree(job);
-	return -ENOMEM;
+	job->result = -ENOMEM;
+	return false;
 }
 
 /**
@@ -187,7 +238,6 @@ static void bsg_request_fn(struct request_queue *q)
 {
 	struct device *dev = q->queuedata;
 	struct request *req;
-	struct bsg_job *job;
 	int ret;
 
 	if (!get_device(dev))
@@ -199,16 +249,13 @@ static void bsg_request_fn(struct request_queue *q)
 			break;
 		spin_unlock_irq(q->queue_lock);
 
-		ret = bsg_create_job(dev, req);
-		if (ret) {
-			scsi_req(req)->result = ret;
-			blk_end_request_all(req, ret);
+		if (!bsg_prepare_job(dev, req)) {
+			blk_end_request_all(req, BLK_STS_OK);
 			spin_lock_irq(q->queue_lock);
 			continue;
 		}
 
-		job = req->special;
-		ret = q->bsg_job_fn(job);
+		ret = q->bsg_job_fn(blk_mq_rq_to_pdu(req));
 		spin_lock_irq(q->queue_lock);
 		if (ret)
 			break;
@@ -219,6 +266,36 @@ static void bsg_request_fn(struct request_queue *q)
 	spin_lock_irq(q->queue_lock);
 }
 
+/* called right after the request is allocated for the request_queue */
+static int bsg_init_rq(struct request_queue *q, struct request *req, gfp_t gfp)
+{
+	struct bsg_job *job = blk_mq_rq_to_pdu(req);
+
+	job->reply = kzalloc(SCSI_SENSE_BUFFERSIZE, gfp);
+	if (!job->reply)
+		return -ENOMEM;
+	return 0;
+}
+
+/* called right before the request is given to the request_queue user */
+static void bsg_initialize_rq(struct request *req)
+{
+	struct bsg_job *job = blk_mq_rq_to_pdu(req);
+	void *reply = job->reply;
+
+	memset(job, 0, sizeof(*job));
+	job->reply = reply;
+	job->reply_len = SCSI_SENSE_BUFFERSIZE;
+	job->dd_data = job + 1;
+}
+
+static void bsg_exit_rq(struct request_queue *q, struct request *req)
+{
+	struct bsg_job *job = blk_mq_rq_to_pdu(req);
+
+	kfree(job->reply);
+}
+
 /**
  * bsg_setup_queue - Create and add the bsg hooks so we can receive requests
  * @dev: device to attach bsg device to
@@ -226,7 +303,7 @@ static void bsg_request_fn(struct request_queue *q)
  * @job_fn: bsg job handler
  * @dd_job_size: size of LLD data needed for each job
  */
-struct request_queue *bsg_setup_queue(struct device *dev, char *name,
+struct request_queue *bsg_setup_queue(struct device *dev, const char *name,
 		bsg_job_fn *job_fn, int dd_job_size)
 {
 	struct request_queue *q;
@@ -235,7 +312,10 @@ struct request_queue *bsg_setup_queue(struct device *dev, char *name,
 	q = blk_alloc_queue(GFP_KERNEL);
 	if (!q)
 		return ERR_PTR(-ENOMEM);
-	q->cmd_size = sizeof(struct scsi_request);
+	q->cmd_size = sizeof(struct bsg_job) + dd_job_size;
+	q->init_rq_fn = bsg_init_rq;
+	q->exit_rq_fn = bsg_exit_rq;
+	q->initialize_rq_fn = bsg_initialize_rq;
 	q->request_fn = bsg_request_fn;
 
 	ret = blk_init_allocated_queue(q);
@@ -243,13 +323,12 @@ struct request_queue *bsg_setup_queue(struct device *dev, char *name,
 		goto out_cleanup_queue;
 
 	q->queuedata = dev;
-	q->bsg_job_size = dd_job_size;
 	q->bsg_job_fn = job_fn;
-	queue_flag_set_unlocked(QUEUE_FLAG_BIDI, q);
+	blk_queue_flag_set(QUEUE_FLAG_BIDI, q);
 	blk_queue_softirq_done(q, bsg_softirq_done);
 	blk_queue_rq_timeout(q, BLK_DEFAULT_SG_TIMEOUT);
 
-	ret = bsg_register_queue(q, dev, name, NULL);
+	ret = bsg_register_queue(q, dev, name, &bsg_transport_ops);
 	if (ret) {
 		printk(KERN_ERR "%s: bsg interface failed to "
 		       "initialize - register queue\n", dev->kobj.name);

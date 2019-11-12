@@ -289,14 +289,14 @@ static struct resource pic1_io_resource = {
 	.name = "pic1",
 	.start = PIC_MASTER_CMD,
 	.end = PIC_MASTER_IMR,
-	.flags = IORESOURCE_BUSY
+	.flags = IORESOURCE_IO | IORESOURCE_BUSY
 };
 
 static struct resource pic2_io_resource = {
 	.name = "pic2",
 	.start = PIC_SLAVE_CMD,
 	.end = PIC_SLAVE_IMR,
-	.flags = IORESOURCE_BUSY
+	.flags = IORESOURCE_IO | IORESOURCE_BUSY
 };
 
 static int i8259A_irq_domain_map(struct irq_domain *d, unsigned int virq,
@@ -307,7 +307,7 @@ static int i8259A_irq_domain_map(struct irq_domain *d, unsigned int virq,
 	return 0;
 }
 
-static struct irq_domain_ops i8259A_ops = {
+static const struct irq_domain_ops i8259A_ops = {
 	.map = i8259A_irq_domain_map,
 	.xlate = irq_domain_xlate_onecell,
 };

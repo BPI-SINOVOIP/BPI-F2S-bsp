@@ -1,19 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Hardware driver for DAQ-STC based boards
  *
  * COMEDI - Linux Control and Measurement Device Interface
  * Copyright (C) 1997-2001 David A. Schleef <ds@schleef.org>
  * Copyright (C) 2002-2006 Frank Mori Hess <fmhess@users.sourceforge.net>
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 /*
@@ -1284,6 +1275,8 @@ static void ack_a_interrupt(struct comedi_device *dev, unsigned short a_status)
 		ack |= NISTC_INTA_ACK_AI_START;
 	if (a_status & NISTC_AI_STATUS1_STOP)
 		ack |= NISTC_INTA_ACK_AI_STOP;
+	if (a_status & NISTC_AI_STATUS1_OVER)
+		ack |= NISTC_INTA_ACK_AI_ERR;
 	if (ack)
 		ni_stc_writew(dev, ack, NISTC_INTA_ACK_REG);
 }
@@ -1962,7 +1955,8 @@ static unsigned int ni_timer_to_ns(const struct comedi_device *dev, int timer)
 static void ni_cmd_set_mite_transfer(struct mite_ring *ring,
 				     struct comedi_subdevice *sdev,
 				     const struct comedi_cmd *cmd,
-				     unsigned int max_count) {
+				     unsigned int max_count)
+{
 #ifdef PCIDMA
 	unsigned int nbytes = max_count;
 
@@ -1973,7 +1967,8 @@ static void ni_cmd_set_mite_transfer(struct mite_ring *ring,
 	if (nbytes > sdev->async->prealloc_bufsz) {
 		if (cmd->stop_arg > 0)
 			dev_err(sdev->device->class_dev,
-				"ni_cmd_set_mite_transfer: tried exact data transfer limits greater than buffer size\n");
+				"%s: tried exact data transfer limits greater than buffer size\n",
+				__func__);
 
 		/*
 		 * we can only transfer up to the size of the buffer.  In this
@@ -1986,7 +1981,8 @@ static void ni_cmd_set_mite_transfer(struct mite_ring *ring,
 	mite_init_ring_descriptors(ring, sdev, nbytes);
 #else
 	dev_err(sdev->device->class_dev,
-		"ni_cmd_set_mite_transfer: exact data transfer limits not implemented yet without DMA\n");
+		"%s: exact data transfer limits not implemented yet without DMA\n",
+		__func__);
 #endif
 }
 
@@ -3520,6 +3516,7 @@ static int ni_cdio_check_chanlist(struct comedi_device *dev,
 static int ni_cdio_cmdtest(struct comedi_device *dev,
 			   struct comedi_subdevice *s, struct comedi_cmd *cmd)
 {
+	unsigned int bytes_per_scan;
 	int err = 0;
 	int tmp;
 
@@ -3549,9 +3546,12 @@ static int ni_cdio_cmdtest(struct comedi_device *dev,
 	err |= comedi_check_trigger_arg_is(&cmd->convert_arg, 0);
 	err |= comedi_check_trigger_arg_is(&cmd->scan_end_arg,
 					   cmd->chanlist_len);
-	err |= comedi_check_trigger_arg_max(&cmd->stop_arg,
-					    s->async->prealloc_bufsz /
-					    comedi_bytes_per_scan(s));
+	bytes_per_scan = comedi_bytes_per_scan_cmd(s, cmd);
+	if (bytes_per_scan) {
+		err |= comedi_check_trigger_arg_max(&cmd->stop_arg,
+						    s->async->prealloc_bufsz /
+						    bytes_per_scan);
+	}
 
 	if (err)
 		return 3;
@@ -4298,7 +4298,7 @@ static int pack_ad8842(int addr, int val, int *bitstring)
 struct caldac_struct {
 	int n_chans;
 	int n_bits;
-	int (*packbits)(int, int, int *);
+	int (*packbits)(int address, int value, int *bitstring);
 };
 
 static struct caldac_struct caldacs[] = {
@@ -4695,7 +4695,7 @@ static int cs5529_do_conversion(struct comedi_device *dev,
 	retval = cs5529_wait_for_idle(dev);
 	if (retval) {
 		dev_err(dev->class_dev,
-			"timeout or signal in cs5529_do_conversion()\n");
+			"timeout or signal in %s()\n", __func__);
 		return -ETIME;
 	}
 	status = ni_ao_win_inw(dev, NI67XX_CAL_STATUS_REG);
@@ -5450,11 +5450,11 @@ static int ni_E_init(struct comedi_device *dev,
 	/* Digital I/O (PFI) subdevice */
 	s = &dev->subdevices[NI_PFI_DIO_SUBDEV];
 	s->type		= COMEDI_SUBD_DIO;
-	s->subdev_flags	= SDF_READABLE | SDF_WRITABLE | SDF_INTERNAL;
 	s->maxdata	= 1;
 	if (devpriv->is_m_series) {
 		s->n_chan	= 16;
 		s->insn_bits	= ni_pfi_insn_bits;
+		s->subdev_flags	= SDF_READABLE | SDF_WRITABLE | SDF_INTERNAL;
 
 		ni_writew(dev, s->state, NI_M_PFI_DO_REG);
 		for (i = 0; i < NUM_PFI_OUTPUT_SELECT_REGS; ++i) {
@@ -5463,6 +5463,7 @@ static int ni_E_init(struct comedi_device *dev,
 		}
 	} else {
 		s->n_chan	= 10;
+		s->subdev_flags	= SDF_INTERNAL;
 	}
 	s->insn_config	= ni_pfi_insn_config;
 

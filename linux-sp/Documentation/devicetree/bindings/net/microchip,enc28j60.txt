@@ -8,9 +8,6 @@ the SPI master node.
 Required properties:
 - compatible: Should be "microchip,enc28j60"
 - reg: Specify the SPI chip select the ENC28J60 is wired to
-- interrupt-parent: Specify the phandle of the source interrupt, see interrupt
-                    binding documentation for details. Usually this is the GPIO bank
-                    the interrupt line is wired to.
 - interrupts: Specify the interrupt index within the interrupt controller (referred
               to above in interrupt-parent) and interrupt type. The ENC28J60 natively
               generates falling edge interrupts, however, additional board logic
@@ -33,7 +30,6 @@ Example (for NXP i.MX28 with pin control stuff for GPIO irq):
                 compatible = "fsl,imx28-spi";
                 pinctrl-names = "default";
                 pinctrl-0 = <&spi2_pins_b &spi2_sck_cfg>;
-                status = "okay";
 
                 enc28j60: ethernet@0 {
                         compatible = "microchip,enc28j60";

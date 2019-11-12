@@ -33,7 +33,6 @@
 #include <linux/swap.h>
 #include <linux/stddef.h>
 #include <linux/vmalloc.h>
-#include <linux/memblock.h>
 #include <linux/slab.h>
 #include <linux/hugetlb.h>
 
@@ -52,15 +51,9 @@
 #include <asm/sections.h>
 #include <asm/firmware.h>
 #include <asm/dma.h>
-#include <asm/powernv.h>
 
 #include "mmu_decl.h"
 
-#ifdef CONFIG_PPC_STD_MMU_64
-#if TASK_SIZE_USER64 > (1UL << (ESID_BITS + SID_SHIFT))
-#error TASK_SIZE_USER64 exceeds user VSID range
-#endif
-#endif
 
 #ifdef CONFIG_PPC_BOOK3S_64
 /*
@@ -79,8 +72,8 @@ unsigned long __pud_index_size;
 EXPORT_SYMBOL(__pud_index_size);
 unsigned long __pgd_index_size;
 EXPORT_SYMBOL(__pgd_index_size);
-unsigned long __pmd_cache_index;
-EXPORT_SYMBOL(__pmd_cache_index);
+unsigned long __pud_cache_index;
+EXPORT_SYMBOL(__pud_cache_index);
 unsigned long __pte_table_size;
 EXPORT_SYMBOL(__pte_table_size);
 unsigned long __pmd_table_size;
@@ -103,6 +96,8 @@ unsigned long __vmalloc_start;
 EXPORT_SYMBOL(__vmalloc_start);
 unsigned long __vmalloc_end;
 EXPORT_SYMBOL(__vmalloc_end);
+unsigned long __kernel_io_start;
+EXPORT_SYMBOL(__kernel_io_start);
 struct page *vmemmap;
 EXPORT_SYMBOL(vmemmap);
 unsigned long __pte_frag_nr;
@@ -241,20 +236,8 @@ void __iomem * ioremap_prot(phys_addr_t addr, unsigned long size,
 	/*
 	 * Force kernel mapping.
 	 */
-#if defined(CONFIG_PPC_BOOK3S_64)
-	flags |= _PAGE_PRIVILEGED;
-#else
 	flags &= ~_PAGE_USER;
-#endif
-
-
-#ifdef _PAGE_BAP_SR
-	/* _PAGE_USER contains _PAGE_BAP_SR on BookE using the new PTE format
-	 * which means that we just cleared supervisor access... oops ;-) This
-	 * restores it
-	 */
-	flags |= _PAGE_BAP_SR;
-#endif
+	flags |= _PAGE_PRIVILEGED;
 
 	if (ppc_md.ioremap)
 		return ppc_md.ioremap(addr, size, flags, caller);
@@ -323,159 +306,30 @@ struct page *pud_page(pud_t pud)
  */
 struct page *pmd_page(pmd_t pmd)
 {
-	if (pmd_trans_huge(pmd) || pmd_huge(pmd))
+	if (pmd_trans_huge(pmd) || pmd_huge(pmd) || pmd_devmap(pmd))
 		return pte_page(pmd_pte(pmd));
 	return virt_to_page(pmd_page_vaddr(pmd));
 }
 
-#ifdef CONFIG_PPC_64K_PAGES
-static pte_t *get_from_cache(struct mm_struct *mm)
+#ifdef CONFIG_STRICT_KERNEL_RWX
+void mark_rodata_ro(void)
 {
-	void *pte_frag, *ret;
-
-	spin_lock(&mm->page_table_lock);
-	ret = mm->context.pte_frag;
-	if (ret) {
-		pte_frag = ret + PTE_FRAG_SIZE;
-		/*
-		 * If we have taken up all the fragments mark PTE page NULL
-		 */
-		if (((unsigned long)pte_frag & ~PAGE_MASK) == 0)
-			pte_frag = NULL;
-		mm->context.pte_frag = pte_frag;
-	}
-	spin_unlock(&mm->page_table_lock);
-	return (pte_t *)ret;
-}
-
-static pte_t *__alloc_for_cache(struct mm_struct *mm, int kernel)
-{
-	void *ret = NULL;
-	struct page *page = alloc_page(GFP_KERNEL | __GFP_NOTRACK | __GFP_ZERO);
-	if (!page)
-		return NULL;
-	if (!kernel && !pgtable_page_ctor(page)) {
-		__free_page(page);
-		return NULL;
+	if (!mmu_has_feature(MMU_FTR_KERNEL_RO)) {
+		pr_warn("Warning: Unable to mark rodata read only on this CPU.\n");
+		return;
 	}
 
-	ret = page_address(page);
-	spin_lock(&mm->page_table_lock);
-	/*
-	 * If we find pgtable_page set, we return
-	 * the allocated page with single fragement
-	 * count.
-	 */
-	if (likely(!mm->context.pte_frag)) {
-		set_page_count(page, PTE_FRAG_NR);
-		mm->context.pte_frag = ret + PTE_FRAG_SIZE;
-	}
-	spin_unlock(&mm->page_table_lock);
-
-	return (pte_t *)ret;
+	if (radix_enabled())
+		radix__mark_rodata_ro();
+	else
+		hash__mark_rodata_ro();
 }
 
-pte_t *pte_fragment_alloc(struct mm_struct *mm, unsigned long vmaddr, int kernel)
+void mark_initmem_nx(void)
 {
-	pte_t *pte;
-
-	pte = get_from_cache(mm);
-	if (pte)
-		return pte;
-
-	return __alloc_for_cache(mm, kernel);
-}
-#endif /* CONFIG_PPC_64K_PAGES */
-
-void pte_fragment_free(unsigned long *table, int kernel)
-{
-	struct page *page = virt_to_page(table);
-	if (put_page_testzero(page)) {
-		if (!kernel)
-			pgtable_page_dtor(page);
-		free_hot_cold_page(page, 0);
-	}
-}
-
-#ifdef CONFIG_SMP
-void pgtable_free_tlb(struct mmu_gather *tlb, void *table, int shift)
-{
-	unsigned long pgf = (unsigned long)table;
-
-	BUG_ON(shift > MAX_PGTABLE_INDEX_SIZE);
-	pgf |= shift;
-	tlb_remove_table(tlb, (void *)pgf);
-}
-
-void __tlb_remove_table(void *_table)
-{
-	void *table = (void *)((unsigned long)_table & ~MAX_PGTABLE_INDEX_SIZE);
-	unsigned shift = (unsigned long)_table & MAX_PGTABLE_INDEX_SIZE;
-
-	if (!shift)
-		/* PTE page needs special handling */
-		pte_fragment_free(table, 0);
-	else {
-		BUG_ON(shift > MAX_PGTABLE_INDEX_SIZE);
-		kmem_cache_free(PGT_CACHE(shift), table);
-	}
-}
-#else
-void pgtable_free_tlb(struct mmu_gather *tlb, void *table, int shift)
-{
-	if (!shift) {
-		/* PTE page needs special handling */
-		pte_fragment_free(table, 0);
-	} else {
-		BUG_ON(shift > MAX_PGTABLE_INDEX_SIZE);
-		kmem_cache_free(PGT_CACHE(shift), table);
-	}
+	if (radix_enabled())
+		radix__mark_initmem_nx();
+	else
+		hash__mark_initmem_nx();
 }
 #endif
-
-#ifdef CONFIG_PPC_BOOK3S_64
-void __init mmu_partition_table_init(void)
-{
-	unsigned long patb_size = 1UL << PATB_SIZE_SHIFT;
-	unsigned long ptcr;
-
-	BUILD_BUG_ON_MSG((PATB_SIZE_SHIFT > 36), "Partition table size too large.");
-	partition_tb = __va(memblock_alloc_base(patb_size, patb_size,
-						MEMBLOCK_ALLOC_ANYWHERE));
-
-	/* Initialize the Partition Table with no entries */
-	memset((void *)partition_tb, 0, patb_size);
-
-	/*
-	 * update partition table control register,
-	 * 64 K size.
-	 */
-	ptcr = __pa(partition_tb) | (PATB_SIZE_SHIFT - 12);
-	mtspr(SPRN_PTCR, ptcr);
-	powernv_set_nmmu_ptcr(ptcr);
-}
-
-void mmu_partition_table_set_entry(unsigned int lpid, unsigned long dw0,
-				   unsigned long dw1)
-{
-	unsigned long old = be64_to_cpu(partition_tb[lpid].patb0);
-
-	partition_tb[lpid].patb0 = cpu_to_be64(dw0);
-	partition_tb[lpid].patb1 = cpu_to_be64(dw1);
-
-	/*
-	 * Global flush of TLBs and partition table caches for this lpid.
-	 * The type of flush (hash or radix) depends on what the previous
-	 * use of this partition ID was, not the new use.
-	 */
-	asm volatile("ptesync" : : : "memory");
-	if (old & PATB_HR)
-		asm volatile(PPC_TLBIE_5(%0,%1,2,0,1) : :
-			     "r" (TLBIEL_INVAL_SET_LPID), "r" (lpid));
-	else
-		asm volatile(PPC_TLBIE_5(%0,%1,2,0,0) : :
-			     "r" (TLBIEL_INVAL_SET_LPID), "r" (lpid));
-	asm volatile("eieio; tlbsync; ptesync" : : : "memory");
-}
-EXPORT_SYMBOL_GPL(mmu_partition_table_set_entry);
-#endif /* CONFIG_PPC_BOOK3S_64 */

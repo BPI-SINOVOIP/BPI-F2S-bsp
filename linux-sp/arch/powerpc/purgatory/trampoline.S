@@ -12,15 +12,7 @@
  * Software Foundation (version 2 of the License).
  */
 
-#if defined(__LITTLE_ENDIAN__)
-#define STWX_BE	stwbrx
-#define LWZX_BE	lwbrx
-#elif defined(__BIG_ENDIAN__)
-#define STWX_BE	stwx
-#define LWZX_BE	lwzx
-#else
-#error no endianness defined!
-#endif
+#include <asm/asm-compat.h>
 
 	.machine ppc64
 	.balign 256
@@ -67,7 +59,7 @@ master:
 	mr	%r16,%r3	/* save dt address in reg16 */
 	li	%r4,20
 	LWZX_BE	%r6,%r3,%r4	/* fetch __be32 version number at byte 20 */
-	cmpwi	%r0,%r6,2	/* v2 or later? */
+	cmpwi	%cr0,%r6,2	/* v2 or later? */
 	blt	1f
 	li	%r4,28
 	STWX_BE	%r17,%r3,%r4	/* Store my cpu as __be32 at byte 28 */
@@ -104,13 +96,13 @@ master:
 	.balign 8
 	.globl kernel
 kernel:
-	.llong  0x0
+	.8byte  0x0
 	.size kernel, . - kernel
 
 	.balign 8
 	.globl dt_offset
 dt_offset:
-	.llong  0x0
+	.8byte  0x0
 	.size dt_offset, . - dt_offset
 
 

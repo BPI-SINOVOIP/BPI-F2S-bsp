@@ -29,7 +29,8 @@
 
 #include "mpu3050.h"
 
-#define MPU3050_CHIP_ID		0x69
+#define MPU3050_CHIP_ID		0x68
+#define MPU3050_CHIP_ID_MASK	0x7E
 
 /*
  * Register map: anything suffixed *_H is a big-endian high byte and always
@@ -742,7 +743,6 @@ static const struct attribute_group mpu3050_attribute_group = {
 };
 
 static const struct iio_info mpu3050_info = {
-	.driver_module = THIS_MODULE,
 	.read_raw = mpu3050_read_raw,
 	.write_raw = mpu3050_write_raw,
 	.attrs = &mpu3050_attribute_group,
@@ -1032,7 +1032,6 @@ static int mpu3050_drdy_trigger_set_state(struct iio_trigger *trig,
 }
 
 static const struct iio_trigger_ops mpu3050_trigger_ops = {
-	.owner = THIS_MODULE,
 	.set_trigger_state = mpu3050_drdy_trigger_set_state,
 };
 
@@ -1063,11 +1062,6 @@ static int mpu3050_trigger_probe(struct iio_dev *indio_dev, int irq)
 	case IRQF_TRIGGER_RISING:
 		dev_info(&indio_dev->dev,
 			 "pulse interrupts on the rising edge\n");
-		if (mpu3050->irq_opendrain) {
-			dev_info(&indio_dev->dev,
-				 "rising edge incompatible with open drain\n");
-			mpu3050->irq_opendrain = false;
-		}
 		break;
 	case IRQF_TRIGGER_FALLING:
 		mpu3050->irq_actl = true;
@@ -1078,11 +1072,6 @@ static int mpu3050_trigger_probe(struct iio_dev *indio_dev, int irq)
 		mpu3050->irq_latch = true;
 		dev_info(&indio_dev->dev,
 			 "interrupts active high level\n");
-		if (mpu3050->irq_opendrain) {
-			dev_info(&indio_dev->dev,
-				 "active high incompatible with open drain\n");
-			mpu3050->irq_opendrain = false;
-		}
 		/*
 		 * With level IRQs, we mask the IRQ until it is processed,
 		 * but with edge IRQs (pulses) we can queue several interrupts
@@ -1188,8 +1177,9 @@ int mpu3050_common_probe(struct device *dev,
 		goto err_power_down;
 	}
 
-	if (val != MPU3050_CHIP_ID) {
-		dev_err(dev, "unsupported chip id %02x\n", (u8)val);
+	if ((val & MPU3050_CHIP_ID_MASK) != MPU3050_CHIP_ID) {
+		dev_err(dev, "unsupported chip id %02x\n",
+				(u8)(val & MPU3050_CHIP_ID_MASK));
 		ret = -ENODEV;
 		goto err_power_down;
 	}

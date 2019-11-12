@@ -1,13 +1,13 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 #ifndef __ASM_S390_PCI_H
 #define __ASM_S390_PCI_H
 
-/* must be set before including asm-generic/pci.h */
-#define PCI_DMA_BUS_IS_PHYS (0)
 /* must be set before including pci_clp.h */
 #define PCI_BAR_COUNT	6
 
 #include <linux/pci.h>
 #include <linux/mutex.h>
+#include <linux/iommu.h>
 #include <asm-generic/pci.h>
 #include <asm/pci_clp.h>
 #include <asm/pci_debug.h>
@@ -51,6 +51,10 @@ struct zpci_fmb_fmt2 {
 	u64 max_work_units;
 };
 
+struct zpci_fmb_fmt3 {
+	u64 tx_bytes;
+};
+
 struct zpci_fmb {
 	u32 format	: 8;
 	u32 fmt_ind	: 24;
@@ -66,15 +70,15 @@ struct zpci_fmb {
 		struct zpci_fmb_fmt0 fmt0;
 		struct zpci_fmb_fmt1 fmt1;
 		struct zpci_fmb_fmt2 fmt2;
+		struct zpci_fmb_fmt3 fmt3;
 	};
 } __packed __aligned(128);
 
 enum zpci_state {
-	ZPCI_FN_STATE_RESERVED,
-	ZPCI_FN_STATE_STANDBY,
-	ZPCI_FN_STATE_CONFIGURED,
-	ZPCI_FN_STATE_ONLINE,
-	NR_ZPCI_FN_STATES,
+	ZPCI_FN_STATE_STANDBY = 0,
+	ZPCI_FN_STATE_CONFIGURED = 1,
+	ZPCI_FN_STATE_RESERVED = 2,
+	ZPCI_FN_STATE_ONLINE = 3,
 };
 
 struct zpci_bar_struct {
@@ -109,7 +113,7 @@ struct zpci_dev {
 	u64		msi_addr;	/* MSI address */
 	unsigned int	max_msi;	/* maximum number of MSI's */
 	struct airq_iv *aibv;		/* adapter interrupt bit vector */
-	unsigned int	aisb;		/* number of the summary bit */
+	unsigned long	aisb;		/* number of the summary bit */
 
 	/* DMA stuff */
 	unsigned long	*dma_table;
@@ -122,6 +126,8 @@ struct zpci_dev {
 	unsigned long	iommu_size;
 	unsigned long	iommu_pages;
 	unsigned int	next_bit;
+
+	struct iommu_device iommu_dev;  /* IOMMU core handle */
 
 	char res_name[16];
 	struct zpci_bar_struct bars[PCI_BAR_COUNT];
@@ -159,11 +165,12 @@ extern const struct attribute_group *zpci_attr_groups[];
 ----------------------------------------------------------------------------- */
 /* Base stuff */
 int zpci_create_device(struct zpci_dev *);
+void zpci_remove_device(struct zpci_dev *zdev);
 int zpci_enable_device(struct zpci_dev *);
 int zpci_disable_device(struct zpci_dev *);
-void zpci_stop_device(struct zpci_dev *);
 int zpci_register_ioat(struct zpci_dev *, u8, u64, u64, u64);
 int zpci_unregister_ioat(struct zpci_dev *, u8);
+void zpci_remove_reserved_devices(void);
 
 /* CLP */
 int clp_scan_pci_devices(void);
@@ -172,6 +179,11 @@ int clp_rescan_pci_devices_simple(void);
 int clp_add_pci_device(u32, u32, int);
 int clp_enable_fh(struct zpci_dev *, u8);
 int clp_disable_fh(struct zpci_dev *);
+int clp_get_state(u32 fid, enum zpci_state *state);
+
+/* IOMMU Interface */
+int zpci_init_iommu(struct zpci_dev *zdev);
+void zpci_destroy_iommu(struct zpci_dev *zdev);
 
 #ifdef CONFIG_PCI
 /* Error handling and recovery */

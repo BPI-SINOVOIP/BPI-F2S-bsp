@@ -221,7 +221,7 @@ void i2400m_tx_prep_header(struct sk_buff *skb)
 {
 	struct i2400m_pl_data_hdr *pl_hdr;
 	skb_pull(skb, ETH_HLEN);
-	pl_hdr = (struct i2400m_pl_data_hdr *) skb_push(skb, sizeof(*pl_hdr));
+	pl_hdr = skb_push(skb, sizeof(*pl_hdr));
 	pl_hdr->reserved = 0;
 }
 
@@ -488,7 +488,7 @@ void i2400m_net_rx(struct i2400m *i2400m, struct sk_buff *skb_rx,
 			net_dev->stats.rx_dropped++;
 			goto error_skb_realloc;
 		}
-		memcpy(skb_put(skb, buf_len), buf, buf_len);
+		skb_put_data(skb, buf, buf_len);
 	}
 	i2400m_rx_fake_eth_header(i2400m->wimax_dev.net_dev,
 				  skb->data - ETH_HLEN,
@@ -535,14 +535,12 @@ void i2400m_net_erx(struct i2400m *i2400m, struct sk_buff *skb,
 {
 	struct net_device *net_dev = i2400m->wimax_dev.net_dev;
 	struct device *dev = i2400m_dev(i2400m);
-	int protocol;
 
 	d_fnstart(2, dev, "(i2400m %p skb %p [%u] cs %d)\n",
 		  i2400m, skb, skb->len, cs);
 	switch(cs) {
 	case I2400M_CS_IPV4_0:
 	case I2400M_CS_IPV4:
-		protocol = ETH_P_IP;
 		i2400m_rx_fake_eth_header(i2400m->wimax_dev.net_dev,
 					  skb->data - ETH_HLEN,
 					  cpu_to_be16(ETH_P_IP));

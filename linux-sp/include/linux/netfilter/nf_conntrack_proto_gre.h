@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 #ifndef _CONNTRACK_PROTO_GRE_H
 #define _CONNTRACK_PROTO_GRE_H
 #include <asm/byteorder.h>
@@ -18,6 +19,19 @@ struct nf_conn;
 struct nf_ct_gre_keymap {
 	struct list_head list;
 	struct nf_conntrack_tuple tuple;
+};
+
+enum grep_conntrack {
+	GRE_CT_UNREPLIED,
+	GRE_CT_REPLIED,
+	GRE_CT_MAX
+};
+
+struct netns_proto_gre {
+	struct nf_proto_net	nf;
+	rwlock_t		keymap_lock;
+	struct list_head	keymap_list;
+	unsigned int		gre_timeouts[GRE_CT_MAX];
 };
 
 /* add new tuple->key_reply pair to keymap */

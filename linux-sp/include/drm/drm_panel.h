@@ -24,8 +24,10 @@
 #ifndef __DRM_PANEL_H__
 #define __DRM_PANEL_H__
 
+#include <linux/errno.h>
 #include <linux/list.h>
 
+struct device_node;
 struct drm_connector;
 struct drm_device;
 struct drm_panel;
@@ -197,7 +199,7 @@ struct drm_panel *of_drm_find_panel(const struct device_node *np);
 #else
 static inline struct drm_panel *of_drm_find_panel(const struct device_node *np)
 {
-	return NULL;
+	return ERR_PTR(-ENODEV);
 }
 #endif
 

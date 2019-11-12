@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-1.0+
 /*
  * Open Host Controller Interface (OHCI) driver for USB.
  *
@@ -39,15 +40,11 @@
 #include <linux/dmapool.h>
 #include <linux/workqueue.h>
 #include <linux/debugfs.h>
-#include <linux/platform_device.h>
-
 
 #include <asm/io.h>
 #include <asm/irq.h>
 #include <asm/unaligned.h>
 #include <asm/byteorder.h>
-#include <linux/usb/sp_usb.h>
-
 
 
 #define DRIVER_AUTHOR "Roman Weissgaerber, David Brownell"
@@ -74,23 +71,17 @@
 /*-------------------------------------------------------------------------*/
 
 static const char	hcd_name [] = "ohci_hcd";
-#ifdef CONFIG_USB_OHCI_SPHE8700_TD_FIX
-u32 td_fix_flag = 0;
-#define set_td_fix_flag() (td_fix_flag |=  1)
-#define clr_td_fix_flag() (td_fix_flag &= ~1)
-#define get_td_fix_flag() (td_fix_flag & 0x1)
-#endif
 
 #define	STATECHANGE_DELAY	msecs_to_jiffies(300)
 #define	IO_WATCHDOG_DELAY	msecs_to_jiffies(275)
+#define	IO_WATCHDOG_OFF		0xffffff00
 
 #include "ohci.h"
 #include "pci-quirks.h"
 
 static void ohci_dump(struct ohci_hcd *ohci);
-static int ohci_init(struct ohci_hcd *ohci);
 static void ohci_stop(struct usb_hcd *hcd);
-static void io_watchdog_func(unsigned long _ohci);
+static void io_watchdog_func(struct timer_list *t);
 
 #include "ohci-hub.c"
 #include "ohci-dbg.c"
@@ -241,7 +232,7 @@ static int ohci_urb_enqueue (
 		}
 
 		/* Start up the I/O watchdog timer, if it's not running */
-		if (!timer_pending(&ohci->io_watchdog) &&
+		if (ohci->prev_frame_no == IO_WATCHDOG_OFF &&
 				list_empty(&ohci->eds_in_use) &&
 				!(ohci->flags & OHCI_QUIRK_QEMU)) {
 			ohci->prev_frame_no = ohci_frame_no(ohci);
@@ -393,7 +384,7 @@ sanitize:
 			ed_free (ohci, ed);
 			break;
 		}
-		/* else FALL THROUGH */
+		/* fall through */
 	default:
 		/* caller was supposed to have unlinked any requests;
 		 * that's not our job.  can't recover; must leak ed.
@@ -456,7 +447,8 @@ static int ohci_init (struct ohci_hcd *ohci)
 	struct usb_hcd *hcd = ohci_to_hcd(ohci);
 
 	/* Accept arbitrarily long scatter-gather lists */
-	hcd->self.sg_tablesize = ~0;
+	if (!(hcd->driver->flags & HCD_LOCAL_MEM))
+		hcd->self.sg_tablesize = ~0;
 
 	if (distrust_firmware)
 		ohci->flags |= OHCI_QUIRK_HUB_POWER;
@@ -510,8 +502,8 @@ static int ohci_init (struct ohci_hcd *ohci)
 	if (ohci->hcca)
 		return 0;
 
-	setup_timer(&ohci->io_watchdog, io_watchdog_func,
-			(unsigned long) ohci);
+	timer_setup(&ohci->io_watchdog, io_watchdog_func, 0);
+	ohci->prev_frame_no = IO_WATCHDOG_OFF;
 
 	ohci->hcca = dma_alloc_coherent (hcd->self.controller,
 			sizeof(*ohci->hcca), &ohci->hcca_dma, GFP_KERNEL);
@@ -733,15 +725,15 @@ static int ohci_start(struct usb_hcd *hcd)
  * the unlink list.  As a result, URBs could never be dequeued and
  * endpoints could never be released.
  */
-static void io_watchdog_func(unsigned long _ohci)
+static void io_watchdog_func(struct timer_list *t)
 {
-	struct ohci_hcd	*ohci = (struct ohci_hcd *) _ohci;
+	struct ohci_hcd	*ohci = from_timer(ohci, t, io_watchdog);
 	bool		takeback_all_pending = false;
 	u32		status;
 	u32		head;
 	struct ed	*ed;
 	struct td	*td, *td_start, *td_next;
-	unsigned	frame_no;
+	unsigned	frame_no, prev_frame_no = IO_WATCHDOG_OFF;
 	unsigned long	flags;
 
 	spin_lock_irqsave(&ohci->lock, flags);
@@ -796,7 +788,7 @@ static void io_watchdog_func(unsigned long _ohci)
 		}
 
 		/* find the last TD processed by the controller. */
-		head = hc32_to_cpu(ohci, ACCESS_ONCE(ed->hwHeadP)) & TD_MASK;
+		head = hc32_to_cpu(ohci, READ_ONCE(ed->hwHeadP)) & TD_MASK;
 		td_start = td;
 		td_next = list_prepare_entry(td, &ed->td_list, td_list);
 		list_for_each_entry_continue(td_next, &ed->td_list, td_list) {
@@ -846,7 +838,7 @@ static void io_watchdog_func(unsigned long _ohci)
 			}
 		}
 		if (!list_empty(&ohci->eds_in_use)) {
-			ohci->prev_frame_no = frame_no;
+			prev_frame_no = frame_no;
 			ohci->prev_wdh_cnt = ohci->wdh_cnt;
 			ohci->prev_donehead = ohci_readl(ohci,
 					&ohci->regs->donehead);
@@ -856,6 +848,7 @@ static void io_watchdog_func(unsigned long _ohci)
 	}
 
  done:
+	ohci->prev_frame_no = prev_frame_no;
 	spin_unlock_irqrestore(&ohci->lock, flags);
 }
 
@@ -866,7 +859,6 @@ static irqreturn_t ohci_irq (struct usb_hcd *hcd)
 	struct ohci_hcd		*ohci = hcd_to_ohci (hcd);
 	struct ohci_regs __iomem *regs = ohci->regs;
 	int			ints;
-	int port_status;
 
 	/* Read interrupt status (and flush pending writes).  We ignore the
 	 * optimization of checking the LSB of hcca->done_head; it doesn't
@@ -971,51 +963,7 @@ static irqreturn_t ohci_irq (struct usb_hcd *hcd)
 	}
 	spin_unlock(&ohci->lock);
 
-#ifdef CONFIG_USB_HOST_NOT_FINISH_QTD_WHEN_DISC_WORKAROUND
-	port_status = ohci_readl(ohci, &ohci->regs->roothub.portstatus[0]);
-	if ((!(port_status & RH_PS_CCS)) || (port_status & RH_PS_CSC)) {
-		tasklet_schedule(&hcd->host_irq_tasklet);
-	}
-#endif
-
 	return IRQ_HANDLED;
-}
-
-#ifdef CONFIG_USB_HOST_NOT_FINISH_QTD_WHEN_DISC_WORKAROUND
-struct api_context {
-	struct completion done;
-	int status;
-};
-static void ohci_irq_tasklet(unsigned long data)
-{
-	int port_status;
-	struct api_context *ctx;
-	struct platform_device *pdev;
-	struct usb_hcd *hcd = (void *)data;
-	struct ohci_hcd *ohci = hcd_to_ohci(hcd);
-
-	pdev = to_platform_device(hcd->self.controller);
-	port_status = ohci_readl(ohci, &ohci->regs->roothub.portstatus[0]);
-	printk(KERN_NOTICE "ohci_irq,id:%d,ps:%x\n",pdev->id - 1,port_status);
-	if (hcd->current_active_urb && hcd->enum_msg_flag) {
-		printk(KERN_NOTICE "ohci_irq,dev disc,ps:%x\n",port_status);
-		ctx = hcd->current_active_urb->context;
-		hcd->enum_msg_flag = false;
-		hcd->current_active_urb = NULL;
-		ctx->status = -ENOTCONN_IRQ;
-		complete(&ctx->done);
-	}
-}
-#endif
-
-int ohci_get_port_status_from_register(struct usb_hcd *hcd)
-{
-	struct ohci_hcd *ohci = hcd_to_ohci(hcd);
-	int port_status = ohci_readl(ohci, &ohci->regs->roothub.portstatus[0]);
-
-	printk(KERN_DEBUG "o_ps:%x\n", port_status);
-
-	return port_status;
 }
 
 /*-------------------------------------------------------------------------*/
@@ -1029,6 +977,7 @@ static void ohci_stop (struct usb_hcd *hcd)
 	if (quirk_nec(ohci))
 		flush_work(&ohci->nec_work);
 	del_timer_sync(&ohci->io_watchdog);
+	ohci->prev_frame_no = IO_WATCHDOG_OFF;
 
 	ohci_writel (ohci, OHCI_INTR_MIE, &ohci->regs->intrdisable);
 	ohci_usb_reset(ohci);
@@ -1296,16 +1245,6 @@ MODULE_LICENSE ("GPL");
 #define TMIO_OHCI_DRIVER	ohci_hcd_tmio_driver
 #endif
 
-#ifdef CONFIG_TILE_USB
-#include "ohci-tilegx.c"
-#define PLATFORM_DRIVER		ohci_hcd_tilegx_driver
-#endif
-
-#ifdef CONFIG_USB_OHCI_HCD_PLATFORM
-#include "ohci-platform.c"
-#endif
-
-#if 0
 static int __init ohci_hcd_mod_init(void)
 {
 	int retval = 0;
@@ -1319,21 +1258,11 @@ static int __init ohci_hcd_mod_init(void)
 	set_bit(USB_OHCI_LOADED, &usb_hcds_loaded);
 
 	ohci_debug_root = debugfs_create_dir("ohci", usb_debug_root);
-	if (!ohci_debug_root) {
-		retval = -ENOENT;
-		goto error_debug;
-	}
 
 #ifdef PS3_SYSTEM_BUS_DRIVER
 	retval = ps3_ohci_driver_register(&PS3_SYSTEM_BUS_DRIVER);
 	if (retval < 0)
 		goto error_ps3;
-#endif
-
-#ifdef PLATFORM_DRIVER
-	retval = platform_driver_register(&PLATFORM_DRIVER);
-	if (retval < 0)
-		goto error_platform;
 #endif
 
 #ifdef OF_PLATFORM_DRIVER
@@ -1379,22 +1308,17 @@ static int __init ohci_hcd_mod_init(void)
 	platform_driver_unregister(&OF_PLATFORM_DRIVER);
  error_of_platform:
 #endif
-#ifdef PLATFORM_DRIVER
-	platform_driver_unregister(&PLATFORM_DRIVER);
- error_platform:
-#endif
 #ifdef PS3_SYSTEM_BUS_DRIVER
 	ps3_ohci_driver_unregister(&PS3_SYSTEM_BUS_DRIVER);
  error_ps3:
 #endif
 	debugfs_remove(ohci_debug_root);
 	ohci_debug_root = NULL;
- error_debug:
 
 	clear_bit(USB_OHCI_LOADED, &usb_hcds_loaded);
 	return retval;
 }
-/*module_init(ohci_hcd_mod_init);*/
+module_init(ohci_hcd_mod_init);
 
 static void __exit ohci_hcd_mod_exit(void)
 {
@@ -1410,14 +1334,11 @@ static void __exit ohci_hcd_mod_exit(void)
 #ifdef OF_PLATFORM_DRIVER
 	platform_driver_unregister(&OF_PLATFORM_DRIVER);
 #endif
-#ifdef PLATFORM_DRIVER
-	platform_driver_unregister(&PLATFORM_DRIVER);
-#endif
 #ifdef PS3_SYSTEM_BUS_DRIVER
 	ps3_ohci_driver_unregister(&PS3_SYSTEM_BUS_DRIVER);
 #endif
 	debugfs_remove(ohci_debug_root);
 	clear_bit(USB_OHCI_LOADED, &usb_hcds_loaded);
 }
-/*module_exit(ohci_hcd_mod_exit);*/
-#endif
+module_exit(ohci_hcd_mod_exit);
+

@@ -8,6 +8,7 @@
  * Copyright 2007, Michael Wu <flamingice@sourmilk.net>
  * Copyright 2007-2008, Intel Corporation
  * Copyright 2008, Johannes Berg <johannes@sipsolutions.net>
+ * Copyright (C) 2018        Intel Corporation
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -27,7 +28,7 @@ int ieee80211_parse_ch_switch_ie(struct ieee80211_sub_if_data *sdata,
 				 u32 sta_flags, u8 *bssid,
 				 struct ieee80211_csa_ie *csa_ie)
 {
-	enum nl80211_band new_band;
+	enum nl80211_band new_band = current_band;
 	int new_freq;
 	u8 new_chan_no;
 	struct ieee80211_channel *new_chan;
@@ -35,6 +36,8 @@ int ieee80211_parse_ch_switch_ie(struct ieee80211_sub_if_data *sdata,
 	const struct ieee80211_sec_chan_offs_ie *sec_chan_offs;
 	const struct ieee80211_wide_bw_chansw_ie *wide_bw_chansw_ie;
 	int secondary_channel_offset = -1;
+
+	memset(csa_ie, 0, sizeof(*csa_ie));
 
 	sec_chan_offs = elems->sec_chan_offs;
 	wide_bw_chansw_ie = elems->wide_bw_chansw_ie;
@@ -53,15 +56,13 @@ int ieee80211_parse_ch_switch_ie(struct ieee80211_sub_if_data *sdata,
 				elems->ext_chansw_ie->new_operating_class,
 				&new_band)) {
 			sdata_info(sdata,
-				   "cannot understand ECSA IE operating class %d, disconnecting\n",
+				   "cannot understand ECSA IE operating class, %d, ignoring\n",
 				   elems->ext_chansw_ie->new_operating_class);
-			return -EINVAL;
 		}
 		new_chan_no = elems->ext_chansw_ie->new_ch_num;
 		csa_ie->count = elems->ext_chansw_ie->count;
 		csa_ie->mode = elems->ext_chansw_ie->mode;
 	} else if (elems->ch_switch_ie) {
-		new_band = current_band;
 		new_chan_no = elems->ch_switch_ie->new_ch_num;
 		csa_ie->count = elems->ch_switch_ie->count;
 		csa_ie->mode = elems->ch_switch_ie->mode;
@@ -76,6 +77,11 @@ int ieee80211_parse_ch_switch_ie(struct ieee80211_sub_if_data *sdata,
 		csa_ie->mode = elems->mesh_chansw_params_ie->mesh_flags;
 		csa_ie->pre_value = le16_to_cpu(
 				elems->mesh_chansw_params_ie->mesh_pre_value);
+
+		if (elems->mesh_chansw_params_ie->mesh_flags &
+				WLAN_EID_CHAN_SWITCH_PARAM_REASON)
+			csa_ie->reason_code = le16_to_cpu(
+				elems->mesh_chansw_params_ie->mesh_reason);
 	}
 
 	new_freq = ieee80211_channel_to_frequency(new_chan_no, new_band);
@@ -186,8 +192,7 @@ static void ieee80211_send_refuse_measurement_request(struct ieee80211_sub_if_da
 		return;
 
 	skb_reserve(skb, local->hw.extra_tx_headroom);
-	msr_report = (struct ieee80211_mgmt *)skb_put(skb, 24);
-	memset(msr_report, 0, 24);
+	msr_report = skb_put_zero(skb, 24);
 	memcpy(msr_report->da, da, ETH_ALEN);
 	memcpy(msr_report->sa, sdata->vif.addr, ETH_ALEN);
 	memcpy(msr_report->bssid, bssid, ETH_ALEN);

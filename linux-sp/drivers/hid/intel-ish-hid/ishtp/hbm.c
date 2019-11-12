@@ -298,7 +298,6 @@ int ishtp_hbm_cl_flow_control_req(struct ishtp_device *dev,
 	struct ishtp_msg_hdr *ishtp_hdr = &hdr;
 	const size_t len = sizeof(struct hbm_flow_control);
 	int	rv;
-	unsigned int	num_frags;
 	unsigned long	flags;
 
 	spin_lock_irqsave(&cl->fc_spinlock, flags);
@@ -314,20 +313,16 @@ int ishtp_hbm_cl_flow_control_req(struct ishtp_device *dev,
 		return	0;
 	}
 
-	num_frags = cl->recv_msg_num_frags;
 	cl->recv_msg_num_frags = 0;
 
 	rv = ishtp_write_message(dev, ishtp_hdr, data);
 	if (!rv) {
 		++cl->out_flow_ctrl_creds;
 		++cl->out_flow_ctrl_cnt;
-		getnstimeofday(&cl->ts_out_fc);
-		if (cl->ts_rx.tv_sec && cl->ts_rx.tv_nsec) {
-			struct timespec ts_diff;
-
-			ts_diff = timespec_sub(cl->ts_out_fc, cl->ts_rx);
-			if (timespec_compare(&ts_diff, &cl->ts_max_fc_delay)
-					> 0)
+		cl->ts_out_fc = ktime_get();
+		if (cl->ts_rx) {
+			ktime_t ts_diff = ktime_sub(cl->ts_out_fc, cl->ts_rx);
+			if (ktime_after(ts_diff, cl->ts_max_fc_delay))
 				cl->ts_max_fc_delay = ts_diff;
 		}
 	} else {

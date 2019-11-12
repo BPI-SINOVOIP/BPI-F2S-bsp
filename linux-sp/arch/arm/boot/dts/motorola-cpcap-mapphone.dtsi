@@ -26,6 +26,22 @@
 			#io-channel-cells = <1>;
 		};
 
+		cpcap_battery: battery {
+			compatible = "motorola,cpcap-battery";
+			interrupts-extended = <
+				&cpcap 6 0 &cpcap 5 0 &cpcap 3 0
+				&cpcap 20 0 &cpcap 54 0
+			>;
+			interrupt-names =
+				"eol", "lowbph", "lowbpl",
+				"chrgcurr1", "battdetb";
+			io-channels = <&cpcap_adc 0 &cpcap_adc 1
+				       &cpcap_adc 5 &cpcap_adc 6>;
+			io-channel-names = "battdetb", "battp",
+					   "chg_isense", "batti";
+			power-supplies = <&cpcap_charger>;
+		};
+
 		cpcap_charger: charger {
 			compatible = "motorola,mapphone-cpcap-charger";
 			interrupts-extended = <
@@ -49,6 +65,19 @@
 			compatible = "motorola,mapphone-cpcap-regulator";
 
 			cpcap_regulators: regulators {
+			};
+		};
+
+		cpcap_audio: audio-codec {
+			#sound-dai-cells = <1>;
+
+			port@0 {
+				cpcap_audio_codec0: endpoint {
+				};
+			};
+			port@1 {
+				cpcap_audio_codec1: endpoint {
+				};
 			};
 		};
 
@@ -76,7 +105,7 @@
 			interrupts-extended = <
 				&cpcap 15 0 &cpcap 14 0 &cpcap 28 0 &cpcap 19 0
 				&cpcap 18 0 &cpcap 17 0 &cpcap 16 0 &cpcap 49 0
-				&cpcap 48 1
+				&cpcap 48 0
 			>;
 			interrupt-names =
 				"id_ground", "id_float", "se0conn", "vbusvld",
@@ -239,5 +268,6 @@
 		regulator-min-microvolt = <2775000>;
 		regulator-max-microvolt = <2775000>;
 		regulator-enable-ramp-delay = <1000>;
+		regulator-initial-mode = <0x00>; /* NORMAL */
 	};
 };

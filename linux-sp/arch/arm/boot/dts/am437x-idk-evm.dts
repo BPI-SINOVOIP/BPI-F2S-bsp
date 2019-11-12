@@ -339,7 +339,7 @@
 	clock-frequency = <400000>;
 
 	at24@50 {
-		compatible = "at24,24c256";
+		compatible = "atmel,24c256";
 		pagesize = <64>;
 		reg = <0x50>;
 	};
@@ -518,4 +518,18 @@
 
 &cpu {
 	cpu0-supply = <&tps>;
+};
+
+&cpu0_opp_table {
+	/*
+	 * Supply voltage supervisor on board will not allow opp50 so
+	 * disable it and set opp100 as suspend OPP.
+	 */
+	opp50@300000000 {
+		status = "disabled";
+	};
+
+	opp100@600000000 {
+		opp-suspend;
+	};
 };

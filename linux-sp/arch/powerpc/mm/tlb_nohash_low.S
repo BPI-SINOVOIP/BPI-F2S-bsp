@@ -34,6 +34,8 @@
 #include <asm/asm-offsets.h>
 #include <asm/processor.h>
 #include <asm/bug.h>
+#include <asm/asm-compat.h>
+#include <asm/feature-fixups.h>
 
 #if defined(CONFIG_40x)
 
@@ -60,7 +62,7 @@ _GLOBAL(__tlbil_va)
 	isync
 1:	blr
 
-#elif defined(CONFIG_8xx)
+#elif defined(CONFIG_PPC_8xx)
 
 /*
  * Nothing to do for 8xx, everything is inline

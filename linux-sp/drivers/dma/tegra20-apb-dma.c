@@ -353,7 +353,8 @@ static int tegra_dma_slave_config(struct dma_chan *dc,
 	}
 
 	memcpy(&tdc->dma_sconfig, sconfig, sizeof(*sconfig));
-	if (tdc->slave_id == TEGRA_APBDMA_SLAVE_ID_INVALID) {
+	if (tdc->slave_id == TEGRA_APBDMA_SLAVE_ID_INVALID &&
+	    sconfig->device_fc) {
 		if (sconfig->slave_id > TEGRA_APBDMA_CSR_REQ_SEL_MASK)
 			return -EINVAL;
 		tdc->slave_id = sconfig->slave_id;
@@ -635,7 +636,10 @@ static void handle_cont_sngl_cycle_dma_done(struct tegra_dma_channel *tdc,
 
 	sgreq = list_first_entry(&tdc->pending_sg_req, typeof(*sgreq), node);
 	dma_desc = sgreq->dma_desc;
-	dma_desc->bytes_transferred += sgreq->req_len;
+	/* if we dma for long enough the transfer count will wrap */
+	dma_desc->bytes_transferred =
+		(dma_desc->bytes_transferred + sgreq->req_len) %
+		dma_desc->bytes_requested;
 
 	/* Callback need to be call */
 	if (!dma_desc->cb_count)
@@ -970,8 +974,13 @@ static struct dma_async_tx_descriptor *tegra_dma_prep_slave_sg(
 					TEGRA_APBDMA_AHBSEQ_WRAP_SHIFT;
 	ahb_seq |= TEGRA_APBDMA_AHBSEQ_BUS_WIDTH_32;
 
-	csr |= TEGRA_APBDMA_CSR_ONCE | TEGRA_APBDMA_CSR_FLOW;
-	csr |= tdc->slave_id << TEGRA_APBDMA_CSR_REQ_SEL_SHIFT;
+	csr |= TEGRA_APBDMA_CSR_ONCE;
+
+	if (tdc->slave_id != TEGRA_APBDMA_SLAVE_ID_INVALID) {
+		csr |= TEGRA_APBDMA_CSR_FLOW;
+		csr |= tdc->slave_id << TEGRA_APBDMA_CSR_REQ_SEL_SHIFT;
+	}
+
 	if (flags & DMA_PREP_INTERRUPT)
 		csr |= TEGRA_APBDMA_CSR_IE_EOC;
 
@@ -1110,10 +1119,13 @@ static struct dma_async_tx_descriptor *tegra_dma_prep_dma_cyclic(
 					TEGRA_APBDMA_AHBSEQ_WRAP_SHIFT;
 	ahb_seq |= TEGRA_APBDMA_AHBSEQ_BUS_WIDTH_32;
 
-	csr |= TEGRA_APBDMA_CSR_FLOW;
+	if (tdc->slave_id != TEGRA_APBDMA_SLAVE_ID_INVALID) {
+		csr |= TEGRA_APBDMA_CSR_FLOW;
+		csr |= tdc->slave_id << TEGRA_APBDMA_CSR_REQ_SEL_SHIFT;
+	}
+
 	if (flags & DMA_PREP_INTERRUPT)
 		csr |= TEGRA_APBDMA_CSR_IE_EOC;
-	csr |= tdc->slave_id << TEGRA_APBDMA_CSR_REQ_SEL_SHIFT;
 
 	apb_seq |= TEGRA_APBDMA_APBSEQ_WRAP_WORD_1;
 
@@ -1494,35 +1506,7 @@ static int tegra_dma_remove(struct platform_device *pdev)
 static int tegra_dma_runtime_suspend(struct device *dev)
 {
 	struct tegra_dma *tdma = dev_get_drvdata(dev);
-
-	clk_disable_unprepare(tdma->dma_clk);
-	return 0;
-}
-
-static int tegra_dma_runtime_resume(struct device *dev)
-{
-	struct tegra_dma *tdma = dev_get_drvdata(dev);
-	int ret;
-
-	ret = clk_prepare_enable(tdma->dma_clk);
-	if (ret < 0) {
-		dev_err(dev, "clk_enable failed: %d\n", ret);
-		return ret;
-	}
-	return 0;
-}
-
-#ifdef CONFIG_PM_SLEEP
-static int tegra_dma_pm_suspend(struct device *dev)
-{
-	struct tegra_dma *tdma = dev_get_drvdata(dev);
 	int i;
-	int ret;
-
-	/* Enable clock before accessing register */
-	ret = pm_runtime_get_sync(dev);
-	if (ret < 0)
-		return ret;
 
 	tdma->reg_gen = tdma_read(tdma, TEGRA_APBDMA_GENERAL);
 	for (i = 0; i < tdma->chip_data->nr_channels; i++) {
@@ -1543,21 +1527,21 @@ static int tegra_dma_pm_suspend(struct device *dev)
 						  TEGRA_APBDMA_CHAN_WCOUNT);
 	}
 
-	/* Disable clock */
-	pm_runtime_put(dev);
+	clk_disable_unprepare(tdma->dma_clk);
+
 	return 0;
 }
 
-static int tegra_dma_pm_resume(struct device *dev)
+static int tegra_dma_runtime_resume(struct device *dev)
 {
 	struct tegra_dma *tdma = dev_get_drvdata(dev);
-	int i;
-	int ret;
+	int i, ret;
 
-	/* Enable clock before accessing register */
-	ret = pm_runtime_get_sync(dev);
-	if (ret < 0)
+	ret = clk_prepare_enable(tdma->dma_clk);
+	if (ret < 0) {
+		dev_err(dev, "clk_enable failed: %d\n", ret);
 		return ret;
+	}
 
 	tdma_write(tdma, TEGRA_APBDMA_GENERAL, tdma->reg_gen);
 	tdma_write(tdma, TEGRA_APBDMA_CONTROL, 0);
@@ -1582,16 +1566,14 @@ static int tegra_dma_pm_resume(struct device *dev)
 			(ch_reg->csr & ~TEGRA_APBDMA_CSR_ENB));
 	}
 
-	/* Disable clock */
-	pm_runtime_put(dev);
 	return 0;
 }
-#endif
 
 static const struct dev_pm_ops tegra_dma_dev_pm_ops = {
 	SET_RUNTIME_PM_OPS(tegra_dma_runtime_suspend, tegra_dma_runtime_resume,
 			   NULL)
-	SET_SYSTEM_SLEEP_PM_OPS(tegra_dma_pm_suspend, tegra_dma_pm_resume)
+	SET_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
+				pm_runtime_force_resume)
 };
 
 static const struct of_device_id tegra_dma_of_match[] = {

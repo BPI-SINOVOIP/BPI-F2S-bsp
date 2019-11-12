@@ -20,16 +20,26 @@
 #include <asm/setup.h>
 
 /*
- * We organize the E820 table into two main data structures:
+ * We organize the E820 table into three main data structures:
  *
  * - 'e820_table_firmware': the original firmware version passed to us by the
- *   bootloader - not modified by the kernel. We use this to:
+ *   bootloader - not modified by the kernel. It is composed of two parts:
+ *   the first 128 E820 memory entries in boot_params.e820_table and the remaining
+ *   (if any) entries of the SETUP_E820_EXT nodes. We use this to:
  *
  *       - inform the user about the firmware's notion of memory layout
  *         via /sys/firmware/memmap
  *
  *       - the hibernation code uses it to generate a kernel-independent MD5
  *         fingerprint of the physical memory layout of a system.
+ *
+ * - 'e820_table_kexec': a slightly modified (by the kernel) firmware version
+ *   passed to us by the bootloader - the major difference between
+ *   e820_table_firmware[] and this one is that, the latter marks the setup_data
+ *   list created by the EFI boot stub as reserved, so that kexec can reuse the
+ *   setup_data information in the second kernel. Besides, e820_table_kexec[]
+ *   might also be modified by the kexec itself to fake a mptable.
+ *   We use this to:
  *
  *       - kexec, which is a bootloader in disguise, uses the original E820
  *         layout to pass to the kexec-ed kernel. This way the original kernel
@@ -46,9 +56,11 @@
  * specific memory layout data during early bootup.
  */
 static struct e820_table e820_table_init		__initdata;
+static struct e820_table e820_table_kexec_init		__initdata;
 static struct e820_table e820_table_firmware_init	__initdata;
 
 struct e820_table *e820_table __refdata			= &e820_table_init;
+struct e820_table *e820_table_kexec __refdata		= &e820_table_kexec_init;
 struct e820_table *e820_table_firmware __refdata	= &e820_table_firmware_init;
 
 /* For PCI or other memory-mapped resources */
@@ -84,7 +96,8 @@ EXPORT_SYMBOL_GPL(e820__mapped_any);
  * Note: this function only works correctly once the E820 table is sorted and
  * not-overlapping (at least for the range specified), which is the case normally.
  */
-bool __init e820__mapped_all(u64 start, u64 end, enum e820_type type)
+static struct e820_entry *__e820__mapped_all(u64 start, u64 end,
+					     enum e820_type type)
 {
 	int i;
 
@@ -110,9 +123,28 @@ bool __init e820__mapped_all(u64 start, u64 end, enum e820_type type)
 		 * coverage of the desired range exists:
 		 */
 		if (start >= end)
-			return 1;
+			return entry;
 	}
-	return 0;
+
+	return NULL;
+}
+
+/*
+ * This function checks if the entire range <start,end> is mapped with type.
+ */
+bool __init e820__mapped_all(u64 start, u64 end, enum e820_type type)
+{
+	return __e820__mapped_all(start, end, type);
+}
+
+/*
+ * This function returns the type associated with the range <start,end>.
+ */
+int e820__get_entry_type(u64 start, u64 end)
+{
+	struct e820_entry *entry = __e820__mapped_all(start, end, 0);
+
+	return entry ? entry->type : -EINVAL;
 }
 
 /*
@@ -123,7 +155,8 @@ static void __init __e820__range_add(struct e820_table *table, u64 start, u64 si
 	int x = table->nr_entries;
 
 	if (x >= ARRAY_SIZE(table->entries)) {
-		pr_err("e820: too many entries; ignoring [mem %#010llx-%#010llx]\n", start, start + size - 1);
+		pr_err("too many entries; ignoring [mem %#010llx-%#010llx]\n",
+		       start, start + size - 1);
 		return;
 	}
 
@@ -158,9 +191,10 @@ void __init e820__print_table(char *who)
 	int i;
 
 	for (i = 0; i < e820_table->nr_entries; i++) {
-		pr_info("%s: [mem %#018Lx-%#018Lx] ", who,
-		       e820_table->entries[i].addr,
-		       e820_table->entries[i].addr + e820_table->entries[i].size - 1);
+		pr_info("%s: [mem %#018Lx-%#018Lx] ",
+			who,
+			e820_table->entries[i].addr,
+			e820_table->entries[i].addr + e820_table->entries[i].size - 1);
 
 		e820_print_type(e820_table->entries[i].type);
 		pr_cont("\n");
@@ -470,9 +504,9 @@ u64 __init e820__range_update(u64 start, u64 size, enum e820_type old_type, enum
 	return __e820__range_update(e820_table, start, size, old_type, new_type);
 }
 
-static u64 __init e820__range_update_firmware(u64 start, u64 size, enum e820_type old_type, enum e820_type  new_type)
+static u64 __init e820__range_update_kexec(u64 start, u64 size, enum e820_type old_type, enum e820_type  new_type)
 {
-	return __e820__range_update(e820_table_firmware, start, size, old_type, new_type);
+	return __e820__range_update(e820_table_kexec, start, size, old_type, new_type);
 }
 
 /* Remove a range of memory from the E820 table: */
@@ -542,13 +576,13 @@ void __init e820__update_table_print(void)
 	if (e820__update_table(e820_table))
 		return;
 
-	pr_info("e820: modified physical RAM map:\n");
+	pr_info("modified physical RAM map:\n");
 	e820__print_table("modified");
 }
 
-static void __init e820__update_table_firmware(void)
+static void __init e820__update_table_kexec(void)
 {
-	e820__update_table(e820_table_firmware);
+	e820__update_table(e820_table_kexec);
 }
 
 #define MAX_GAP_END 0x100000000ull
@@ -604,9 +638,8 @@ __init void e820__setup_pci_gap(void)
 	if (!found) {
 #ifdef CONFIG_X86_64
 		gapstart = (max_pfn << PAGE_SHIFT) + 1024*1024;
-		pr_err(
-			"e820: Cannot find an available gap in the 32-bit address range\n"
-			"e820: PCI devices with unassigned 32-bit BARs may not work!\n");
+		pr_err("Cannot find an available gap in the 32-bit address range\n");
+		pr_err("PCI devices with unassigned 32-bit BARs may not work!\n");
 #else
 		gapstart = 0x10000000;
 #endif
@@ -617,13 +650,14 @@ __init void e820__setup_pci_gap(void)
 	 */
 	pci_mem_start = gapstart;
 
-	pr_info("e820: [mem %#010lx-%#010lx] available for PCI devices\n", gapstart, gapstart + gapsize - 1);
+	pr_info("[mem %#010lx-%#010lx] available for PCI devices\n",
+		gapstart, gapstart + gapsize - 1);
 }
 
 /*
  * Called late during init, in free_initmem().
  *
- * Initial e820_table and e820_table_firmware are largish __initdata arrays.
+ * Initial e820_table and e820_table_kexec are largish __initdata arrays.
  *
  * Copy them to a (usually much smaller) dynamically allocated area that is
  * sized precisely after the number of e820 entries.
@@ -642,6 +676,12 @@ __init void e820__reallocate_tables(void)
 	BUG_ON(!n);
 	memcpy(n, e820_table, size);
 	e820_table = n;
+
+	size = offsetof(struct e820_table, entries) + sizeof(struct e820_entry)*e820_table_kexec->nr_entries;
+	n = kmalloc(size, GFP_KERNEL);
+	BUG_ON(!n);
+	memcpy(n, e820_table_kexec, size);
+	e820_table_kexec = n;
 
 	size = offsetof(struct e820_table, entries) + sizeof(struct e820_entry)*e820_table_firmware->nr_entries;
 	n = kmalloc(size, GFP_KERNEL);
@@ -669,8 +709,11 @@ void __init e820__memory_setup_extended(u64 phys_addr, u32 data_len)
 	__append_e820_table(extmap, entries);
 	e820__update_table(e820_table);
 
+	memcpy(e820_table_kexec, e820_table, sizeof(*e820_table_kexec));
+	memcpy(e820_table_firmware, e820_table, sizeof(*e820_table_firmware));
+
 	early_memunmap(sdata, data_len);
-	pr_info("e820: extended physical RAM map:\n");
+	pr_info("extended physical RAM map:\n");
 	e820__print_table("extended");
 }
 
@@ -727,7 +770,7 @@ core_initcall(e820__register_nvs_regions);
 /*
  * Allocate the requested number of bytes with the requsted alignment
  * and return (the physical address) to the caller. Also register this
- * range in the 'firmware' E820 table as a reserved range.
+ * range in the 'kexec' E820 table as a reserved range.
  *
  * This allows kexec to fake a new mptable, as if it came from the real
  * system.
@@ -738,9 +781,9 @@ u64 __init e820__memblock_alloc_reserved(u64 size, u64 align)
 
 	addr = __memblock_alloc_base(size, align, MEMBLOCK_ALLOC_ACCESSIBLE);
 	if (addr) {
-		e820__range_update_firmware(addr, size, E820_TYPE_RAM, E820_TYPE_RESERVED);
-		pr_info("e820: update e820_table_firmware for e820__memblock_alloc_reserved()\n");
-		e820__update_table_firmware();
+		e820__range_update_kexec(addr, size, E820_TYPE_RAM, E820_TYPE_RESERVED);
+		pr_info("update e820_table_kexec for e820__memblock_alloc_reserved()\n");
+		e820__update_table_kexec();
 	}
 
 	return addr;
@@ -789,8 +832,8 @@ static unsigned long __init e820_end_pfn(unsigned long limit_pfn, enum e820_type
 	if (last_pfn > max_arch_pfn)
 		last_pfn = max_arch_pfn;
 
-	pr_info("e820: last_pfn = %#lx max_arch_pfn = %#lx\n",
-			 last_pfn, max_arch_pfn);
+	pr_info("last_pfn = %#lx max_arch_pfn = %#lx\n",
+		last_pfn, max_arch_pfn);
 	return last_pfn;
 }
 
@@ -883,6 +926,24 @@ static int __init parse_memmap_one(char *p)
 	} else if (*p == '!') {
 		start_at = memparse(p+1, &p);
 		e820__range_add(start_at, mem_size, E820_TYPE_PRAM);
+	} else if (*p == '%') {
+		enum e820_type from = 0, to = 0;
+
+		start_at = memparse(p + 1, &p);
+		if (*p == '-')
+			from = simple_strtoull(p + 1, &p, 0);
+		if (*p == '+')
+			to = simple_strtoull(p + 1, &p, 0);
+		if (*p != '\0')
+			return -EINVAL;
+		if (from && to)
+			e820__range_update(start_at, mem_size, from, to);
+		else if (to)
+			e820__range_add(start_at, mem_size, to);
+		else if (from)
+			e820__range_remove(start_at, mem_size, from, 1);
+		else
+			e820__range_remove(start_at, mem_size, 0, 0);
 	} else {
 		e820__range_remove(mem_size, ULLONG_MAX - mem_size, E820_TYPE_RAM, 1);
 	}
@@ -923,13 +984,13 @@ void __init e820__reserve_setup_data(void)
 	while (pa_data) {
 		data = early_memremap(pa_data, sizeof(*data));
 		e820__range_update(pa_data, sizeof(*data)+data->len, E820_TYPE_RAM, E820_TYPE_RESERVED_KERN);
+		e820__range_update_kexec(pa_data, sizeof(*data)+data->len, E820_TYPE_RAM, E820_TYPE_RESERVED_KERN);
 		pa_data = data->next;
 		early_memunmap(data, sizeof(*data));
 	}
 
 	e820__update_table(e820_table);
-
-	memcpy(e820_table_firmware, e820_table, sizeof(*e820_table_firmware));
+	e820__update_table(e820_table_kexec);
 
 	pr_info("extended physical RAM map:\n");
 	e820__print_table("reserve setup_data");
@@ -946,7 +1007,7 @@ void __init e820__finish_early_params(void)
 		if (e820__update_table(e820_table) < 0)
 			early_panic("Invalid user supplied memory map");
 
-		pr_info("e820: user-defined physical RAM map:\n");
+		pr_info("user-defined physical RAM map:\n");
 		e820__print_table("user");
 	}
 }
@@ -1062,6 +1123,7 @@ void __init e820__reserve_resources(void)
 		res++;
 	}
 
+	/* Expose the bootloader-provided memory layout to the sysfs. */
 	for (i = 0; i < e820_table_firmware->nr_entries; i++) {
 		struct e820_entry *entry = e820_table_firmware->entries + i;
 
@@ -1175,9 +1237,10 @@ void __init e820__memory_setup(void)
 
 	who = x86_init.resources.memory_setup();
 
+	memcpy(e820_table_kexec, e820_table, sizeof(*e820_table_kexec));
 	memcpy(e820_table_firmware, e820_table, sizeof(*e820_table_firmware));
 
-	pr_info("e820: BIOS-provided physical RAM map:\n");
+	pr_info("BIOS-provided physical RAM map:\n");
 	e820__print_table(who);
 }
 

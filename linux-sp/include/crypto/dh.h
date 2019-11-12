@@ -29,17 +29,21 @@
  *
  * @key:	Private DH key
  * @p:		Diffie-Hellman parameter P
+ * @q:		Diffie-Hellman parameter Q
  * @g:		Diffie-Hellman generator G
  * @key_size:	Size of the private DH key
  * @p_size:	Size of DH parameter P
+ * @q_size:	Size of DH parameter Q
  * @g_size:	Size of DH generator G
  */
 struct dh {
 	void *key;
 	void *p;
+	void *q;
 	void *g;
 	unsigned int key_size;
 	unsigned int p_size;
+	unsigned int q_size;
 	unsigned int g_size;
 };
 
@@ -53,7 +57,7 @@ struct dh {
  *
  * Return: size of the key in bytes
  */
-int crypto_dh_key_len(const struct dh *params);
+unsigned int crypto_dh_key_len(const struct dh *params);
 
 /**
  * crypto_dh_encode_key() - encode the private key
@@ -73,9 +77,9 @@ int crypto_dh_encode_key(char *buf, unsigned int len, const struct dh *params);
 /**
  * crypto_dh_decode_key() - decode a private key
  * @buf:	Buffer holding a packet key that should be decoded
- * @len:	Lenth of the packet private key buffer
+ * @len:	Length of the packet private key buffer
  * @params:	Buffer allocated by the caller that is filled with the
- *		unpacket DH private key.
+ *		unpacked DH private key.
  *
  * The unpacking obtains the private key by pointing @p to the correct location
  * in @buf. Thus, both pointers refer to the same memory.

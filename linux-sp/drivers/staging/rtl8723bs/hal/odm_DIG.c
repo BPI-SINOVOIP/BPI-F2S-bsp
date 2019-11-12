@@ -1,15 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0
 /******************************************************************************
  *
  * Copyright(c) 2007 - 2011 Realtek Corporation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of version 2 of the GNU General Public License as
- * published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
- * more details.
  *
  ******************************************************************************/
 
@@ -278,11 +270,11 @@ void odm_Adaptivity(void *pDM_VOID, u8 IGI)
 
 	if (!pDM_Odm->ForceEDCCA) {
 		if (pDM_Odm->RSSI_Min > pDM_Odm->AdapEn_RSSI)
-			EDCCA_State = 1;
+			EDCCA_State = true;
 		else if (pDM_Odm->RSSI_Min < (pDM_Odm->AdapEn_RSSI - 5))
-			EDCCA_State = 0;
+			EDCCA_State = false;
 	} else
-		EDCCA_State = 1;
+		EDCCA_State = true;
 
 	if (
 		pDM_Odm->bLinked &&
@@ -305,7 +297,7 @@ void odm_Adaptivity(void *pDM_VOID, u8 IGI)
 		)
 	);
 
-	if (EDCCA_State == 1) {
+	if (EDCCA_State) {
 		Diff = IGI_target-(s8)IGI;
 		TH_L2H_dmc = pDM_Odm->TH_L2H_ini + Diff;
 		if (TH_L2H_dmc > 10)
@@ -372,7 +364,7 @@ void odm_PauseDIG(
 {
 	PDM_ODM_T pDM_Odm = (PDM_ODM_T)pDM_VOID;
 	pDIG_T pDM_DigTable = &pDM_Odm->DM_DigTable;
-	static bool bPaused = false;
+	static bool bPaused;
 
 	ODM_RT_TRACE(pDM_Odm, ODM_COMP_DIG, ODM_DBG_LOUD, ("odm_PauseDIG() =========>\n"));
 
@@ -553,7 +545,7 @@ void odm_DIG(void *pDM_VOID)
 	dm_dig_min = DM_DIG_MIN_NIC;
 	DIG_MaxOfMin = DM_DIG_MAX_AP;
 
-	ODM_RT_TRACE(pDM_Odm, ODM_COMP_DIG, ODM_DBG_LOUD, ("odm_DIG(): Absolutly upper bound = 0x%x, lower bound = 0x%x\n", dm_dig_max, dm_dig_min));
+	ODM_RT_TRACE(pDM_Odm, ODM_COMP_DIG, ODM_DBG_LOUD, ("odm_DIG(): Absolutely upper bound = 0x%x, lower bound = 0x%x\n", dm_dig_max, dm_dig_min));
 
 	/* 1 Adjust boundary by RSSI */
 	if (pDM_Odm->bLinked && bPerformance) {

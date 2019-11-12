@@ -42,6 +42,10 @@ struct intel_gvt_workload_scheduler {
 	struct intel_vgpu_workload *current_workload[I915_NUM_ENGINES];
 	bool need_reschedule;
 
+	spinlock_t mmio_context_lock;
+	/* can be null when owner is host */
+	struct intel_vgpu *engine_owner[I915_NUM_ENGINES];
+
 	wait_queue_head_t workload_complete_wq;
 	struct task_struct *thread[I915_NUM_ENGINES];
 	wait_queue_head_t waitq[I915_NUM_ENGINES];
@@ -64,6 +68,7 @@ struct shadow_indirect_ctx {
 struct shadow_per_ctx {
 	unsigned long guest_gma;
 	unsigned long shadow_gma;
+	unsigned valid;
 };
 
 struct intel_shadow_wa_ctx {
@@ -75,7 +80,7 @@ struct intel_shadow_wa_ctx {
 struct intel_vgpu_workload {
 	struct intel_vgpu *vgpu;
 	int ring_id;
-	struct drm_i915_gem_request *req;
+	struct i915_request *req;
 	/* if this workload has been dispatched to i915? */
 	bool dispatched;
 	int status;
@@ -104,26 +109,28 @@ struct intel_vgpu_workload {
 	/* shadow batch buffer */
 	struct list_head shadow_bb;
 	struct intel_shadow_wa_ctx wa_ctx;
+
+	/* oa registers */
+	u32 oactxctrl;
+	u32 flex_mmio[7];
 };
 
-/* Intel shadow batch buffer is a i915 gem object */
-struct intel_shadow_bb_entry {
+struct intel_vgpu_shadow_bb {
 	struct list_head list;
 	struct drm_i915_gem_object *obj;
+	struct i915_vma *vma;
 	void *va;
-	unsigned long len;
 	u32 *bb_start_cmd_va;
+	unsigned int clflush;
+	bool accessing;
+	unsigned long bb_offset;
+	bool ppgtt;
 };
 
 #define workload_q_head(vgpu, ring_id) \
-	(&(vgpu->workload_q_head[ring_id]))
+	(&(vgpu->submission.workload_q_head[ring_id]))
 
-#define queue_workload(workload) do { \
-	list_add_tail(&workload->list, \
-	workload_q_head(workload->vgpu, workload->ring_id)); \
-	wake_up(&workload->vgpu->gvt-> \
-	scheduler.waitq[workload->ring_id]); \
-} while (0)
+void intel_vgpu_queue_workload(struct intel_vgpu_workload *workload);
 
 int intel_gvt_init_workload_scheduler(struct intel_gvt *gvt);
 
@@ -131,8 +138,27 @@ void intel_gvt_clean_workload_scheduler(struct intel_gvt *gvt);
 
 void intel_gvt_wait_vgpu_idle(struct intel_vgpu *vgpu);
 
-int intel_vgpu_init_gvt_context(struct intel_vgpu *vgpu);
+int intel_vgpu_setup_submission(struct intel_vgpu *vgpu);
 
-void intel_vgpu_clean_gvt_context(struct intel_vgpu *vgpu);
+void intel_vgpu_reset_submission(struct intel_vgpu *vgpu,
+				 unsigned long engine_mask);
+
+void intel_vgpu_clean_submission(struct intel_vgpu *vgpu);
+
+int intel_vgpu_select_submission_ops(struct intel_vgpu *vgpu,
+				     unsigned long engine_mask,
+				     unsigned int interface);
+
+extern const struct intel_vgpu_submission_ops
+intel_vgpu_execlist_submission_ops;
+
+struct intel_vgpu_workload *
+intel_vgpu_create_workload(struct intel_vgpu *vgpu, int ring_id,
+			   struct execlist_ctx_descriptor_format *desc);
+
+void intel_vgpu_destroy_workload(struct intel_vgpu_workload *workload);
+
+void intel_vgpu_clean_workloads(struct intel_vgpu *vgpu,
+				unsigned long engine_mask);
 
 #endif

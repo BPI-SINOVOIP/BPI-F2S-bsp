@@ -269,7 +269,6 @@ static struct drm_connector_helper_funcs zx_tvenc_connector_helper_funcs = {
 };
 
 static const struct drm_connector_funcs zx_tvenc_connector_funcs = {
-	.dpms = drm_atomic_helper_connector_dpms,
 	.fill_modes = drm_helper_probe_single_connector_modes,
 	.destroy = drm_connector_cleanup,
 	.reset = drm_atomic_helper_connector_reset,
@@ -298,7 +297,7 @@ static int zx_tvenc_register(struct drm_device *drm, struct zx_tvenc *tvenc)
 			   DRM_MODE_CONNECTOR_Composite);
 	drm_connector_helper_add(connector, &zx_tvenc_connector_helper_funcs);
 
-	drm_mode_connector_attach_encoder(connector, encoder);
+	drm_connector_attach_encoder(connector, encoder);
 
 	return 0;
 }

@@ -46,7 +46,7 @@
 #include <dt-bindings/gpio/gpio.h>
 
 / {
-	memory {
+	memory@10000000 {
 		reg = <0x10000000 0x40000000>;
 	};
 
@@ -157,7 +157,12 @@
 
 		partition@d0000 {
 			label = "spare";
-			reg = <0xd0000 0x130000>;
+			reg = <0xd0000 0x320000>;
+		};
+
+		partition@3f0000 {
+			label = "mfg";
+			reg = <0x3f0000 0x10000>;
 		};
 	};
 };
@@ -321,7 +326,7 @@
 &pcie {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_pcie>;
-	reset-gpio = <&gpio7 12 GPIO_ACTIVE_HIGH>;
+	reset-gpio = <&gpio7 12 GPIO_ACTIVE_LOW>;
 	fsl,tx-swing-full = <103>;
 	fsl,tx-swing-low = <103>;
 	status = "okay";

@@ -138,7 +138,7 @@ int virtio_gpu_driver_load(struct drm_device *dev, unsigned long flags)
 	u32 num_scanouts, num_capsets;
 	int ret;
 
-	if (!virtio_has_feature(dev->virtdev, VIRTIO_F_VERSION_1))
+	if (!virtio_has_feature(dev_to_virtio(dev->dev), VIRTIO_F_VERSION_1))
 		return -ENODEV;
 
 	vgdev = kzalloc(sizeof(struct virtio_gpu_device), GFP_KERNEL);
@@ -147,7 +147,7 @@ int virtio_gpu_driver_load(struct drm_device *dev, unsigned long flags)
 
 	vgdev->ddev = dev;
 	dev->dev_private = vgdev;
-	vgdev->vdev = dev->virtdev;
+	vgdev->vdev = dev_to_virtio(dev->dev);
 	vgdev->dev = dev->dev;
 
 	spin_lock_init(&vgdev->display_info_lock);
@@ -272,20 +272,18 @@ int virtio_gpu_driver_open(struct drm_device *dev, struct drm_file *file)
 	struct virtio_gpu_device *vgdev = dev->dev_private;
 	struct virtio_gpu_fpriv *vfpriv;
 	uint32_t id;
-	char dbgname[64], tmpname[TASK_COMM_LEN];
+	char dbgname[TASK_COMM_LEN];
 
 	/* can't create contexts without 3d renderer */
 	if (!vgdev->has_virgl_3d)
 		return 0;
 
-	get_task_comm(tmpname, current);
-	snprintf(dbgname, sizeof(dbgname), "%s", tmpname);
-	dbgname[63] = 0;
 	/* allocate a virt GPU context for this opener */
 	vfpriv = kzalloc(sizeof(*vfpriv), GFP_KERNEL);
 	if (!vfpriv)
 		return -ENOMEM;
 
+	get_task_comm(dbgname, current);
 	virtio_gpu_context_create(vgdev, strlen(dbgname), dbgname, &id);
 
 	vfpriv->ctx_id = id;

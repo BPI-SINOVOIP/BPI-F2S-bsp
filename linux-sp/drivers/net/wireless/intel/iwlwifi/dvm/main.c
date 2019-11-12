@@ -399,9 +399,9 @@ int iwl_send_statistics_request(struct iwl_priv *priv, u8 flags, bool clear)
  * was received.  We need to ensure we receive the statistics in order
  * to update the temperature used for calibrating the TXPOWER.
  */
-static void iwl_bg_statistics_periodic(unsigned long data)
+static void iwl_bg_statistics_periodic(struct timer_list *t)
 {
-	struct iwl_priv *priv = (struct iwl_priv *)data;
+	struct iwl_priv *priv = from_timer(priv, t, statistics_periodic);
 
 	if (test_bit(STATUS_EXIT_PENDING, &priv->status))
 		return;
@@ -556,9 +556,9 @@ static void iwl_continuous_event_trace(struct iwl_priv *priv)
  * this function is to perform continuous uCode event logging operation
  * if enabled
  */
-static void iwl_bg_ucode_trace(unsigned long data)
+static void iwl_bg_ucode_trace(struct timer_list *t)
 {
-	struct iwl_priv *priv = (struct iwl_priv *)data;
+	struct iwl_priv *priv = from_timer(priv, t, ucode_trace);
 
 	if (test_bit(STATUS_EXIT_PENDING, &priv->status))
 		return;
@@ -1085,11 +1085,9 @@ static void iwl_setup_deferred_work(struct iwl_priv *priv)
 	if (priv->lib->bt_params)
 		iwlagn_bt_setup_deferred_work(priv);
 
-	setup_timer(&priv->statistics_periodic, iwl_bg_statistics_periodic,
-		    (unsigned long)priv);
+	timer_setup(&priv->statistics_periodic, iwl_bg_statistics_periodic, 0);
 
-	setup_timer(&priv->ucode_trace, iwl_bg_ucode_trace,
-		    (unsigned long)priv);
+	timer_setup(&priv->ucode_trace, iwl_bg_ucode_trace, 0);
 }
 
 void iwl_cancel_deferred_work(struct iwl_priv *priv)
@@ -1202,16 +1200,16 @@ static int iwl_eeprom_init_hw_params(struct iwl_priv *priv)
 		return -EINVAL;
 	}
 
-	if (!data->sku_cap_11n_enable && !data->sku_cap_band_24GHz_enable &&
-	    !data->sku_cap_band_52GHz_enable) {
+	if (!data->sku_cap_11n_enable && !data->sku_cap_band_24ghz_enable &&
+	    !data->sku_cap_band_52ghz_enable) {
 		IWL_ERR(priv, "Invalid device sku\n");
 		return -EINVAL;
 	}
 
 	IWL_DEBUG_INFO(priv,
 		       "Device SKU: 24GHz %s %s, 52GHz %s %s, 11.n %s %s\n",
-		       data->sku_cap_band_24GHz_enable ? "" : "NOT", "enabled",
-		       data->sku_cap_band_52GHz_enable ? "" : "NOT", "enabled",
+		       data->sku_cap_band_24ghz_enable ? "" : "NOT", "enabled",
+		       data->sku_cap_band_52ghz_enable ? "" : "NOT", "enabled",
 		       data->sku_cap_11n_enable ? "" : "NOT", "enabled");
 
 	priv->hw_params.tx_chains_num =
@@ -1371,7 +1369,7 @@ static struct iwl_op_mode *iwl_op_mode_dvm_start(struct iwl_trans *trans,
 
 	/* is antenna coupling more than 35dB ? */
 	priv->bt_ant_couple_ok =
-		(iwlwifi_mod_params.ant_coupling >
+		(iwlwifi_mod_params.antenna_coupling >
 			IWL_BT_ANTENNA_COUPLING_THRESHOLD) ?
 			true : false;
 
@@ -1513,7 +1511,7 @@ out_destroy_workqueue:
 out_free_eeprom_blob:
 	kfree(priv->eeprom_blob);
 out_free_eeprom:
-	iwl_free_nvm_data(priv->nvm_data);
+	kfree(priv->nvm_data);
 out_free_hw:
 	ieee80211_free_hw(priv->hw);
 out:
@@ -1532,7 +1530,7 @@ static void iwl_op_mode_dvm_stop(struct iwl_op_mode *op_mode)
 	iwl_tt_exit(priv);
 
 	kfree(priv->eeprom_blob);
-	iwl_free_nvm_data(priv->nvm_data);
+	kfree(priv->nvm_data);
 
 	/*netif_stop_queue(dev); */
 	flush_workqueue(priv->workqueue);
@@ -1653,12 +1651,7 @@ static void iwl_dump_nic_error_log(struct iwl_priv *priv)
 			priv->status, table.valid);
 	}
 
-	trace_iwlwifi_dev_ucode_error(trans->dev, table.error_id, table.tsf_low,
-				      table.data1, table.data2, table.line,
-				      table.blink2, table.ilink1, table.ilink2,
-				      table.bcon_time, table.gp1, table.gp2,
-				      table.gp3, table.ucode_ver, table.hw_ver,
-				      0, table.brd_ver);
+	trace_iwlwifi_dev_ucode_error(trans->dev, &table, 0, table.brd_ver);
 	IWL_ERR(priv, "0x%08X | %-28s\n", table.error_id,
 		desc_lookup(table.error_id));
 	IWL_ERR(priv, "0x%08X | uPc\n", table.pc);
@@ -1958,7 +1951,7 @@ static void iwlagn_fw_error(struct iwl_priv *priv, bool ondemand)
 	}
 
 	if (!test_bit(STATUS_EXIT_PENDING, &priv->status)) {
-		if (iwlwifi_mod_params.restart_fw) {
+		if (iwlwifi_mod_params.fw_restart) {
 			IWL_DEBUG_FW_ERRORS(priv,
 				  "Restarting adapter due to uCode error.\n");
 			queue_work(priv->workqueue, &priv->restart);

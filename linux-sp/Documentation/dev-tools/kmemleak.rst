@@ -8,7 +8,7 @@ with the difference that the orphan objects are not freed but only
 reported via /sys/kernel/debug/kmemleak. A similar method is used by the
 Valgrind tool (``memcheck --leak-check``) to detect the memory leaks in
 user-space applications.
-Kmemleak is supported on x86, arm, powerpc, sparc, sh, microblaze, ppc, mips, s390, metag and tile.
+Kmemleak is supported on x86, arm, powerpc, sparc, sh, microblaze, ppc, mips, s390 and tile.
 
 Usage
 -----
@@ -150,6 +150,7 @@ See the include/linux/kmemleak.h header for the functions prototype.
 - ``kmemleak_init``		 - initialize kmemleak
 - ``kmemleak_alloc``		 - notify of a memory block allocation
 - ``kmemleak_alloc_percpu``	 - notify of a percpu memory block allocation
+- ``kmemleak_vmalloc``		 - notify of a vmalloc() memory allocation
 - ``kmemleak_free``		 - notify of a memory block freeing
 - ``kmemleak_free_part``	 - notify of a partial memory block freeing
 - ``kmemleak_free_percpu``	 - notify of a percpu memory block freeing

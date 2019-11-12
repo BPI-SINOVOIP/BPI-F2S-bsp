@@ -42,6 +42,9 @@
 
 #define IDEAPAD_RFKILL_DEV_NUM	(3)
 
+#define BM_CONSERVATION_BIT (5)
+#define HA_FNLOCK_BIT       (10)
+
 #define CFG_BT_BIT	(16)
 #define CFG_3G_BIT	(17)
 #define CFG_WIFI_BIT	(18)
@@ -53,6 +56,13 @@ static const char *const ideapad_wmi_fnesc_events[] = {
 	"56322276-8493-4CE8-A783-98C991274F5E", /* Yoga 700 */
 };
 #endif
+
+enum {
+	BMCMD_CONSERVATION_ON = 3,
+	BMCMD_CONSERVATION_OFF = 5,
+	HACMD_FNLOCK_ON = 0xe,
+	HACMD_FNLOCK_OFF = 0xf,
+};
 
 enum {
 	VPCCMD_R_VPC1 = 0x10,
@@ -106,7 +116,7 @@ MODULE_PARM_DESC(no_bt_rfkill, "No rfkill for bluetooth.");
 /*
  * ACPI Helpers
  */
-#define IDEAPAD_EC_TIMEOUT (100) /* in ms */
+#define IDEAPAD_EC_TIMEOUT (200) /* in ms */
 
 static int read_method_int(acpi_handle handle, const char *method, int *val)
 {
@@ -117,10 +127,27 @@ static int read_method_int(acpi_handle handle, const char *method, int *val)
 	if (ACPI_FAILURE(status)) {
 		*val = -1;
 		return -1;
-	} else {
-		*val = result;
-		return 0;
 	}
+	*val = result;
+	return 0;
+
+}
+
+static int method_gbmd(acpi_handle handle, unsigned long *ret)
+{
+	int result, val;
+
+	result = read_method_int(handle, "GBMD", &val);
+	*ret = val;
+	return result;
+}
+
+static int method_int1(acpi_handle handle, char *method, int cmd)
+{
+	acpi_status status;
+
+	status = acpi_execute_simple_method(handle, method, cmd);
+	return ACPI_FAILURE(status) ? -1 : 0;
 }
 
 static int method_vpcr(acpi_handle handle, int cmd, int *ret)
@@ -140,10 +167,10 @@ static int method_vpcr(acpi_handle handle, int cmd, int *ret)
 	if (ACPI_FAILURE(status)) {
 		*ret = -1;
 		return -1;
-	} else {
-		*ret = result;
-		return 0;
 	}
+	*ret = result;
+	return 0;
+
 }
 
 static int method_vpcw(acpi_handle handle, int cmd, int data)
@@ -207,7 +234,7 @@ static int write_ec_cmd(acpi_handle handle, int cmd, unsigned long data)
 		if (val == 0)
 			return 0;
 	}
-	pr_err("timeout in write_ec_cmd\n");
+	pr_err("timeout in %s\n", __func__);
 	return -1;
 }
 
@@ -250,22 +277,17 @@ static int debugfs_status_show(struct seq_file *s, void *data)
 	if (!read_ec_data(priv->adev->handle, VPCCMD_R_CAMERA, &value))
 		seq_printf(s, "Camera status:\t%s(%lu)\n",
 			   value ? "On" : "Off", value);
+	seq_puts(s, "=====================\n");
+
+	if (!method_gbmd(priv->adev->handle, &value)) {
+		seq_printf(s, "Conservation mode:\t%s(%lu)\n",
+			   test_bit(BM_CONSERVATION_BIT, &value) ? "On" : "Off",
+			   value);
+	}
 
 	return 0;
 }
-
-static int debugfs_status_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, debugfs_status_show, inode->i_private);
-}
-
-static const struct file_operations debugfs_status_fops = {
-	.owner = THIS_MODULE,
-	.open = debugfs_status_open,
-	.read = seq_read,
-	.llseek = seq_lseek,
-	.release = single_release,
-};
+DEFINE_SHOW_ATTRIBUTE(debugfs_status);
 
 static int debugfs_cfg_show(struct seq_file *s, void *data)
 {
@@ -306,19 +328,7 @@ static int debugfs_cfg_show(struct seq_file *s, void *data)
 	}
 	return 0;
 }
-
-static int debugfs_cfg_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, debugfs_cfg_show, inode->i_private);
-}
-
-static const struct file_operations debugfs_cfg_fops = {
-	.owner = THIS_MODULE,
-	.open = debugfs_cfg_open,
-	.read = seq_read,
-	.llseek = seq_lseek,
-	.release = single_release,
-};
+DEFINE_SHOW_ATTRIBUTE(debugfs_cfg);
 
 static int ideapad_debugfs_init(struct ideapad_private *priv)
 {
@@ -423,9 +433,118 @@ static ssize_t store_ideapad_fan(struct device *dev,
 
 static DEVICE_ATTR(fan_mode, 0644, show_ideapad_fan, store_ideapad_fan);
 
+static ssize_t touchpad_show(struct device *dev,
+			     struct device_attribute *attr,
+			     char *buf)
+{
+	struct ideapad_private *priv = dev_get_drvdata(dev);
+	unsigned long result;
+
+	if (read_ec_data(priv->adev->handle, VPCCMD_R_TOUCHPAD, &result))
+		return sprintf(buf, "-1\n");
+	return sprintf(buf, "%lu\n", result);
+}
+
+/* Switch to RO for now: It might be revisited in the future */
+static ssize_t __maybe_unused touchpad_store(struct device *dev,
+					     struct device_attribute *attr,
+					     const char *buf, size_t count)
+{
+	struct ideapad_private *priv = dev_get_drvdata(dev);
+	bool state;
+	int ret;
+
+	ret = kstrtobool(buf, &state);
+	if (ret)
+		return ret;
+
+	ret = write_ec_cmd(priv->adev->handle, VPCCMD_W_TOUCHPAD, state);
+	if (ret < 0)
+		return -EIO;
+	return count;
+}
+
+static DEVICE_ATTR_RO(touchpad);
+
+static ssize_t conservation_mode_show(struct device *dev,
+				struct device_attribute *attr,
+				char *buf)
+{
+	struct ideapad_private *priv = dev_get_drvdata(dev);
+	unsigned long result;
+
+	if (method_gbmd(priv->adev->handle, &result))
+		return sprintf(buf, "-1\n");
+	return sprintf(buf, "%u\n", test_bit(BM_CONSERVATION_BIT, &result));
+}
+
+static ssize_t conservation_mode_store(struct device *dev,
+				 struct device_attribute *attr,
+				 const char *buf, size_t count)
+{
+	struct ideapad_private *priv = dev_get_drvdata(dev);
+	bool state;
+	int ret;
+
+	ret = kstrtobool(buf, &state);
+	if (ret)
+		return ret;
+
+	ret = method_int1(priv->adev->handle, "SBMC", state ?
+					      BMCMD_CONSERVATION_ON :
+					      BMCMD_CONSERVATION_OFF);
+	if (ret < 0)
+		return -EIO;
+	return count;
+}
+
+static DEVICE_ATTR_RW(conservation_mode);
+
+static ssize_t fn_lock_show(struct device *dev,
+			    struct device_attribute *attr,
+			    char *buf)
+{
+	struct ideapad_private *priv = dev_get_drvdata(dev);
+	unsigned long result;
+	int hals;
+	int fail = read_method_int(priv->adev->handle, "HALS", &hals);
+
+	if (fail)
+		return sprintf(buf, "-1\n");
+
+	result = hals;
+	return sprintf(buf, "%u\n", test_bit(HA_FNLOCK_BIT, &result));
+}
+
+static ssize_t fn_lock_store(struct device *dev,
+			     struct device_attribute *attr,
+			     const char *buf, size_t count)
+{
+	struct ideapad_private *priv = dev_get_drvdata(dev);
+	bool state;
+	int ret;
+
+	ret = kstrtobool(buf, &state);
+	if (ret)
+		return ret;
+
+	ret = method_int1(priv->adev->handle, "SALS", state ?
+			  HACMD_FNLOCK_ON :
+			  HACMD_FNLOCK_OFF);
+	if (ret < 0)
+		return -EIO;
+	return count;
+}
+
+static DEVICE_ATTR_RW(fn_lock);
+
+
 static struct attribute *ideapad_attributes[] = {
 	&dev_attr_camera_power.attr,
 	&dev_attr_fan_mode.attr,
+	&dev_attr_touchpad.attr,
+	&dev_attr_conservation_mode.attr,
+	&dev_attr_fn_lock.attr,
 	NULL
 };
 
@@ -443,6 +562,12 @@ static umode_t ideapad_is_visible(struct kobject *kobj,
 		unsigned long value;
 		supported = !read_ec_data(priv->adev->handle, VPCCMD_R_FAN,
 					  &value);
+	} else if (attr == &dev_attr_conservation_mode.attr) {
+		supported = acpi_has_method(priv->adev->handle, "GBMD") &&
+			    acpi_has_method(priv->adev->handle, "SBMC");
+	} else if (attr == &dev_attr_fn_lock.attr) {
+		supported = acpi_has_method(priv->adev->handle, "HALS") &&
+			acpi_has_method(priv->adev->handle, "SALS");
 	} else
 		supported = true;
 
@@ -478,7 +603,7 @@ static int ideapad_rfk_set(void *data, bool blocked)
 	return write_ec_cmd(priv->priv->adev->handle, opcode, !blocked);
 }
 
-static struct rfkill_ops ideapad_rfk_ops = {
+static const struct rfkill_ops ideapad_rfk_ops = {
 	.set_block = ideapad_rfk_set,
 };
 
@@ -810,7 +935,6 @@ static void ideapad_acpi_notify(acpi_handle handle, u32 event, void *data)
 			case 8:
 			case 7:
 			case 6:
-			case 1:
 				ideapad_input_report(priv, vpc_bit);
 				break;
 			case 5:
@@ -827,6 +951,13 @@ static void ideapad_acpi_notify(acpi_handle handle, u32 event, void *data)
 				break;
 			case 0:
 				ideapad_check_special_buttons(priv);
+				break;
+			case 1:
+				/* Some IdeaPads report event 1 every ~20
+				 * seconds while on battery power; some
+				 * report this when changing to/from tablet
+				 * mode. Squelch this event.
+				 */
 				break;
 			default:
 				pr_info("Unknown event: %lu\n", vpc_bit);
@@ -855,6 +986,13 @@ static void ideapad_wmi_notify(u32 value, void *context)
  */
 static const struct dmi_system_id no_hw_rfkill_list[] = {
 	{
+		.ident = "Lenovo RESCUER R720-15IKBN",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
+			DMI_MATCH(DMI_PRODUCT_VERSION, "Lenovo R720-15IKBN"),
+		},
+	},
+	{
 		.ident = "Lenovo G40-30",
 		.matches = {
 			DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
@@ -869,17 +1007,94 @@ static const struct dmi_system_id no_hw_rfkill_list[] = {
 		},
 	},
 	{
+		.ident = "Lenovo V310-14IKB",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
+			DMI_MATCH(DMI_PRODUCT_VERSION, "Lenovo V310-14IKB"),
+		},
+	},
+	{
+		.ident = "Lenovo V310-14ISK",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
+			DMI_MATCH(DMI_PRODUCT_VERSION, "Lenovo V310-14ISK"),
+		},
+	},
+	{
+		.ident = "Lenovo V310-15IKB",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
+			DMI_MATCH(DMI_PRODUCT_VERSION, "Lenovo V310-15IKB"),
+		},
+	},
+	{
 		.ident = "Lenovo V310-15ISK",
 		.matches = {
-		        DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
-		        DMI_MATCH(DMI_PRODUCT_VERSION, "Lenovo V310-15ISK"),
+			DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
+			DMI_MATCH(DMI_PRODUCT_VERSION, "Lenovo V310-15ISK"),
+		},
+	},
+	{
+		.ident = "Lenovo V510-15IKB",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
+			DMI_MATCH(DMI_PRODUCT_VERSION, "Lenovo V510-15IKB"),
+		},
+	},
+	{
+		.ident = "Lenovo ideapad 300-15IBR",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
+			DMI_MATCH(DMI_PRODUCT_VERSION, "Lenovo ideapad 300-15IBR"),
+		},
+	},
+	{
+		.ident = "Lenovo ideapad 300-15IKB",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
+			DMI_MATCH(DMI_PRODUCT_VERSION, "Lenovo ideapad 300-15IKB"),
+		},
+	},
+	{
+		.ident = "Lenovo ideapad 300S-11IBR",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
+			DMI_MATCH(DMI_PRODUCT_VERSION, "Lenovo ideapad 300S-11BR"),
+		},
+	},
+	{
+		.ident = "Lenovo ideapad 310-15ABR",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
+			DMI_MATCH(DMI_PRODUCT_VERSION, "Lenovo ideapad 310-15ABR"),
+		},
+	},
+	{
+		.ident = "Lenovo ideapad 310-15IAP",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
+			DMI_MATCH(DMI_PRODUCT_VERSION, "Lenovo ideapad 310-15IAP"),
 		},
 	},
 	{
 		.ident = "Lenovo ideapad 310-15IKB",
 		.matches = {
-		        DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
-		        DMI_MATCH(DMI_PRODUCT_VERSION, "Lenovo ideapad 310-15IKB"),
+			DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
+			DMI_MATCH(DMI_PRODUCT_VERSION, "Lenovo ideapad 310-15IKB"),
+		},
+	},
+	{
+		.ident = "Lenovo ideapad 310-15ISK",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
+			DMI_MATCH(DMI_PRODUCT_VERSION, "Lenovo ideapad 310-15ISK"),
+		},
+	},
+	{
+		.ident = "Lenovo ideapad Y700-14ISK",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
+			DMI_MATCH(DMI_PRODUCT_VERSION, "Lenovo ideapad Y700-14ISK"),
 		},
 	},
 	{
@@ -908,6 +1123,48 @@ static const struct dmi_system_id no_hw_rfkill_list[] = {
 		.matches = {
 			DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
 			DMI_MATCH(DMI_PRODUCT_VERSION, "Lenovo ideapad Y700-17ISK"),
+		},
+	},
+	{
+		.ident = "Lenovo ideapad MIIX 720-12IKB",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
+			DMI_MATCH(DMI_PRODUCT_VERSION, "MIIX 720-12IKB"),
+		},
+	},
+	{
+		.ident = "Lenovo Legion Y520-15IKB",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
+			DMI_MATCH(DMI_PRODUCT_VERSION, "Lenovo Y520-15IKB"),
+		},
+	},
+	{
+		.ident = "Lenovo Y520-15IKBM",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
+			DMI_MATCH(DMI_PRODUCT_VERSION, "Lenovo Y520-15IKBM"),
+		},
+	},
+	{
+		.ident = "Lenovo Legion Y720-15IKB",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
+			DMI_MATCH(DMI_PRODUCT_VERSION, "Lenovo Y720-15IKB"),
+		},
+	},
+	{
+		.ident = "Lenovo Legion Y720-15IKBN",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
+			DMI_MATCH(DMI_PRODUCT_VERSION, "Lenovo Y720-15IKBN"),
+		},
+	},
+	{
+		.ident = "Lenovo Y720-15IKBM",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
+			DMI_MATCH(DMI_PRODUCT_VERSION, "Lenovo Y720-15IKBM"),
 		},
 	},
 	{
@@ -964,6 +1221,20 @@ static const struct dmi_system_id no_hw_rfkill_list[] = {
 		.matches = {
 			DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
 			DMI_MATCH(DMI_PRODUCT_VERSION, "Lenovo YOGA 910-13IKB"),
+		},
+	},
+	{
+		.ident = "Lenovo YOGA 920-13IKB",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
+			DMI_MATCH(DMI_PRODUCT_VERSION, "Lenovo YOGA 920-13IKB"),
+		},
+	},
+	{
+		.ident = "Lenovo Zhaoyang E42-80",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
+			DMI_MATCH(DMI_PRODUCT_VERSION, "ZHAOYANG E42-80"),
 		},
 	},
 	{}

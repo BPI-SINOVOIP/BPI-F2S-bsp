@@ -672,7 +672,6 @@ enum rt2x00_state_flags {
 	CONFIG_CHANNEL_HT40,
 	CONFIG_POWERSAVING,
 	CONFIG_HT_DISABLED,
-	CONFIG_QOS_DISABLED,
 	CONFIG_MONITORING,
 
 	/*
@@ -1049,11 +1048,11 @@ struct rt2x00_bar_list_entry {
  * Generic RF access.
  * The RF is being accessed by word index.
  */
-static inline void rt2x00_rf_read(struct rt2x00_dev *rt2x00dev,
-				  const unsigned int word, u32 *data)
+static inline u32 rt2x00_rf_read(struct rt2x00_dev *rt2x00dev,
+				 const unsigned int word)
 {
 	BUG_ON(word < 1 || word > rt2x00dev->ops->rf_size / sizeof(u32));
-	*data = rt2x00dev->rf[word - 1];
+	return rt2x00dev->rf[word - 1];
 }
 
 static inline void rt2x00_rf_write(struct rt2x00_dev *rt2x00dev,
@@ -1072,10 +1071,10 @@ static inline void *rt2x00_eeprom_addr(struct rt2x00_dev *rt2x00dev,
 	return (void *)&rt2x00dev->eeprom[word];
 }
 
-static inline void rt2x00_eeprom_read(struct rt2x00_dev *rt2x00dev,
-				      const unsigned int word, u16 *data)
+static inline u16 rt2x00_eeprom_read(struct rt2x00_dev *rt2x00dev,
+				     const unsigned int word)
 {
-	*data = le16_to_cpu(rt2x00dev->eeprom[word]);
+	return le16_to_cpu(rt2x00dev->eeprom[word]);
 }
 
 static inline void rt2x00_eeprom_write(struct rt2x00_dev *rt2x00dev,
@@ -1457,10 +1456,6 @@ int rt2x00mac_set_key(struct ieee80211_hw *hw, enum set_key_cmd cmd,
 #else
 #define rt2x00mac_set_key	NULL
 #endif /* CONFIG_RT2X00_LIB_CRYPTO */
-int rt2x00mac_sta_add(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
-		      struct ieee80211_sta *sta);
-int rt2x00mac_sta_remove(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
-			 struct ieee80211_sta *sta);
 void rt2x00mac_sw_scan_start(struct ieee80211_hw *hw,
 			     struct ieee80211_vif *vif,
 			     const u8 *mac_addr);

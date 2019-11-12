@@ -116,8 +116,9 @@ OPTIONS
 --fields::
         Comma separated list of fields to print. Options are:
         comm, tid, pid, time, cpu, event, trace, ip, sym, dso, addr, symoff,
-        srcline, period, iregs, brstack, brstacksym, flags, bpf-output, brstackinsn,
-        callindent, insn, insnlen. Field list can be prepended with the type, trace, sw or hw,
+        srcline, period, iregs, uregs, brstack, brstacksym, flags, bpf-output, brstackinsn,
+        brstackoff, callindent, insn, insnlen, synth, phys_addr, metric, misc.
+        Field list can be prepended with the type, trace, sw or hw,
         to indicate to which event type the field list applies.
         e.g., -F sw:comm,tid,time,ip,sym  and -F trace:time,cpu,trace
 
@@ -129,6 +130,14 @@ OPTIONS
 
 	i.e., the specified fields apply to all event types if the type string
 	is not given.
+
+	In addition to overriding fields, it is also possible to add or remove
+	fields from the defaults. For example
+
+		-F -cpu,+insn
+
+	removes the cpu field and adds the insn field. Adding/removing fields
+	cannot be mixed with normal overriding.
 
 	The arguments are processed in the order received. A later usage can
 	reset a prior request. e.g.:
@@ -185,6 +194,9 @@ OPTIONS
 	instruction bytes and the instruction length of the current
 	instruction.
 
+	The synth field is used by synthesized events which may be created when
+	Instruction Trace decoding.
+
 	Finally, a user may not set fields to none for all event types.
 	i.e., -F "" is not allowed.
 
@@ -202,6 +214,35 @@ OPTIONS
 	When brstackinsn is specified the full assembler sequences of branch sequences for each sample
 	is printed. This is the full execution path leading to the sample. This is only supported when the
 	sample was recorded with perf record -b or -j any.
+
+	The brstackoff field will print an offset into a specific dso/binary.
+
+	With the metric option perf script can compute metrics for
+	sampling periods, similar to perf stat. This requires
+	specifying a group with multiple metrics with the :S option
+	for perf record. perf will sample on the first event, and
+	compute metrics for all the events in the group. Please note
+	that the metric computed is averaged over the whole sampling
+	period, not just for the sample point.
+
+	For sample events it's possible to display misc field with -F +misc option,
+	following letters are displayed for each bit:
+
+	  PERF_RECORD_MISC_KERNEL               K
+	  PERF_RECORD_MISC_USER                 U
+	  PERF_RECORD_MISC_HYPERVISOR           H
+	  PERF_RECORD_MISC_GUEST_KERNEL         G
+	  PERF_RECORD_MISC_GUEST_USER           g
+	  PERF_RECORD_MISC_MMAP_DATA*           M
+	  PERF_RECORD_MISC_COMM_EXEC            E
+	  PERF_RECORD_MISC_SWITCH_OUT           S
+	  PERF_RECORD_MISC_SWITCH_OUT_PREEMPT   Sp
+
+	  $ perf script -F +misc ...
+	   sched-messaging  1414 K     28690.636582:       4590 cycles ...
+	   sched-messaging  1407 U     28690.636600:     325620 cycles ...
+	   sched-messaging  1414 K     28690.636608:      19473 cycles ...
+	  misc field ___________/
 
 -k::
 --vmlinux=<file>::
@@ -260,6 +301,12 @@ OPTIONS
 	Display context switch events i.e. events of type PERF_RECORD_SWITCH or
 	PERF_RECORD_SWITCH_CPU_WIDE.
 
+--show-lost-events
+	Display lost events i.e. events of type PERF_RECORD_LOST.
+
+--show-round-events
+	Display finished round events i.e. events of type PERF_RECORD_FINISHED_ROUND.
+
 --demangle::
 	Demangle symbol names to human readable form. It's enabled by default,
 	disable with --no-demangle.
@@ -307,13 +354,34 @@ include::itrace.txt[]
 	stop time is not given (i.e, time string is 'x.y,') then analysis goes
 	to end of file.
 
+	Also support time percent with multipe time range. Time string is
+	'a%/n,b%/m,...' or 'a%-b%,c%-%d,...'.
+
+	For example:
+	Select the second 10% time slice:
+	perf script --time 10%/2
+
+	Select from 0% to 10% time slice:
+	perf script --time 0%-10%
+
+	Select the first and second 10% time slices:
+	perf script --time 10%/1,10%/2
+
+	Select from 0% to 10% and 30% to 40% slices:
+	perf script --time 0%-10%,30%-40%
+
 --max-blocks::
 	Set the maximum number of program blocks to print with brstackasm for
 	each sample.
 
+--per-event-dump::
+	Create per event files with a "perf.data.EVENT.dump" name instead of
+        printing to stdout, useful, for instance, for generating flamegraphs.
+
 --inline::
 	If a callgraph address belongs to an inlined function, the inline stack
-	will be printed. Each entry has function name and file/line.
+	will be printed. Each entry has function name and file/line. Enabled by
+	default, disable with --no-inline.
 
 SEE ALSO
 --------

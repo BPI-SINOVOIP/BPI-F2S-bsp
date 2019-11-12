@@ -331,7 +331,7 @@ static int soc_button_probe(struct platform_device *pdev)
 	error = gpiod_count(dev, NULL);
 	if (error < 0) {
 		dev_dbg(dev, "no GPIO attached, ignoring...\n");
-		return error;
+		return -ENODEV;
 	}
 
 	priv = devm_kzalloc(dev, sizeof(*priv), GFP_KERNEL);
@@ -373,7 +373,7 @@ static struct soc_button_info soc_button_PNP0C40[] = {
 	{ "home", 1, EV_KEY, KEY_LEFTMETA, false, true },
 	{ "volume_up", 2, EV_KEY, KEY_VOLUMEUP, true, false },
 	{ "volume_down", 3, EV_KEY, KEY_VOLUMEDOWN, true, false },
-	{ "rotation_lock", 4, EV_SW, SW_ROTATE_LOCK, false, false },
+	{ "rotation_lock", 4, EV_KEY, KEY_ROTATE_LOCK_TOGGLE, false, false },
 	{ }
 };
 

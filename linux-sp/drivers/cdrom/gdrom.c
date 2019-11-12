@@ -497,6 +497,9 @@ static const struct cdrom_device_ops gdrom_ops = {
 static int gdrom_bdops_open(struct block_device *bdev, fmode_t mode)
 {
 	int ret;
+
+	check_disk_change(bdev);
+
 	mutex_lock(&gdrom_mutex);
 	ret = cdrom_open(gd.cd_info, bdev, mode);
 	mutex_unlock(&gdrom_mutex);
@@ -583,7 +586,8 @@ static int gdrom_set_interrupt_handlers(void)
  */
 static void gdrom_readdisk_dma(struct work_struct *work)
 {
-	int err, block, block_cnt;
+	int block, block_cnt;
+	blk_status_t err;
 	struct packet_command *read_command;
 	struct list_head *elem, *next;
 	struct request *req;
@@ -641,7 +645,7 @@ static void gdrom_readdisk_dma(struct work_struct *work)
 		__raw_writeb(1, GDROM_DMA_STATUS_REG);
 		wait_event_interruptible_timeout(request_queue,
 			gd.transfer == 0, GDROM_DEFAULT_TIMEOUT);
-		err = gd.transfer ? -EIO : 0;
+		err = gd.transfer ? BLK_STS_IOERR : BLK_STS_OK;
 		gd.transfer = 0;
 		gd.pending = 0;
 		/* now seek to take the request spinlock
@@ -670,11 +674,11 @@ static void gdrom_request(struct request_queue *rq)
 			break;
 		case REQ_OP_WRITE:
 			pr_notice("Read only device - write request ignored\n");
-			__blk_end_request_all(req, -EIO);
+			__blk_end_request_all(req, BLK_STS_IOERR);
 			break;
 		default:
 			printk(KERN_DEBUG "gdrom: Non-fs request ignored\n");
-			__blk_end_request_all(req, -EIO);
+			__blk_end_request_all(req, BLK_STS_IOERR);
 			break;
 		}
 	}
@@ -812,6 +816,7 @@ static int probe_gdrom(struct platform_device *devptr)
 		err = -ENOMEM;
 		goto probe_fail_requestq;
 	}
+	blk_queue_bounce_limit(gd.gdrom_rq, BLK_BOUNCE_HIGH);
 
 	err = probe_gdrom_setupqueue();
 	if (err)
@@ -884,6 +889,7 @@ static void __exit exit_gdrom(void)
 	platform_device_unregister(pd);
 	platform_driver_unregister(&gdrom_driver);
 	kfree(gd.toc);
+	kfree(gd.cd_info);
 }
 
 module_init(init_gdrom);

@@ -43,6 +43,7 @@ struct proxy_dev {
 #define STATE_OPENED_FLAG        BIT(0)
 #define STATE_WAIT_RESPONSE_FLAG BIT(1)  /* waiting for emulator response */
 #define STATE_REGISTERED_FLAG	 BIT(2)
+#define STATE_DRIVER_COMMAND     BIT(3)  /* sending a driver specific command */
 
 	size_t req_len;              /* length of queued TPM request */
 	size_t resp_len;             /* length of queued TPM response */
@@ -172,22 +173,22 @@ static ssize_t vtpm_proxy_fops_write(struct file *filp, const char __user *buf,
  *
  * Return: Poll flags
  */
-static unsigned int vtpm_proxy_fops_poll(struct file *filp, poll_table *wait)
+static __poll_t vtpm_proxy_fops_poll(struct file *filp, poll_table *wait)
 {
 	struct proxy_dev *proxy_dev = filp->private_data;
-	unsigned ret;
+	__poll_t ret;
 
 	poll_wait(filp, &proxy_dev->wq, wait);
 
-	ret = POLLOUT;
+	ret = EPOLLOUT;
 
 	mutex_lock(&proxy_dev->buf_lock);
 
 	if (proxy_dev->req_len)
-		ret |= POLLIN | POLLRDNORM;
+		ret |= EPOLLIN | EPOLLRDNORM;
 
 	if (!(proxy_dev->state & STATE_OPENED_FLAG))
-		ret |= POLLHUP;
+		ret |= EPOLLHUP;
 
 	mutex_unlock(&proxy_dev->buf_lock);
 
@@ -299,6 +300,28 @@ out:
 	return len;
 }
 
+static int vtpm_proxy_is_driver_command(struct tpm_chip *chip,
+					u8 *buf, size_t count)
+{
+	struct tpm_input_header *hdr = (struct tpm_input_header *)buf;
+
+	if (count < sizeof(struct tpm_input_header))
+		return 0;
+
+	if (chip->flags & TPM_CHIP_FLAG_TPM2) {
+		switch (be32_to_cpu(hdr->ordinal)) {
+		case TPM2_CC_SET_LOCALITY:
+			return 1;
+		}
+	} else {
+		switch (be32_to_cpu(hdr->ordinal)) {
+		case TPM_ORD_SET_LOCALITY:
+			return 1;
+		}
+	}
+	return 0;
+}
+
 /*
  * Called when core TPM driver forwards TPM requests to 'server side'.
  *
@@ -312,7 +335,6 @@ out:
 static int vtpm_proxy_tpm_op_send(struct tpm_chip *chip, u8 *buf, size_t count)
 {
 	struct proxy_dev *proxy_dev = dev_get_drvdata(&chip->dev);
-	int rc = 0;
 
 	if (count > sizeof(proxy_dev->buffer)) {
 		dev_err(&chip->dev,
@@ -320,6 +342,10 @@ static int vtpm_proxy_tpm_op_send(struct tpm_chip *chip, u8 *buf, size_t count)
 			count, sizeof(proxy_dev->buffer));
 		return -EIO;
 	}
+
+	if (!(proxy_dev->state & STATE_DRIVER_COMMAND) &&
+	    vtpm_proxy_is_driver_command(chip, buf, count))
+		return -EFAULT;
 
 	mutex_lock(&proxy_dev->buf_lock);
 
@@ -339,7 +365,7 @@ static int vtpm_proxy_tpm_op_send(struct tpm_chip *chip, u8 *buf, size_t count)
 
 	wake_up_interruptible(&proxy_dev->wq);
 
-	return rc;
+	return 0;
 }
 
 static void vtpm_proxy_tpm_op_cancel(struct tpm_chip *chip)
@@ -371,6 +397,47 @@ static bool vtpm_proxy_tpm_req_canceled(struct tpm_chip  *chip, u8 status)
 	return ret;
 }
 
+static int vtpm_proxy_request_locality(struct tpm_chip *chip, int locality)
+{
+	struct tpm_buf buf;
+	int rc;
+	const struct tpm_output_header *header;
+	struct proxy_dev *proxy_dev = dev_get_drvdata(&chip->dev);
+
+	if (chip->flags & TPM_CHIP_FLAG_TPM2)
+		rc = tpm_buf_init(&buf, TPM2_ST_SESSIONS,
+				  TPM2_CC_SET_LOCALITY);
+	else
+		rc = tpm_buf_init(&buf, TPM_TAG_RQU_COMMAND,
+				  TPM_ORD_SET_LOCALITY);
+	if (rc)
+		return rc;
+	tpm_buf_append_u8(&buf, locality);
+
+	proxy_dev->state |= STATE_DRIVER_COMMAND;
+
+	rc = tpm_transmit_cmd(chip, NULL, buf.data, tpm_buf_length(&buf), 0,
+			      TPM_TRANSMIT_NESTED,
+			      "attempting to set locality");
+
+	proxy_dev->state &= ~STATE_DRIVER_COMMAND;
+
+	if (rc < 0) {
+		locality = rc;
+		goto out;
+	}
+
+	header = (const struct tpm_output_header *)buf.data;
+	rc = be32_to_cpu(header->return_code);
+	if (rc)
+		locality = -1;
+
+out:
+	tpm_buf_destroy(&buf);
+
+	return locality;
+}
+
 static const struct tpm_class_ops vtpm_proxy_tpm_ops = {
 	.flags = TPM_OPS_AUTO_STARTUP,
 	.recv = vtpm_proxy_tpm_op_recv,
@@ -380,6 +447,7 @@ static const struct tpm_class_ops vtpm_proxy_tpm_ops = {
 	.req_complete_mask = VTPM_PROXY_REQ_COMPLETE_FLAG,
 	.req_complete_val = VTPM_PROXY_REQ_COMPLETE_FLAG,
 	.req_canceled = vtpm_proxy_tpm_req_canceled,
+	.request_locality = vtpm_proxy_request_locality,
 };
 
 /*

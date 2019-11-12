@@ -64,18 +64,20 @@
  * @address:	Address for operation
  * @value:	Pointer to read buffer
  *
- * Return: length of the io, or -ERRNO
+ * Return: 0 on success, or -ERRNO
  */
 int nfp_cpp_readl(struct nfp_cpp *cpp, u32 cpp_id,
 		  unsigned long long address, u32 *value)
 {
 	u8 tmp[4];
-	int err;
+	int n;
 
-	err = nfp_cpp_read(cpp, cpp_id, address, tmp, sizeof(tmp));
+	n = nfp_cpp_read(cpp, cpp_id, address, tmp, sizeof(tmp));
+	if (n != sizeof(tmp))
+		return n < 0 ? n : -EIO;
+
 	*value = get_unaligned_le32(tmp);
-
-	return err;
+	return 0;
 }
 
 /**
@@ -85,15 +87,18 @@ int nfp_cpp_readl(struct nfp_cpp *cpp, u32 cpp_id,
  * @address:	Address for operation
  * @value:	Value to write
  *
- * Return: length of the io, or -ERRNO
+ * Return: 0 on success, or -ERRNO
  */
 int nfp_cpp_writel(struct nfp_cpp *cpp, u32 cpp_id,
 		   unsigned long long address, u32 value)
 {
 	u8 tmp[4];
+	int n;
 
 	put_unaligned_le32(value, tmp);
-	return nfp_cpp_write(cpp, cpp_id, address, tmp, sizeof(tmp));
+	n = nfp_cpp_write(cpp, cpp_id, address, tmp, sizeof(tmp));
+
+	return n == sizeof(tmp) ? 0 : n < 0 ? n : -EIO;
 }
 
 /**
@@ -103,18 +108,20 @@ int nfp_cpp_writel(struct nfp_cpp *cpp, u32 cpp_id,
  * @address:	Address for operation
  * @value:	Pointer to read buffer
  *
- * Return: length of the io, or -ERRNO
+ * Return: 0 on success, or -ERRNO
  */
 int nfp_cpp_readq(struct nfp_cpp *cpp, u32 cpp_id,
 		  unsigned long long address, u64 *value)
 {
 	u8 tmp[8];
-	int err;
+	int n;
 
-	err = nfp_cpp_read(cpp, cpp_id, address, tmp, sizeof(tmp));
+	n = nfp_cpp_read(cpp, cpp_id, address, tmp, sizeof(tmp));
+	if (n != sizeof(tmp))
+		return n < 0 ? n : -EIO;
+
 	*value = get_unaligned_le64(tmp);
-
-	return err;
+	return 0;
 }
 
 /**
@@ -124,15 +131,18 @@ int nfp_cpp_readq(struct nfp_cpp *cpp, u32 cpp_id,
  * @address:	Address for operation
  * @value:	Value to write
  *
- * Return: length of the io, or -ERRNO
+ * Return: 0 on success, or -ERRNO
  */
 int nfp_cpp_writeq(struct nfp_cpp *cpp, u32 cpp_id,
 		   unsigned long long address, u64 value)
 {
 	u8 tmp[8];
+	int n;
 
 	put_unaligned_le64(value, tmp);
-	return nfp_cpp_write(cpp, cpp_id, address, tmp, sizeof(tmp));
+	n = nfp_cpp_write(cpp, cpp_id, address, tmp, sizeof(tmp));
+
+	return n == sizeof(tmp) ? 0 : n < 0 ? n : -EIO;
 }
 
 /* NOTE: This code should not use nfp_xpb_* functions,
@@ -278,4 +288,44 @@ exit_release:
 	nfp_cpp_explicit_release(expl);
 
 	return err;
+}
+
+/**
+ * nfp_cpp_map_area() - Helper function to map an area
+ * @cpp:    NFP CPP handler
+ * @name:   Name for the area
+ * @domain: CPP domain
+ * @target: CPP target
+ * @addr:   CPP address
+ * @size:   Size of the area
+ * @area:   Area handle (output)
+ *
+ * Map an area of IOMEM access.  To undo the effect of this function call
+ * @nfp_cpp_area_release_free(*area).
+ *
+ * Return: Pointer to memory mapped area or ERR_PTR
+ */
+u8 __iomem *
+nfp_cpp_map_area(struct nfp_cpp *cpp, const char *name, int domain, int target,
+		 u64 addr, unsigned long size, struct nfp_cpp_area **area)
+{
+	u8 __iomem *res;
+	u32 dest;
+
+	dest = NFP_CPP_ISLAND_ID(target, NFP_CPP_ACTION_RW, 0, domain);
+
+	*area = nfp_cpp_area_alloc_acquire(cpp, name, dest, addr, size);
+	if (!*area)
+		goto err_eio;
+
+	res = nfp_cpp_area_iomem(*area);
+	if (!res)
+		goto err_release_free;
+
+	return res;
+
+err_release_free:
+	nfp_cpp_area_release_free(*area);
+err_eio:
+	return (u8 __iomem *)ERR_PTR(-EIO);
 }

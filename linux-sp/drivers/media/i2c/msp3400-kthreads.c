@@ -655,6 +655,7 @@ restart:
 			break;
 		case 0: /* 4.5 */
 			state->detected_std = V4L2_STD_MN;
+			/* fall-through */
 		default:
 no_second:
 			state->second = msp3400c_carrier_detect_main[max1].cdo;
@@ -884,7 +885,7 @@ static int msp34xxg_modus(struct i2c_client *client)
 }
 
 static void msp34xxg_set_source(struct i2c_client *client, u16 reg, int in)
- {
+{
 	struct msp_state *state = to_state(i2c_get_clientdata(client));
 	int source, matrix;
 

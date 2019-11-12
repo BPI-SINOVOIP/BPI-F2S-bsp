@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /* USB OTG (On The Go) defines */
 /*
  *
@@ -12,7 +13,6 @@
 #include <linux/phy/phy.h>
 #include <linux/usb/phy.h>
 
-#if 0
 struct usb_otg {
 	u8			default_a;
 
@@ -41,7 +41,6 @@ struct usb_otg {
 	int	(*start_hnp)(struct usb_otg *otg);
 
 };
-#endif
 
 /**
  * struct usb_otg_caps - describes the otg capabilities of the device
@@ -58,17 +57,8 @@ struct usb_otg_caps {
 	bool adp_support;
 };
 
-#ifdef CONFIG_USB_SUNPLUS_OTG
-extern int usb_set_transceiver_sunplus(struct usb_phy *, int);
-#endif
-
-#ifdef CONFIG_USB_SUNPLUS_OTG
-extern struct usb_phy *usb_get_transceiver_sunplus(int bus_num);
-#endif
-
 extern const char *usb_otg_state_string(enum usb_otg_state state);
 
-#if 0
 /* Context: can sleep */
 static inline int
 otg_start_hnp(struct usb_otg *otg)
@@ -122,7 +112,6 @@ otg_start_srp(struct usb_otg *otg)
 
 /* for OTG controller drivers (and maybe other stuff) */
 extern int usb_bus_start_enum(struct usb_bus *bus, unsigned port_num);
-#endif
 
 enum usb_dr_mode {
 	USB_DR_MODE_UNKNOWN,

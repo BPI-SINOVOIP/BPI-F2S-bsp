@@ -59,7 +59,7 @@ struct xfrm6_tunnel_spi {
 	struct hlist_node	list_byspi;
 	xfrm_address_t		addr;
 	u32			spi;
-	atomic_t		refcnt;
+	refcount_t		refcnt;
 	struct rcu_head		rcu_head;
 };
 
@@ -144,6 +144,9 @@ static u32 __xfrm6_tunnel_alloc_spi(struct net *net, xfrm_address_t *saddr)
 		index = __xfrm6_tunnel_spi_check(net, spi);
 		if (index >= 0)
 			goto alloc_spi;
+
+		if (spi == XFRM6_TUNNEL_SPI_MAX)
+			break;
 	}
 	for (spi = XFRM6_TUNNEL_SPI_MIN; spi < xfrm6_tn->spi; spi++) {
 		index = __xfrm6_tunnel_spi_check(net, spi);
@@ -160,7 +163,7 @@ alloc_spi:
 
 	memcpy(&x6spi->addr, saddr, sizeof(x6spi->addr));
 	x6spi->spi = spi;
-	atomic_set(&x6spi->refcnt, 1);
+	refcount_set(&x6spi->refcnt, 1);
 
 	hlist_add_head_rcu(&x6spi->list_byspi, &xfrm6_tn->spi_byspi[index]);
 
@@ -178,7 +181,7 @@ __be32 xfrm6_tunnel_alloc_spi(struct net *net, xfrm_address_t *saddr)
 	spin_lock_bh(&xfrm6_tunnel_spi_lock);
 	x6spi = __xfrm6_tunnel_spi_lookup(net, saddr);
 	if (x6spi) {
-		atomic_inc(&x6spi->refcnt);
+		refcount_inc(&x6spi->refcnt);
 		spi = x6spi->spi;
 	} else
 		spi = __xfrm6_tunnel_alloc_spi(net, saddr);
@@ -207,7 +210,7 @@ static void xfrm6_tunnel_free_spi(struct net *net, xfrm_address_t *saddr)
 				  list_byaddr)
 	{
 		if (xfrm6_addr_equal(&x6spi->addr, saddr)) {
-			if (atomic_dec_and_test(&x6spi->refcnt)) {
+			if (refcount_dec_and_test(&x6spi->refcnt)) {
 				hlist_del_rcu(&x6spi->list_byaddr);
 				hlist_del_rcu(&x6spi->list_byspi);
 				call_rcu(&x6spi->rcu_head, x6spi_destroy_rcu);
@@ -338,6 +341,17 @@ static int __net_init xfrm6_tunnel_net_init(struct net *net)
 
 static void __net_exit xfrm6_tunnel_net_exit(struct net *net)
 {
+	struct xfrm6_tunnel_net *xfrm6_tn = xfrm6_tunnel_pernet(net);
+	unsigned int i;
+
+	xfrm_flush_gc();
+	xfrm_state_flush(net, IPSEC_PROTO_ANY, false, true);
+
+	for (i = 0; i < XFRM6_TUNNEL_SPI_BYADDR_HSIZE; i++)
+		WARN_ON_ONCE(!hlist_empty(&xfrm6_tn->spi_byaddr[i]));
+
+	for (i = 0; i < XFRM6_TUNNEL_SPI_BYSPI_HSIZE; i++)
+		WARN_ON_ONCE(!hlist_empty(&xfrm6_tn->spi_byspi[i]));
 }
 
 static struct pernet_operations xfrm6_tunnel_net_ops = {

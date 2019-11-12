@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * VFIO based Physical Subchannel device driver
  *
@@ -21,6 +22,7 @@
 #include "vfio_ccw_private.h"
 
 struct workqueue_struct *vfio_ccw_work_q;
+struct kmem_cache *vfio_ccw_io_region;
 
 /*
  * Helpers
@@ -69,73 +71,27 @@ out_unlock:
 static void vfio_ccw_sch_io_todo(struct work_struct *work)
 {
 	struct vfio_ccw_private *private;
-	struct subchannel *sch;
 	struct irb *irb;
+	bool is_final;
 
 	private = container_of(work, struct vfio_ccw_private, io_work);
 	irb = &private->irb;
-	sch = private->sch;
 
+	is_final = !(scsw_actl(&irb->scsw) &
+		     (SCSW_ACTL_DEVACT | SCSW_ACTL_SCHACT));
 	if (scsw_is_solicited(&irb->scsw)) {
 		cp_update_scsw(&private->cp, &irb->scsw);
-		cp_free(&private->cp);
+		if (is_final)
+			cp_free(&private->cp);
 	}
-	memcpy(private->io_region.irb_area, irb, sizeof(*irb));
+	memcpy(private->io_region->irb_area, irb, sizeof(*irb));
 
 	if (private->io_trigger)
 		eventfd_signal(private->io_trigger, 1);
 
-	if (private->mdev)
+	if (private->mdev && is_final)
 		private->state = VFIO_CCW_STATE_IDLE;
 }
-
-/*
- * Sysfs interfaces
- */
-static ssize_t chpids_show(struct device *dev,
-			   struct device_attribute *attr,
-			   char *buf)
-{
-	struct subchannel *sch = to_subchannel(dev);
-	struct chsc_ssd_info *ssd = &sch->ssd_info;
-	ssize_t ret = 0;
-	int chp;
-	int mask;
-
-	for (chp = 0; chp < 8; chp++) {
-		mask = 0x80 >> chp;
-		if (ssd->path_mask & mask)
-			ret += sprintf(buf + ret, "%02x ", ssd->chpid[chp].id);
-		else
-			ret += sprintf(buf + ret, "00 ");
-	}
-	ret += sprintf(buf+ret, "\n");
-	return ret;
-}
-
-static ssize_t pimpampom_show(struct device *dev,
-			      struct device_attribute *attr,
-			      char *buf)
-{
-	struct subchannel *sch = to_subchannel(dev);
-	struct pmcw *pmcw = &sch->schib.pmcw;
-
-	return sprintf(buf, "%02x %02x %02x\n",
-		       pmcw->pim, pmcw->pam, pmcw->pom);
-}
-
-static DEVICE_ATTR(chpids, 0444, chpids_show, NULL);
-static DEVICE_ATTR(pimpampom, 0444, pimpampom_show, NULL);
-
-static struct attribute *vfio_subchannel_attrs[] = {
-	&dev_attr_chpids.attr,
-	&dev_attr_pimpampom.attr,
-	NULL,
-};
-
-static struct attribute_group vfio_subchannel_attr_group = {
-	.attrs = vfio_subchannel_attrs,
-};
 
 /*
  * Css driver callbacks
@@ -163,6 +119,14 @@ static int vfio_ccw_sch_probe(struct subchannel *sch)
 	private = kzalloc(sizeof(*private), GFP_KERNEL | GFP_DMA);
 	if (!private)
 		return -ENOMEM;
+
+	private->io_region = kmem_cache_zalloc(vfio_ccw_io_region,
+					       GFP_KERNEL | GFP_DMA);
+	if (!private->io_region) {
+		kfree(private);
+		return -ENOMEM;
+	}
+
 	private->sch = sch;
 	dev_set_drvdata(&sch->dev, private);
 
@@ -174,13 +138,9 @@ static int vfio_ccw_sch_probe(struct subchannel *sch)
 	if (ret)
 		goto out_free;
 
-	ret = sysfs_create_group(&sch->dev.kobj, &vfio_subchannel_attr_group);
-	if (ret)
-		goto out_disable;
-
 	ret = vfio_ccw_mdev_reg(sch);
 	if (ret)
-		goto out_rm_group;
+		goto out_disable;
 
 	INIT_WORK(&private->io_work, vfio_ccw_sch_io_todo);
 	atomic_set(&private->avail, 1);
@@ -188,12 +148,11 @@ static int vfio_ccw_sch_probe(struct subchannel *sch)
 
 	return 0;
 
-out_rm_group:
-	sysfs_remove_group(&sch->dev.kobj, &vfio_subchannel_attr_group);
 out_disable:
 	cio_disable_subchannel(sch);
 out_free:
 	dev_set_drvdata(&sch->dev, NULL);
+	kmem_cache_free(vfio_ccw_io_region, private->io_region);
 	kfree(private);
 	return ret;
 }
@@ -206,10 +165,9 @@ static int vfio_ccw_sch_remove(struct subchannel *sch)
 
 	vfio_ccw_mdev_unreg(sch);
 
-	sysfs_remove_group(&sch->dev.kobj, &vfio_subchannel_attr_group);
-
 	dev_set_drvdata(&sch->dev, NULL);
 
+	kmem_cache_free(vfio_ccw_io_region, private->io_region);
 	kfree(private);
 
 	return 0;
@@ -234,6 +192,7 @@ static int vfio_ccw_sch_event(struct subchannel *sch, int process)
 {
 	struct vfio_ccw_private *private = dev_get_drvdata(&sch->dev);
 	unsigned long flags;
+	int rc = -EAGAIN;
 
 	spin_lock_irqsave(sch->lock, flags);
 	if (!device_is_registered(&sch->dev))
@@ -244,6 +203,7 @@ static int vfio_ccw_sch_event(struct subchannel *sch, int process)
 
 	if (cio_update_schib(sch)) {
 		vfio_ccw_fsm_event(private, VFIO_CCW_EVENT_NOT_OPER);
+		rc = 0;
 		goto out_unlock;
 	}
 
@@ -252,11 +212,12 @@ static int vfio_ccw_sch_event(struct subchannel *sch, int process)
 		private->state = private->mdev ? VFIO_CCW_STATE_IDLE :
 				 VFIO_CCW_STATE_STANDBY;
 	}
+	rc = 0;
 
 out_unlock:
 	spin_unlock_irqrestore(sch->lock, flags);
 
-	return 0;
+	return rc;
 }
 
 static struct css_device_id vfio_ccw_sch_ids[] = {
@@ -286,10 +247,20 @@ static int __init vfio_ccw_sch_init(void)
 	if (!vfio_ccw_work_q)
 		return -ENOMEM;
 
+	vfio_ccw_io_region = kmem_cache_create_usercopy("vfio_ccw_io_region",
+					sizeof(struct ccw_io_region), 0,
+					SLAB_ACCOUNT, 0,
+					sizeof(struct ccw_io_region), NULL);
+	if (!vfio_ccw_io_region) {
+		destroy_workqueue(vfio_ccw_work_q);
+		return -ENOMEM;
+	}
+
 	isc_register(VFIO_CCW_ISC);
 	ret = css_driver_register(&vfio_ccw_sch_driver);
 	if (ret) {
 		isc_unregister(VFIO_CCW_ISC);
+		kmem_cache_destroy(vfio_ccw_io_region);
 		destroy_workqueue(vfio_ccw_work_q);
 	}
 
@@ -300,6 +271,7 @@ static void __exit vfio_ccw_sch_exit(void)
 {
 	css_driver_unregister(&vfio_ccw_sch_driver);
 	isc_unregister(VFIO_CCW_ISC);
+	kmem_cache_destroy(vfio_ccw_io_region);
 	destroy_workqueue(vfio_ccw_work_q);
 }
 module_init(vfio_ccw_sch_init);

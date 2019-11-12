@@ -88,20 +88,61 @@
  * On top of this basic transformation additional properties can be exposed by
  * the driver:
  *
- * - Rotation is set up with drm_plane_create_rotation_property(). It adds a
- *   rotation and reflection step between the source and destination rectangles.
- *   Without this property the rectangle is only scaled, but not rotated or
- *   reflected.
+ * alpha:
+ * 	Alpha is setup with drm_plane_create_alpha_property(). It controls the
+ * 	plane-wide opacity, from transparent (0) to opaque (0xffff). It can be
+ * 	combined with pixel alpha.
+ *	The pixel values in the framebuffers are expected to not be
+ *	pre-multiplied by the global alpha associated to the plane.
  *
- * - Z position is set up with drm_plane_create_zpos_immutable_property() and
- *   drm_plane_create_zpos_property(). It controls the visibility of overlapping
- *   planes. Without this property the primary plane is always below the cursor
- *   plane, and ordering between all other planes is undefined.
+ * rotation:
+ *	Rotation is set up with drm_plane_create_rotation_property(). It adds a
+ *	rotation and reflection step between the source and destination rectangles.
+ *	Without this property the rectangle is only scaled, but not rotated or
+ *	reflected.
+ *
+ * zpos:
+ *	Z position is set up with drm_plane_create_zpos_immutable_property() and
+ *	drm_plane_create_zpos_property(). It controls the visibility of overlapping
+ *	planes. Without this property the primary plane is always below the cursor
+ *	plane, and ordering between all other planes is undefined.
  *
  * Note that all the property extensions described here apply either to the
  * plane or the CRTC (e.g. for the background color, which currently is not
  * exposed and assumed to be black).
  */
+
+/**
+ * drm_plane_create_alpha_property - create a new alpha property
+ * @plane: drm plane
+ *
+ * This function creates a generic, mutable, alpha property and enables support
+ * for it in the DRM core. It is attached to @plane.
+ *
+ * The alpha property will be allowed to be within the bounds of 0
+ * (transparent) to 0xffff (opaque).
+ *
+ * Returns:
+ * 0 on success, negative error code on failure.
+ */
+int drm_plane_create_alpha_property(struct drm_plane *plane)
+{
+	struct drm_property *prop;
+
+	prop = drm_property_create_range(plane->dev, 0, "alpha",
+					 0, DRM_BLEND_ALPHA_OPAQUE);
+	if (!prop)
+		return -ENOMEM;
+
+	drm_object_attach_property(&plane->base, prop, DRM_BLEND_ALPHA_OPAQUE);
+	plane->alpha_property = prop;
+
+	if (plane->state)
+		plane->state->alpha = DRM_BLEND_ALPHA_OPAQUE;
+
+	return 0;
+}
+EXPORT_SYMBOL(drm_plane_create_alpha_property);
 
 /**
  * drm_plane_create_rotation_property - create a new rotation property
@@ -119,17 +160,17 @@
  * drm_property_create_bitmask()) called "rotation" and has the following
  * bitmask enumaration values:
  *
- * DRM_ROTATE_0:
+ * DRM_MODE_ROTATE_0:
  * 	"rotate-0"
- * DRM_ROTATE_90:
+ * DRM_MODE_ROTATE_90:
  * 	"rotate-90"
- * DRM_ROTATE_180:
+ * DRM_MODE_ROTATE_180:
  * 	"rotate-180"
- * DRM_ROTATE_270:
+ * DRM_MODE_ROTATE_270:
  * 	"rotate-270"
- * DRM_REFLECT_X:
+ * DRM_MODE_REFLECT_X:
  * 	"reflect-x"
- * DRM_REFELCT_Y:
+ * DRM_MODE_REFLECT_Y:
  * 	"reflect-y"
  *
  * Rotation is the specified amount in degrees in counter clockwise direction,
@@ -142,17 +183,17 @@ int drm_plane_create_rotation_property(struct drm_plane *plane,
 				       unsigned int supported_rotations)
 {
 	static const struct drm_prop_enum_list props[] = {
-		{ __builtin_ffs(DRM_ROTATE_0) - 1,   "rotate-0" },
-		{ __builtin_ffs(DRM_ROTATE_90) - 1,  "rotate-90" },
-		{ __builtin_ffs(DRM_ROTATE_180) - 1, "rotate-180" },
-		{ __builtin_ffs(DRM_ROTATE_270) - 1, "rotate-270" },
-		{ __builtin_ffs(DRM_REFLECT_X) - 1,  "reflect-x" },
-		{ __builtin_ffs(DRM_REFLECT_Y) - 1,  "reflect-y" },
+		{ __builtin_ffs(DRM_MODE_ROTATE_0) - 1,   "rotate-0" },
+		{ __builtin_ffs(DRM_MODE_ROTATE_90) - 1,  "rotate-90" },
+		{ __builtin_ffs(DRM_MODE_ROTATE_180) - 1, "rotate-180" },
+		{ __builtin_ffs(DRM_MODE_ROTATE_270) - 1, "rotate-270" },
+		{ __builtin_ffs(DRM_MODE_REFLECT_X) - 1,  "reflect-x" },
+		{ __builtin_ffs(DRM_MODE_REFLECT_Y) - 1,  "reflect-y" },
 	};
 	struct drm_property *prop;
 
-	WARN_ON((supported_rotations & DRM_ROTATE_MASK) == 0);
-	WARN_ON(!is_power_of_2(rotation & DRM_ROTATE_MASK));
+	WARN_ON((supported_rotations & DRM_MODE_ROTATE_MASK) == 0);
+	WARN_ON(!is_power_of_2(rotation & DRM_MODE_ROTATE_MASK));
 	WARN_ON(rotation & ~supported_rotations);
 
 	prop = drm_property_create_bitmask(plane->dev, 0, "rotation",
@@ -178,14 +219,14 @@ EXPORT_SYMBOL(drm_plane_create_rotation_property);
  * @supported_rotations: Supported rotations
  *
  * Attempt to simplify the rotation to a form that is supported.
- * Eg. if the hardware supports everything except DRM_REFLECT_X
+ * Eg. if the hardware supports everything except DRM_MODE_REFLECT_X
  * one could call this function like this:
  *
- * drm_rotation_simplify(rotation, DRM_ROTATE_0 |
- *                       DRM_ROTATE_90 | DRM_ROTATE_180 |
- *                       DRM_ROTATE_270 | DRM_REFLECT_Y);
+ * drm_rotation_simplify(rotation, DRM_MODE_ROTATE_0 |
+ *                       DRM_MODE_ROTATE_90 | DRM_MODE_ROTATE_180 |
+ *                       DRM_MODE_ROTATE_270 | DRM_MODE_REFLECT_Y);
  *
- * to eliminate the DRM_ROTATE_X flag. Depending on what kind of
+ * to eliminate the DRM_MODE_ROTATE_X flag. Depending on what kind of
  * transforms the hardware supports, this function may not
  * be able to produce a supported transform, so the caller should
  * check the result afterwards.
@@ -194,9 +235,10 @@ unsigned int drm_rotation_simplify(unsigned int rotation,
 				   unsigned int supported_rotations)
 {
 	if (rotation & ~supported_rotations) {
-		rotation ^= DRM_REFLECT_X | DRM_REFLECT_Y;
-		rotation = (rotation & DRM_REFLECT_MASK) |
-		           BIT((ffs(rotation & DRM_ROTATE_MASK) + 1) % 4);
+		rotation ^= DRM_MODE_REFLECT_X | DRM_MODE_REFLECT_Y;
+		rotation = (rotation & DRM_MODE_REFLECT_MASK) |
+		           BIT((ffs(rotation & DRM_MODE_ROTATE_MASK) + 1)
+		           % 4);
 	}
 
 	return rotation;
@@ -213,9 +255,11 @@ EXPORT_SYMBOL(drm_rotation_simplify);
  * This function initializes generic mutable zpos property and enables support
  * for it in drm core. Drivers can then attach this property to planes to enable
  * support for configurable planes arrangement during blending operation.
- * Once mutable zpos property has been enabled, the DRM core will automatically
- * calculate &drm_plane_state.normalized_zpos values. Usually min should be set
- * to 0 and max to maximal number of planes for given crtc - 1.
+ * Drivers that attach a mutable zpos property to any plane should call the
+ * drm_atomic_normalize_zpos() helper during their implementation of
+ * &drm_mode_config_funcs.atomic_check(), which will update the normalized zpos
+ * values and store them in &drm_plane_state.normalized_zpos. Usually min
+ * should be set to 0 and max to maximal number of planes for given crtc - 1.
  *
  * If zpos of some planes cannot be changed (like fixed background or
  * cursor/topmost planes), driver should adjust min/max values and assign those
@@ -318,7 +362,7 @@ static int drm_atomic_helper_crtc_normalize_zpos(struct drm_crtc *crtc,
 	DRM_DEBUG_ATOMIC("[CRTC:%d:%s] calculating normalized zpos values\n",
 			 crtc->base.id, crtc->name);
 
-	states = kmalloc_array(total_planes, sizeof(*states), GFP_TEMPORARY);
+	states = kmalloc_array(total_planes, sizeof(*states), GFP_KERNEL);
 	if (!states)
 		return -ENOMEM;
 

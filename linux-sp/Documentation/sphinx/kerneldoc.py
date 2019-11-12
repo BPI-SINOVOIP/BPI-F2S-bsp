@@ -27,6 +27,7 @@
 # Please make sure this works on both python2 and python3.
 #
 
+import codecs
 import os
 import subprocess
 import sys
@@ -35,8 +36,7 @@ import glob
 
 from docutils import nodes, statemachine
 from docutils.statemachine import ViewList
-from docutils.parsers.rst import directives
-from sphinx.util.compat import Directive
+from docutils.parsers.rst import directives, Directive
 from sphinx.ext.autodoc import AutodocReporter
 
 __version__  = '1.0'
@@ -47,7 +47,7 @@ class KernelDocDirective(Directive):
     optional_arguments = 4
     option_spec = {
         'doc': directives.unchanged_required,
-        'functions': directives.unchanged_required,
+        'functions': directives.unchanged,
         'export': directives.unchanged,
         'internal': directives.unchanged,
     }
@@ -75,8 +75,12 @@ class KernelDocDirective(Directive):
         elif 'doc' in self.options:
             cmd += ['-function', str(self.options.get('doc'))]
         elif 'functions' in self.options:
-            for f in str(self.options.get('functions')).split():
-                cmd += ['-function', f]
+            functions = self.options.get('functions').split()
+            if functions:
+                for f in functions:
+                    cmd += ['-function', f]
+            else:
+                cmd += ['-no-doc-sections']
 
         for pattern in export_file_patterns:
             for f in glob.glob(env.config.kerneldoc_srctree + '/' + pattern):
@@ -88,13 +92,10 @@ class KernelDocDirective(Directive):
         try:
             env.app.verbose('calling kernel-doc \'%s\'' % (" ".join(cmd)))
 
-            p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+            p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             out, err = p.communicate()
 
-            # python2 needs conversion to unicode.
-            # python3 with universal_newlines=True returns strings.
-            if sys.version_info.major < 3:
-                out, err = unicode(out, 'utf-8'), unicode(err, 'utf-8')
+            out, err = codecs.decode(out, 'utf-8'), codecs.decode(err, 'utf-8')
 
             if p.returncode != 0:
                 sys.stderr.write(err)

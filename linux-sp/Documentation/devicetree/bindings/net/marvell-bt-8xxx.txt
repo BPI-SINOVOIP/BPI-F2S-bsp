@@ -22,7 +22,6 @@ Optional properties:
   - marvell,wakeup-gap-ms: wakeup gap represents wakeup latency of the host
 		      platform. The value will be configured to firmware. This
 		      is needed to work chip's sleep feature as expected (u16).
-  - interrupt-parent: phandle of the parent interrupt controller
   - interrupt-names: Used only for USB based devices (See below)
   - interrupts : specifies the interrupt pin number to the cpu. For SDIO, the
 		 driver will use the first interrupt specified in the interrupt
@@ -44,7 +43,6 @@ Example for SDIO device follows (calibration data is also available in
 below example).
 
 &mmc3 {
-	status = "okay";
 	vmmc-supply = <&wlan_en_reg>;
 	bus-width = <4>;
 	cap-power-off-card;
@@ -70,7 +68,6 @@ below example).
 Example for USB device:
 
 &usb_host1_ohci {
-    status = "okay";
     #address-cells = <1>;
     #size-cells = <0>;
 

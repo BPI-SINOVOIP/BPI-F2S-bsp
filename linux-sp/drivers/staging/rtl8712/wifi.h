@@ -170,8 +170,10 @@ enum WIFI_REG_DOMAIN {
 	*(__le16 *)(pbuf) &= (~cpu_to_le16(_FROM_DS_)); \
 })
 
-#define get_tofr_ds(pframe)	((GetToDs(pframe) << 1) | GetFrDs(pframe))
-
+static inline unsigned char get_tofr_ds(unsigned char *pframe)
+{
+	return ((GetToDs(pframe) << 1) | GetFrDs(pframe));
+}
 
 #define SetMFrag(pbuf) ({ \
 	*(__le16 *)(pbuf) |= cpu_to_le16(_MORE_FRAG_); \
@@ -572,7 +574,6 @@ struct ieee80211_ht_addt_info {
  * According to IEEE802.11n spec size varies from 8K to 64K (in powers of 2)
  */
 #define IEEE80211_MIN_AMPDU_BUF 0x8
-#define IEEE80211_MAX_AMPDU_BUF 0x40
 
 
 /* Spatial Multiplexing Power Save Modes */

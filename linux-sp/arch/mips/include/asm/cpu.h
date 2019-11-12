@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * cpu.h: Values of the PRId register used to match up
  *	  various MIPS cpu types.
@@ -124,6 +125,7 @@
 #define PRID_IMP_P5600		0xa800
 #define PRID_IMP_I6400		0xa900
 #define PRID_IMP_M6250		0xab00
+#define PRID_IMP_I6500		0xb000
 
 /*
  * These are the PRID's for when 23:16 == PRID_COMP_SIBYTE
@@ -223,30 +225,32 @@
  * Definitions for 7:0 on legacy processors
  */
 
-#define PRID_REV_TX4927		0x0022
-#define PRID_REV_TX4937		0x0030
-#define PRID_REV_R4400		0x0040
-#define PRID_REV_R3000A		0x0030
-#define PRID_REV_R3000		0x0020
-#define PRID_REV_R2000A		0x0010
-#define PRID_REV_TX3912		0x0010
-#define PRID_REV_TX3922		0x0030
-#define PRID_REV_TX3927		0x0040
-#define PRID_REV_VR4111		0x0050
-#define PRID_REV_VR4181		0x0050	/* Same as VR4111 */
-#define PRID_REV_VR4121		0x0060
-#define PRID_REV_VR4122		0x0070
-#define PRID_REV_VR4181A	0x0070	/* Same as VR4122 */
-#define PRID_REV_VR4130		0x0080
-#define PRID_REV_34K_V1_0_2	0x0022
-#define PRID_REV_LOONGSON1B	0x0020
-#define PRID_REV_LOONGSON1C	0x0020	/* Same as Loongson-1B */
-#define PRID_REV_LOONGSON2E	0x0002
-#define PRID_REV_LOONGSON2F	0x0003
-#define PRID_REV_LOONGSON3A_R1	0x0005
-#define PRID_REV_LOONGSON3B_R1	0x0006
-#define PRID_REV_LOONGSON3B_R2	0x0007
-#define PRID_REV_LOONGSON3A_R2	0x0008
+#define PRID_REV_TX4927			0x0022
+#define PRID_REV_TX4937			0x0030
+#define PRID_REV_R4400			0x0040
+#define PRID_REV_R3000A			0x0030
+#define PRID_REV_R3000			0x0020
+#define PRID_REV_R2000A			0x0010
+#define PRID_REV_TX3912			0x0010
+#define PRID_REV_TX3922			0x0030
+#define PRID_REV_TX3927			0x0040
+#define PRID_REV_VR4111			0x0050
+#define PRID_REV_VR4181			0x0050	/* Same as VR4111 */
+#define PRID_REV_VR4121			0x0060
+#define PRID_REV_VR4122			0x0070
+#define PRID_REV_VR4181A		0x0070	/* Same as VR4122 */
+#define PRID_REV_VR4130			0x0080
+#define PRID_REV_34K_V1_0_2		0x0022
+#define PRID_REV_LOONGSON1B		0x0020
+#define PRID_REV_LOONGSON1C		0x0020	/* Same as Loongson-1B */
+#define PRID_REV_LOONGSON2E		0x0002
+#define PRID_REV_LOONGSON2F		0x0003
+#define PRID_REV_LOONGSON3A_R1		0x0005
+#define PRID_REV_LOONGSON3B_R1		0x0006
+#define PRID_REV_LOONGSON3B_R2		0x0007
+#define PRID_REV_LOONGSON3A_R2		0x0008
+#define PRID_REV_LOONGSON3A_R3_0	0x0009
+#define PRID_REV_LOONGSON3A_R3_1	0x000d
 
 /*
  * Older processors used to encode processor version and revision in two
@@ -284,11 +288,6 @@ enum cpu_type_enum {
 	CPU_R3081, CPU_R3081E,
 
 	/*
-	 * R6000 class processors
-	 */
-	CPU_R6000, CPU_R6000A,
-
-	/*
 	 * R4000 class processors
 	 */
 	CPU_R4000PC, CPU_R4000SC, CPU_R4000MC, CPU_R4200, CPU_R4300, CPU_R4310,
@@ -322,7 +321,7 @@ enum cpu_type_enum {
 	 */
 	CPU_5KC, CPU_5KE, CPU_20KC, CPU_25KF, CPU_SB1, CPU_SB1A, CPU_LOONGSON2,
 	CPU_LOONGSON3, CPU_CAVIUM_OCTEON, CPU_CAVIUM_OCTEON_PLUS,
-	CPU_CAVIUM_OCTEON2, CPU_CAVIUM_OCTEON3, CPU_XLR, CPU_XLP,
+	CPU_CAVIUM_OCTEON2, CPU_CAVIUM_OCTEON3, CPU_XLR, CPU_XLP, CPU_I6500,
 
 	CPU_QEMU_GENERIC,
 
@@ -416,6 +415,12 @@ enum cpu_type_enum {
 #define MIPS_CPU_GUESTID	MBIT_ULL(51)	/* CPU uses VZ ASE GuestID feature */
 #define MIPS_CPU_DRG		MBIT_ULL(52)	/* CPU has VZ Direct Root to Guest (DRG) */
 #define MIPS_CPU_UFR		MBIT_ULL(53)	/* CPU supports User mode FR switching */
+#define MIPS_CPU_SHARED_FTLB_RAM \
+				MBIT_ULL(54)	/* CPU shares FTLB RAM with another */
+#define MIPS_CPU_SHARED_FTLB_ENTRIES \
+				MBIT_ULL(55)	/* CPU shares FTLB entries with another */
+#define MIPS_CPU_MT_PER_TC_PERF_COUNTERS \
+				MBIT_ULL(56)	/* CPU has perf counters implemented per TC (MIPSMT ASE) */
 
 /*
  * CPU ASE encodings
@@ -430,5 +435,6 @@ enum cpu_type_enum {
 #define MIPS_ASE_VZ		0x00000080 /* Virtualization ASE */
 #define MIPS_ASE_MSA		0x00000100 /* MIPS SIMD Architecture */
 #define MIPS_ASE_DSP3		0x00000200 /* Signal Processing ASE Rev 3*/
+#define MIPS_ASE_MIPS16E2	0x00000400 /* MIPS16e2 */
 
 #endif /* _ASM_CPU_H */

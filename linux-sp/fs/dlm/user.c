@@ -123,6 +123,8 @@ static void compat_input(struct dlm_write_request *kb,
 static void compat_output(struct dlm_lock_result *res,
 			  struct dlm_lock_result32 *res32)
 {
+	memset(res32, 0, sizeof(*res32));
+
 	res32->version[0] = res->version[0];
 	res32->version[1] = res->version[1];
 	res32->version[2] = res->version[2];
@@ -885,7 +887,7 @@ static ssize_t device_read(struct file *file, char __user *buf, size_t count,
 	return rv;
 }
 
-static unsigned int device_poll(struct file *file, poll_table *wait)
+static __poll_t device_poll(struct file *file, poll_table *wait)
 {
 	struct dlm_user_proc *proc = file->private_data;
 
@@ -894,7 +896,7 @@ static unsigned int device_poll(struct file *file, poll_table *wait)
 	spin_lock(&proc->asts_spin);
 	if (!list_empty(&proc->asts)) {
 		spin_unlock(&proc->asts_spin);
-		return POLLIN | POLLRDNORM;
+		return EPOLLIN | EPOLLRDNORM;
 	}
 	spin_unlock(&proc->asts_spin);
 	return 0;

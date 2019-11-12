@@ -28,14 +28,44 @@
 #include "sun4i_backend.h"
 #include "sun4i_crtc.h"
 #include "sun4i_drv.h"
-#include "sun4i_layer.h"
+#include "sunxi_engine.h"
 #include "sun4i_tcon.h"
+
+/*
+ * While this isn't really working in the DRM theory, in practice we
+ * can only ever have one encoder per TCON since we have a mux in our
+ * TCON.
+ */
+static struct drm_encoder *sun4i_crtc_get_encoder(struct drm_crtc *crtc)
+{
+	struct drm_encoder *encoder;
+
+	drm_for_each_encoder(encoder, crtc->dev)
+		if (encoder->crtc == crtc)
+			return encoder;
+
+	return NULL;
+}
+
+static int sun4i_crtc_atomic_check(struct drm_crtc *crtc,
+				    struct drm_crtc_state *state)
+{
+	struct sun4i_crtc *scrtc = drm_crtc_to_sun4i_crtc(crtc);
+	struct sunxi_engine *engine = scrtc->engine;
+	int ret = 0;
+
+	if (engine && engine->ops && engine->ops->atomic_check)
+		ret = engine->ops->atomic_check(engine, state);
+
+	return ret;
+}
 
 static void sun4i_crtc_atomic_begin(struct drm_crtc *crtc,
 				    struct drm_crtc_state *old_state)
 {
 	struct sun4i_crtc *scrtc = drm_crtc_to_sun4i_crtc(crtc);
 	struct drm_device *dev = crtc->dev;
+	struct sunxi_engine *engine = scrtc->engine;
 	unsigned long flags;
 
 	if (crtc->state->event) {
@@ -45,7 +75,10 @@ static void sun4i_crtc_atomic_begin(struct drm_crtc *crtc,
 		scrtc->event = crtc->state->event;
 		spin_unlock_irqrestore(&dev->event_lock, flags);
 		crtc->state->event = NULL;
-	 }
+	}
+
+	if (engine->ops->atomic_begin)
+		engine->ops->atomic_begin(engine, old_state);
 }
 
 static void sun4i_crtc_atomic_flush(struct drm_crtc *crtc,
@@ -56,7 +89,7 @@ static void sun4i_crtc_atomic_flush(struct drm_crtc *crtc,
 
 	DRM_DEBUG_DRIVER("Committing plane changes\n");
 
-	sun4i_backend_commit(scrtc->backend);
+	sunxi_engine_commit(scrtc->engine);
 
 	if (event) {
 		crtc->state->event = NULL;
@@ -70,13 +103,17 @@ static void sun4i_crtc_atomic_flush(struct drm_crtc *crtc,
 	}
 }
 
-static void sun4i_crtc_disable(struct drm_crtc *crtc)
+static void sun4i_crtc_atomic_disable(struct drm_crtc *crtc,
+				      struct drm_crtc_state *old_state)
 {
+	struct drm_encoder *encoder = sun4i_crtc_get_encoder(crtc);
 	struct sun4i_crtc *scrtc = drm_crtc_to_sun4i_crtc(crtc);
 
 	DRM_DEBUG_DRIVER("Disabling the CRTC\n");
 
-	sun4i_tcon_disable(scrtc->tcon);
+	drm_crtc_vblank_off(crtc);
+
+	sun4i_tcon_set_status(scrtc->tcon, encoder, false);
 
 	if (crtc->state->event && !crtc->state->active) {
 		spin_lock_irq(&crtc->dev->event_lock);
@@ -87,20 +124,35 @@ static void sun4i_crtc_disable(struct drm_crtc *crtc)
 	}
 }
 
-static void sun4i_crtc_enable(struct drm_crtc *crtc)
+static void sun4i_crtc_atomic_enable(struct drm_crtc *crtc,
+				     struct drm_crtc_state *old_state)
 {
+	struct drm_encoder *encoder = sun4i_crtc_get_encoder(crtc);
 	struct sun4i_crtc *scrtc = drm_crtc_to_sun4i_crtc(crtc);
 
 	DRM_DEBUG_DRIVER("Enabling the CRTC\n");
 
-	sun4i_tcon_enable(scrtc->tcon);
+	sun4i_tcon_set_status(scrtc->tcon, encoder, true);
+
+	drm_crtc_vblank_on(crtc);
+}
+
+static void sun4i_crtc_mode_set_nofb(struct drm_crtc *crtc)
+{
+	struct drm_display_mode *mode = &crtc->state->adjusted_mode;
+	struct drm_encoder *encoder = sun4i_crtc_get_encoder(crtc);
+	struct sun4i_crtc *scrtc = drm_crtc_to_sun4i_crtc(crtc);
+
+	sun4i_tcon_mode_set(scrtc->tcon, encoder, mode);
 }
 
 static const struct drm_crtc_helper_funcs sun4i_crtc_helper_funcs = {
+	.atomic_check	= sun4i_crtc_atomic_check,
 	.atomic_begin	= sun4i_crtc_atomic_begin,
 	.atomic_flush	= sun4i_crtc_atomic_flush,
-	.disable	= sun4i_crtc_disable,
-	.enable		= sun4i_crtc_enable,
+	.atomic_enable	= sun4i_crtc_atomic_enable,
+	.atomic_disable	= sun4i_crtc_atomic_disable,
+	.mode_set_nofb	= sun4i_crtc_mode_set_nofb,
 };
 
 static int sun4i_crtc_enable_vblank(struct drm_crtc *crtc)
@@ -135,36 +187,37 @@ static const struct drm_crtc_funcs sun4i_crtc_funcs = {
 };
 
 struct sun4i_crtc *sun4i_crtc_init(struct drm_device *drm,
-				   struct sun4i_backend *backend,
+				   struct sunxi_engine *engine,
 				   struct sun4i_tcon *tcon)
 {
 	struct sun4i_crtc *scrtc;
+	struct drm_plane **planes;
 	struct drm_plane *primary = NULL, *cursor = NULL;
 	int ret, i;
 
 	scrtc = devm_kzalloc(drm->dev, sizeof(*scrtc), GFP_KERNEL);
 	if (!scrtc)
 		return ERR_PTR(-ENOMEM);
-	scrtc->backend = backend;
+	scrtc->engine = engine;
 	scrtc->tcon = tcon;
 
 	/* Create our layers */
-	scrtc->layers = sun4i_layers_init(drm, scrtc->backend);
-	if (IS_ERR(scrtc->layers)) {
+	planes = sunxi_engine_layers_init(drm, engine);
+	if (IS_ERR(planes)) {
 		dev_err(drm->dev, "Couldn't create the planes\n");
 		return NULL;
 	}
 
 	/* find primary and cursor planes for drm_crtc_init_with_planes */
-	for (i = 0; scrtc->layers[i]; i++) {
-		struct sun4i_layer *layer = scrtc->layers[i];
+	for (i = 0; planes[i]; i++) {
+		struct drm_plane *plane = planes[i];
 
-		switch (layer->plane.type) {
+		switch (plane->type) {
 		case DRM_PLANE_TYPE_PRIMARY:
-			primary = &layer->plane;
+			primary = plane;
 			break;
 		case DRM_PLANE_TYPE_CURSOR:
-			cursor = &layer->plane;
+			cursor = plane;
 			break;
 		default:
 			break;
@@ -188,12 +241,12 @@ struct sun4i_crtc *sun4i_crtc_init(struct drm_device *drm,
 						   1);
 
 	/* Set possible_crtcs to this crtc for overlay planes */
-	for (i = 0; scrtc->layers[i]; i++) {
-		uint32_t possible_crtcs = BIT(drm_crtc_index(&scrtc->crtc));
-		struct sun4i_layer *layer = scrtc->layers[i];
+	for (i = 0; planes[i]; i++) {
+		uint32_t possible_crtcs = drm_crtc_mask(&scrtc->crtc);
+		struct drm_plane *plane = planes[i];
 
-		if (layer->plane.type == DRM_PLANE_TYPE_OVERLAY)
-			layer->plane.possible_crtcs = possible_crtcs;
+		if (plane->type == DRM_PLANE_TYPE_OVERLAY)
+			plane->possible_crtcs = possible_crtcs;
 	}
 
 	return scrtc;

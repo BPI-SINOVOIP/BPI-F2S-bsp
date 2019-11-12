@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Xen SMP support
  *
@@ -13,6 +14,7 @@
  * single-threaded.
  */
 #include <linux/sched.h>
+#include <linux/sched/task_stack.h>
 #include <linux/err.h>
 #include <linux/slab.h>
 #include <linux/smp.h>
@@ -30,6 +32,7 @@
 #include <xen/interface/vcpu.h>
 #include <xen/interface/xenpmu.h>
 
+#include <asm/spec-ctrl.h>
 #include <asm/xen/interface.h>
 #include <asm/xen/hypercall.h>
 
@@ -67,6 +70,8 @@ static void cpu_bringup(void)
 	smp_store_cpu_info(cpu);
 	cpu_data(cpu).x86_max_cores = 1;
 	set_cpu_sibling_map(cpu);
+
+	speculative_store_bypass_ht_init();
 
 	xen_setup_cpu_clockevents();
 
@@ -248,6 +253,8 @@ static void __init xen_pv_smp_prepare_cpus(unsigned int max_cpus)
 	}
 	set_cpu_sibling_map(0);
 
+	speculative_store_bypass_ht_init();
+
 	xen_pmu_init(0);
 
 	if (xen_smp_intr_init(0) || xen_smp_intr_init_pv(0))
@@ -293,12 +300,19 @@ cpu_initialize_context(unsigned int cpu, struct task_struct *idle)
 #endif
 	memset(&ctxt->fpu_ctxt, 0, sizeof(ctxt->fpu_ctxt));
 
+	/*
+	 * Bring up the CPU in cpu_bringup_and_idle() with the stack
+	 * pointing just below where pt_regs would be if it were a normal
+	 * kernel entry.
+	 */
 	ctxt->user_regs.eip = (unsigned long)cpu_bringup_and_idle;
 	ctxt->flags = VGCF_IN_KERNEL;
 	ctxt->user_regs.eflags = 0x1000; /* IOPL_RING1 */
 	ctxt->user_regs.ds = __USER_DS;
 	ctxt->user_regs.es = __USER_DS;
 	ctxt->user_regs.ss = __KERNEL_DS;
+	ctxt->user_regs.cs = __KERNEL_CS;
+	ctxt->user_regs.esp = (unsigned long)task_pt_regs(idle);
 
 	xen_copy_trap_info(ctxt->trap_ctxt);
 
@@ -313,8 +327,13 @@ cpu_initialize_context(unsigned int cpu, struct task_struct *idle)
 	ctxt->gdt_frames[0] = gdt_mfn;
 	ctxt->gdt_ents      = GDT_ENTRIES;
 
+	/*
+	 * Set SS:SP that Xen will use when entering guest kernel mode
+	 * from guest user mode.  Subsequent calls to load_sp0() can
+	 * change this value.
+	 */
 	ctxt->kernel_ss = __KERNEL_DS;
-	ctxt->kernel_sp = idle->thread.sp0;
+	ctxt->kernel_sp = task_top_of_stack(idle);
 
 #ifdef CONFIG_X86_32
 	ctxt->event_callback_cs     = __KERNEL_CS;
@@ -326,10 +345,8 @@ cpu_initialize_context(unsigned int cpu, struct task_struct *idle)
 		(unsigned long)xen_hypervisor_callback;
 	ctxt->failsafe_callback_eip =
 		(unsigned long)xen_failsafe_callback;
-	ctxt->user_regs.cs = __KERNEL_CS;
 	per_cpu(xen_cr3, cpu) = __pa(swapper_pg_dir);
 
-	ctxt->user_regs.esp = idle->thread.sp0 - sizeof(struct pt_regs);
 	ctxt->ctrlreg[3] = xen_pfn_to_cr3(virt_to_gfn(swapper_pg_dir));
 	if (HYPERVISOR_vcpu_op(VCPUOP_initialise, xen_vcpu_nr(cpu), ctxt))
 		BUG();
@@ -370,10 +387,6 @@ static int xen_pv_cpu_up(unsigned int cpu, struct task_struct *idle)
 		HYPERVISOR_sched_op(SCHEDOP_yield, NULL);
 
 	return 0;
-}
-
-static void xen_pv_smp_cpus_done(unsigned int max_cpus)
-{
 }
 
 #ifdef CONFIG_HOTPLUG_CPU
@@ -417,6 +430,7 @@ static void xen_pv_play_dead(void) /* used only with HOTPLUG_CPU */
 	 * data back is to call:
 	 */
 	tick_nohz_idle_enter();
+	tick_nohz_idle_stop_tick_protected();
 
 	cpuhp_online_idle(CPUHP_AP_ONLINE_IDLE);
 }
@@ -470,7 +484,7 @@ static irqreturn_t xen_irq_work_interrupt(int irq, void *dev_id)
 static const struct smp_ops xen_smp_ops __initconst = {
 	.smp_prepare_boot_cpu = xen_pv_smp_prepare_boot_cpu,
 	.smp_prepare_cpus = xen_pv_smp_prepare_cpus,
-	.smp_cpus_done = xen_pv_smp_cpus_done,
+	.smp_cpus_done = xen_smp_cpus_done,
 
 	.cpu_up = xen_pv_cpu_up,
 	.cpu_die = xen_pv_cpu_die,

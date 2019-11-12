@@ -17,6 +17,19 @@
 #include <linux/kernel.h>
 #include <linux/sizes.h>
 #include <linux/types.h>
+#include <linux/uuid.h>
+#include <linux/spinlock.h>
+
+struct badrange_entry {
+	u64 start;
+	u64 length;
+	struct list_head list;
+};
+
+struct badrange {
+	struct list_head list;
+	spinlock_t lock;
+};
 
 enum {
 	/* when a dimm supports both PMEM and BLK access a label is required */
@@ -34,6 +47,17 @@ enum {
 
 	/* region flag indicating to direct-map persistent memory by default */
 	ND_REGION_PAGEMAP = 0,
+	/*
+	 * Platform ensures entire CPU store data path is flushed to pmem on
+	 * system power loss.
+	 */
+	ND_REGION_PERSIST_CACHE = 1,
+	/*
+	 * Platform provides mechanisms to automatically flush outstanding
+	 * write data from memory controler to pmem on system power loss.
+	 * (ADR)
+	 */
+	ND_REGION_PERSIST_MEMCTRL = 2,
 
 	/* mark newly adjusted resources as requiring a label update */
 	DPA_RESOURCE_ADJUSTED = 1 << 0,
@@ -52,11 +76,14 @@ typedef int (*ndctl_fn)(struct nvdimm_bus_descriptor *nd_desc,
 		struct nvdimm *nvdimm, unsigned int cmd, void *buf,
 		unsigned int buf_len, int *cmd_rc);
 
+struct device_node;
 struct nvdimm_bus_descriptor {
 	const struct attribute_group **attr_groups;
+	unsigned long bus_dsm_mask;
 	unsigned long cmd_mask;
 	struct module *module;
 	char *provider_name;
+	struct device_node *of_node;
 	ndctl_fn ndctl;
 	int (*flush_probe)(struct nvdimm_bus_descriptor *nd_desc);
 	int (*clear_to_send)(struct nvdimm_bus_descriptor *nd_desc,
@@ -71,15 +98,21 @@ struct nd_cmd_desc {
 };
 
 struct nd_interleave_set {
-	u64 cookie;
+	/* v1.1 definition of the interleave-set-cookie algorithm */
+	u64 cookie1;
+	/* v1.2 definition of the interleave-set-cookie algorithm */
+	u64 cookie2;
 	/* compatibility with initial buggy Linux implementation */
 	u64 altcookie;
+
+	guid_t type_guid;
 };
 
 struct nd_mapping_desc {
 	struct nvdimm *nvdimm;
 	u64 start;
 	u64 size;
+	int position;
 };
 
 struct nd_region_desc {
@@ -92,6 +125,7 @@ struct nd_region_desc {
 	int num_lanes;
 	int numa_node;
 	unsigned long flags;
+	struct device_node *of_node;
 };
 
 struct device;
@@ -121,15 +155,19 @@ static inline struct nd_blk_region_desc *to_blk_region_desc(
 
 }
 
-int nvdimm_bus_add_poison(struct nvdimm_bus *nvdimm_bus, u64 addr, u64 length);
-void nvdimm_forget_poison(struct nvdimm_bus *nvdimm_bus,
-		phys_addr_t start, unsigned int len);
+void badrange_init(struct badrange *badrange);
+int badrange_add(struct badrange *badrange, u64 addr, u64 length);
+void badrange_forget(struct badrange *badrange, phys_addr_t start,
+		unsigned int len);
+int nvdimm_bus_add_badrange(struct nvdimm_bus *nvdimm_bus, u64 addr,
+		u64 length);
 struct nvdimm_bus *nvdimm_bus_register(struct device *parent,
 		struct nvdimm_bus_descriptor *nfit_desc);
 void nvdimm_bus_unregister(struct nvdimm_bus *nvdimm_bus);
 struct nvdimm_bus *to_nvdimm_bus(struct device *dev);
 struct nvdimm *to_nvdimm(struct device *dev);
 struct nd_region *to_nd_region(struct device *dev);
+struct device *nd_region_dev(struct nd_region *nd_region);
 struct nd_blk_region *to_nd_blk_region(struct device *dev);
 struct nvdimm_bus_descriptor *to_nd_desc(struct nvdimm_bus *nvdimm_bus);
 struct device *to_nvdimm_bus_dev(struct nvdimm_bus *nvdimm_bus);
@@ -159,9 +197,26 @@ void *nd_region_provider_data(struct nd_region *nd_region);
 void *nd_blk_region_provider_data(struct nd_blk_region *ndbr);
 void nd_blk_region_set_provider_data(struct nd_blk_region *ndbr, void *data);
 struct nvdimm *nd_blk_region_to_dimm(struct nd_blk_region *ndbr);
+unsigned long nd_blk_memremap_flags(struct nd_blk_region *ndbr);
 unsigned int nd_region_acquire_lane(struct nd_region *nd_region);
 void nd_region_release_lane(struct nd_region *nd_region, unsigned int lane);
 u64 nd_fletcher64(void *addr, size_t len, bool le);
 void nvdimm_flush(struct nd_region *nd_region);
 int nvdimm_has_flush(struct nd_region *nd_region);
+int nvdimm_has_cache(struct nd_region *nd_region);
+
+#ifdef CONFIG_ARCH_HAS_PMEM_API
+#define ARCH_MEMREMAP_PMEM MEMREMAP_WB
+void arch_wb_cache_pmem(void *addr, size_t size);
+void arch_invalidate_pmem(void *addr, size_t size);
+#else
+#define ARCH_MEMREMAP_PMEM MEMREMAP_WT
+static inline void arch_wb_cache_pmem(void *addr, size_t size)
+{
+}
+static inline void arch_invalidate_pmem(void *addr, size_t size)
+{
+}
+#endif
+
 #endif /* __LIBNVDIMM_H__ */

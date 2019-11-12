@@ -39,14 +39,9 @@ struct p8_aes_cbc_ctx {
 
 static int p8_aes_cbc_init(struct crypto_tfm *tfm)
 {
-	const char *alg;
+	const char *alg = crypto_tfm_alg_name(tfm);
 	struct crypto_skcipher *fallback;
 	struct p8_aes_cbc_ctx *ctx = crypto_tfm_ctx(tfm);
-
-	if (!(alg = crypto_tfm_alg_name(tfm))) {
-		printk(KERN_ERR "Failed to get algorithm name.\n");
-		return -ENOENT;
-	}
 
 	fallback = crypto_alloc_skcipher(alg, 0,
 			CRYPTO_ALG_ASYNC | CRYPTO_ALG_NEED_FALLBACK);
@@ -57,9 +52,6 @@ static int p8_aes_cbc_init(struct crypto_tfm *tfm)
 		       alg, PTR_ERR(fallback));
 		return PTR_ERR(fallback);
 	}
-	printk(KERN_INFO "Using '%s' as fallback implementation.\n",
-		crypto_skcipher_driver_name(fallback));
-
 
 	crypto_skcipher_set_flags(
 		fallback,
@@ -115,24 +107,23 @@ static int p8_aes_cbc_encrypt(struct blkcipher_desc *desc,
 		ret = crypto_skcipher_encrypt(req);
 		skcipher_request_zero(req);
 	} else {
-		preempt_disable();
-		pagefault_disable();
-		enable_kernel_vsx();
-
 		blkcipher_walk_init(&walk, dst, src, nbytes);
 		ret = blkcipher_walk_virt(desc, &walk);
 		while ((nbytes = walk.nbytes)) {
+			preempt_disable();
+			pagefault_disable();
+			enable_kernel_vsx();
 			aes_p8_cbc_encrypt(walk.src.virt.addr,
 					   walk.dst.virt.addr,
 					   nbytes & AES_BLOCK_MASK,
 					   &ctx->enc_key, walk.iv, 1);
+			disable_kernel_vsx();
+			pagefault_enable();
+			preempt_enable();
+
 			nbytes &= AES_BLOCK_SIZE - 1;
 			ret = blkcipher_walk_done(desc, &walk, nbytes);
 		}
-
-		disable_kernel_vsx();
-		pagefault_enable();
-		preempt_enable();
 	}
 
 	return ret;
@@ -155,24 +146,23 @@ static int p8_aes_cbc_decrypt(struct blkcipher_desc *desc,
 		ret = crypto_skcipher_decrypt(req);
 		skcipher_request_zero(req);
 	} else {
-		preempt_disable();
-		pagefault_disable();
-		enable_kernel_vsx();
-
 		blkcipher_walk_init(&walk, dst, src, nbytes);
 		ret = blkcipher_walk_virt(desc, &walk);
 		while ((nbytes = walk.nbytes)) {
+			preempt_disable();
+			pagefault_disable();
+			enable_kernel_vsx();
 			aes_p8_cbc_encrypt(walk.src.virt.addr,
 					   walk.dst.virt.addr,
 					   nbytes & AES_BLOCK_MASK,
 					   &ctx->dec_key, walk.iv, 0);
+			disable_kernel_vsx();
+			pagefault_enable();
+			preempt_enable();
+
 			nbytes &= AES_BLOCK_SIZE - 1;
 			ret = blkcipher_walk_done(desc, &walk, nbytes);
 		}
-
-		disable_kernel_vsx();
-		pagefault_enable();
-		preempt_enable();
 	}
 
 	return ret;

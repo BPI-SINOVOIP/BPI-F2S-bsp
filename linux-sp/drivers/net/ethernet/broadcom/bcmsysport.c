@@ -32,13 +32,13 @@
 #define BCM_SYSPORT_IO_MACRO(name, offset) \
 static inline u32 name##_readl(struct bcm_sysport_priv *priv, u32 off)	\
 {									\
-	u32 reg = __raw_readl(priv->base + offset + off);		\
+	u32 reg = readl_relaxed(priv->base + offset + off);		\
 	return reg;							\
 }									\
 static inline void name##_writel(struct bcm_sysport_priv *priv,		\
 				  u32 val, u32 off)			\
 {									\
-	__raw_writel(val, priv->base + offset + off);			\
+	writel_relaxed(val, priv->base + offset + off);			\
 }									\
 
 BCM_SYSPORT_IO_MACRO(intrl2_0, SYS_PORT_INTRL2_0_OFFSET);
@@ -59,14 +59,14 @@ static inline u32 rdma_readl(struct bcm_sysport_priv *priv, u32 off)
 {
 	if (priv->is_lite && off >= RDMA_STATUS)
 		off += 4;
-	return __raw_readl(priv->base + SYS_PORT_RDMA_OFFSET + off);
+	return readl_relaxed(priv->base + SYS_PORT_RDMA_OFFSET + off);
 }
 
 static inline void rdma_writel(struct bcm_sysport_priv *priv, u32 val, u32 off)
 {
 	if (priv->is_lite && off >= RDMA_STATUS)
 		off += 4;
-	__raw_writel(val, priv->base + SYS_PORT_RDMA_OFFSET + off);
+	writel_relaxed(val, priv->base + SYS_PORT_RDMA_OFFSET + off);
 }
 
 static inline u32 tdma_control_bit(struct bcm_sysport_priv *priv, u32 bit)
@@ -110,10 +110,10 @@ static inline void dma_desc_set_addr(struct bcm_sysport_priv *priv,
 				     dma_addr_t addr)
 {
 #ifdef CONFIG_PHYS_ADDR_T_64BIT
-	__raw_writel(upper_32_bits(addr) & DESC_ADDR_HI_MASK,
+	writel_relaxed(upper_32_bits(addr) & DESC_ADDR_HI_MASK,
 		     d + DESC_ADDR_HI_STATUS_LEN);
 #endif
-	__raw_writel(lower_32_bits(addr), d + DESC_ADDR_LO);
+	writel_relaxed(lower_32_bits(addr), d + DESC_ADDR_LO);
 }
 
 static inline void tdma_port_write_desc_addr(struct bcm_sysport_priv *priv,
@@ -134,6 +134,10 @@ static int bcm_sysport_set_rx_csum(struct net_device *dev,
 
 	priv->rx_chk_en = !!(wanted & NETIF_F_RXCSUM);
 	reg = rxchk_readl(priv, RXCHK_CONTROL);
+	/* Clear L2 header checks, which would prevent BPDUs
+	 * from being received.
+	 */
+	reg &= ~RXCHK_L2_HDR_DIS;
 	if (priv->rx_chk_en)
 		reg |= RXCHK_EN;
 	else
@@ -201,10 +205,10 @@ static int bcm_sysport_set_features(struct net_device *dev,
  */
 static const struct bcm_sysport_stats bcm_sysport_gstrings_stats[] = {
 	/* general stats */
-	STAT_NETDEV(rx_packets),
-	STAT_NETDEV(tx_packets),
-	STAT_NETDEV(rx_bytes),
-	STAT_NETDEV(tx_bytes),
+	STAT_NETDEV64(rx_packets),
+	STAT_NETDEV64(tx_packets),
+	STAT_NETDEV64(rx_bytes),
+	STAT_NETDEV64(tx_bytes),
 	STAT_NETDEV(rx_errors),
 	STAT_NETDEV(tx_errors),
 	STAT_NETDEV(rx_dropped),
@@ -316,6 +320,7 @@ static inline bool bcm_sysport_lite_stat_valid(enum bcm_sysport_stat_type type)
 {
 	switch (type) {
 	case BCM_SYSPORT_STAT_NETDEV:
+	case BCM_SYSPORT_STAT_NETDEV64:
 	case BCM_SYSPORT_STAT_RXCHK:
 	case BCM_SYSPORT_STAT_RBUF:
 	case BCM_SYSPORT_STAT_SOFT:
@@ -398,6 +403,7 @@ static void bcm_sysport_update_mib_counters(struct bcm_sysport_priv *priv)
 		s = &bcm_sysport_gstrings_stats[i];
 		switch (s->type) {
 		case BCM_SYSPORT_STAT_NETDEV:
+		case BCM_SYSPORT_STAT_NETDEV64:
 		case BCM_SYSPORT_STAT_SOFT:
 			continue;
 		case BCM_SYSPORT_STAT_MIB_RX:
@@ -430,15 +436,44 @@ static void bcm_sysport_update_mib_counters(struct bcm_sysport_priv *priv)
 	netif_dbg(priv, hw, priv->netdev, "updated MIB counters\n");
 }
 
+static void bcm_sysport_update_tx_stats(struct bcm_sysport_priv *priv,
+					u64 *tx_bytes, u64 *tx_packets)
+{
+	struct bcm_sysport_tx_ring *ring;
+	u64 bytes = 0, packets = 0;
+	unsigned int start;
+	unsigned int q;
+
+	for (q = 0; q < priv->netdev->num_tx_queues; q++) {
+		ring = &priv->tx_rings[q];
+		do {
+			start = u64_stats_fetch_begin_irq(&priv->syncp);
+			bytes = ring->bytes;
+			packets = ring->packets;
+		} while (u64_stats_fetch_retry_irq(&priv->syncp, start));
+
+		*tx_bytes += bytes;
+		*tx_packets += packets;
+	}
+}
+
 static void bcm_sysport_get_stats(struct net_device *dev,
 				  struct ethtool_stats *stats, u64 *data)
 {
 	struct bcm_sysport_priv *priv = netdev_priv(dev);
+	struct bcm_sysport_stats64 *stats64 = &priv->stats64;
+	struct u64_stats_sync *syncp = &priv->syncp;
 	struct bcm_sysport_tx_ring *ring;
+	u64 tx_bytes = 0, tx_packets = 0;
+	unsigned int start;
 	int i, j;
 
-	if (netif_running(dev))
+	if (netif_running(dev)) {
 		bcm_sysport_update_mib_counters(priv);
+		bcm_sysport_update_tx_stats(priv, &tx_bytes, &tx_packets);
+		stats64->tx_bytes = tx_bytes;
+		stats64->tx_packets = tx_packets;
+	}
 
 	for (i =  0, j = 0; i < BCM_SYSPORT_STATS_LEN; i++) {
 		const struct bcm_sysport_stats *s;
@@ -447,10 +482,23 @@ static void bcm_sysport_get_stats(struct net_device *dev,
 		s = &bcm_sysport_gstrings_stats[i];
 		if (s->type == BCM_SYSPORT_STAT_NETDEV)
 			p = (char *)&dev->stats;
+		else if (s->type == BCM_SYSPORT_STAT_NETDEV64)
+			p = (char *)stats64;
 		else
 			p = (char *)priv;
+
+		if (priv->is_lite && !bcm_sysport_lite_stat_valid(s->type))
+			continue;
 		p += s->stat_offset;
-		data[j] = *(unsigned long *)p;
+
+		if (s->stat_sizeof == sizeof(u64) &&
+		    s->type == BCM_SYSPORT_STAT_NETDEV64) {
+			do {
+				start = u64_stats_fetch_begin_irq(syncp);
+				data[i] = *(u64 *)p;
+			} while (u64_stats_fetch_retry_irq(syncp, start));
+		} else
+			data[i] = *(u32 *)p;
 		j++;
 	}
 
@@ -475,19 +523,14 @@ static void bcm_sysport_get_wol(struct net_device *dev,
 				struct ethtool_wolinfo *wol)
 {
 	struct bcm_sysport_priv *priv = netdev_priv(dev);
-	u32 reg;
 
-	wol->supported = WAKE_MAGIC | WAKE_MAGICSECURE;
+	wol->supported = WAKE_MAGIC | WAKE_MAGICSECURE | WAKE_FILTER;
 	wol->wolopts = priv->wolopts;
 
 	if (!(priv->wolopts & WAKE_MAGICSECURE))
 		return;
 
-	/* Return the programmed SecureOn password */
-	reg = umac_readl(priv, UMAC_PSW_MS);
-	put_unaligned_be16(reg, &wol->sopass[0]);
-	reg = umac_readl(priv, UMAC_PSW_LS);
-	put_unaligned_be32(reg, &wol->sopass[2]);
+	memcpy(wol->sopass, priv->sopass, sizeof(priv->sopass));
 }
 
 static int bcm_sysport_set_wol(struct net_device *dev,
@@ -495,7 +538,7 @@ static int bcm_sysport_set_wol(struct net_device *dev,
 {
 	struct bcm_sysport_priv *priv = netdev_priv(dev);
 	struct device *kdev = &priv->pdev->dev;
-	u32 supported = WAKE_MAGIC | WAKE_MAGICSECURE;
+	u32 supported = WAKE_MAGIC | WAKE_MAGICSECURE | WAKE_FILTER;
 
 	if (!device_can_wakeup(kdev))
 		return -ENOTSUPP;
@@ -503,13 +546,8 @@ static int bcm_sysport_set_wol(struct net_device *dev,
 	if (wol->wolopts & ~supported)
 		return -EINVAL;
 
-	/* Program the SecureOn password */
-	if (wol->wolopts & WAKE_MAGICSECURE) {
-		umac_writel(priv, get_unaligned_be16(&wol->sopass[0]),
-			    UMAC_PSW_MS);
-		umac_writel(priv, get_unaligned_be32(&wol->sopass[2]),
-			    UMAC_PSW_LS);
-	}
+	if (wol->wolopts & WAKE_MAGICSECURE)
+		memcpy(priv->sopass, wol->sopass, sizeof(priv->sopass));
 
 	/* Flag the device and relevant IRQ as wakeup capable */
 	if (wol->wolopts) {
@@ -530,6 +568,34 @@ static int bcm_sysport_set_wol(struct net_device *dev,
 	return 0;
 }
 
+static void bcm_sysport_set_rx_coalesce(struct bcm_sysport_priv *priv,
+					u32 usecs, u32 pkts)
+{
+	u32 reg;
+
+	reg = rdma_readl(priv, RDMA_MBDONE_INTR);
+	reg &= ~(RDMA_INTR_THRESH_MASK |
+		 RDMA_TIMEOUT_MASK << RDMA_TIMEOUT_SHIFT);
+	reg |= pkts;
+	reg |= DIV_ROUND_UP(usecs * 1000, 8192) << RDMA_TIMEOUT_SHIFT;
+	rdma_writel(priv, reg, RDMA_MBDONE_INTR);
+}
+
+static void bcm_sysport_set_tx_coalesce(struct bcm_sysport_tx_ring *ring,
+					struct ethtool_coalesce *ec)
+{
+	struct bcm_sysport_priv *priv = ring->priv;
+	u32 reg;
+
+	reg = tdma_readl(priv, TDMA_DESC_RING_INTR_CONTROL(ring->index));
+	reg &= ~(RING_INTR_THRESH_MASK |
+		 RING_TIMEOUT_MASK << RING_TIMEOUT_SHIFT);
+	reg |= ec->tx_max_coalesced_frames;
+	reg |= DIV_ROUND_UP(ec->tx_coalesce_usecs * 1000, 8192) <<
+			    RING_TIMEOUT_SHIFT;
+	tdma_writel(priv, reg, TDMA_DESC_RING_INTR_CONTROL(ring->index));
+}
+
 static int bcm_sysport_get_coalesce(struct net_device *dev,
 				    struct ethtool_coalesce *ec)
 {
@@ -545,6 +611,7 @@ static int bcm_sysport_get_coalesce(struct net_device *dev,
 
 	ec->rx_coalesce_usecs = (reg >> RDMA_TIMEOUT_SHIFT) * 8192 / 1000;
 	ec->rx_max_coalesced_frames = reg & RDMA_INTR_THRESH_MASK;
+	ec->use_adaptive_rx_coalesce = priv->dim.use_dim;
 
 	return 0;
 }
@@ -553,8 +620,9 @@ static int bcm_sysport_set_coalesce(struct net_device *dev,
 				    struct ethtool_coalesce *ec)
 {
 	struct bcm_sysport_priv *priv = netdev_priv(dev);
+	struct net_dim_cq_moder moder;
+	u32 usecs, pkts;
 	unsigned int i;
-	u32 reg;
 
 	/* Base system clock is 125Mhz, DMA timeout is this reference clock
 	 * divided by 1024, which yield roughly 8.192 us, our maximum value has
@@ -567,26 +635,28 @@ static int bcm_sysport_set_coalesce(struct net_device *dev,
 		return -EINVAL;
 
 	if ((ec->tx_coalesce_usecs == 0 && ec->tx_max_coalesced_frames == 0) ||
-	    (ec->rx_coalesce_usecs == 0 && ec->rx_max_coalesced_frames == 0))
+	    (ec->rx_coalesce_usecs == 0 && ec->rx_max_coalesced_frames == 0) ||
+	    ec->use_adaptive_tx_coalesce)
 		return -EINVAL;
 
-	for (i = 0; i < dev->num_tx_queues; i++) {
-		reg = tdma_readl(priv, TDMA_DESC_RING_INTR_CONTROL(i));
-		reg &= ~(RING_INTR_THRESH_MASK |
-			 RING_TIMEOUT_MASK << RING_TIMEOUT_SHIFT);
-		reg |= ec->tx_max_coalesced_frames;
-		reg |= DIV_ROUND_UP(ec->tx_coalesce_usecs * 1000, 8192) <<
-			 RING_TIMEOUT_SHIFT;
-		tdma_writel(priv, reg, TDMA_DESC_RING_INTR_CONTROL(i));
+	for (i = 0; i < dev->num_tx_queues; i++)
+		bcm_sysport_set_tx_coalesce(&priv->tx_rings[i], ec);
+
+	priv->rx_coalesce_usecs = ec->rx_coalesce_usecs;
+	priv->rx_max_coalesced_frames = ec->rx_max_coalesced_frames;
+	usecs = priv->rx_coalesce_usecs;
+	pkts = priv->rx_max_coalesced_frames;
+
+	if (ec->use_adaptive_rx_coalesce && !priv->dim.use_dim) {
+		moder = net_dim_get_def_rx_moderation(priv->dim.dim.mode);
+		usecs = moder.usec;
+		pkts = moder.pkts;
 	}
 
-	reg = rdma_readl(priv, RDMA_MBDONE_INTR);
-	reg &= ~(RDMA_INTR_THRESH_MASK |
-		 RDMA_TIMEOUT_MASK << RDMA_TIMEOUT_SHIFT);
-	reg |= ec->rx_max_coalesced_frames;
-	reg |= DIV_ROUND_UP(ec->rx_coalesce_usecs * 1000, 8192) <<
-			    RDMA_TIMEOUT_SHIFT;
-	rdma_writel(priv, reg, RDMA_MBDONE_INTR);
+	priv->dim.use_dim = ec->use_adaptive_rx_coalesce;
+
+	/* Apply desired coalescing parameters */
+	bcm_sysport_set_rx_coalesce(priv, usecs, pkts);
 
 	return 0;
 }
@@ -662,8 +732,10 @@ static int bcm_sysport_alloc_rx_bufs(struct bcm_sysport_priv *priv)
 static unsigned int bcm_sysport_desc_rx(struct bcm_sysport_priv *priv,
 					unsigned int budget)
 {
+	struct bcm_sysport_stats64 *stats64 = &priv->stats64;
 	struct net_device *ndev = priv->netdev;
 	unsigned int processed = 0, to_process;
+	unsigned int processed_bytes = 0;
 	struct bcm_sysport_cb *cb;
 	struct sk_buff *skb;
 	unsigned int p_index;
@@ -755,6 +827,7 @@ static unsigned int bcm_sysport_desc_rx(struct bcm_sysport_priv *priv,
 		 */
 		skb_pull(skb, sizeof(*rsb) + 2);
 		len -= (sizeof(*rsb) + 2);
+		processed_bytes += len;
 
 		/* UniMAC may forward CRC */
 		if (priv->crc_fwd) {
@@ -765,6 +838,10 @@ static unsigned int bcm_sysport_desc_rx(struct bcm_sysport_priv *priv,
 		skb->protocol = eth_type_trans(skb, ndev);
 		ndev->stats.rx_packets++;
 		ndev->stats.rx_bytes += len;
+		u64_stats_update_begin(&priv->syncp);
+		stats64->rx_packets++;
+		stats64->rx_bytes += len;
+		u64_stats_update_end(&priv->syncp);
 
 		napi_gro_receive(&priv->napi, skb);
 next:
@@ -774,6 +851,9 @@ next:
 		if (priv->rx_read_ptr == priv->num_rx_bds)
 			priv->rx_read_ptr = 0;
 	}
+
+	priv->dim.packets = processed;
+	priv->dim.bytes = processed_bytes;
 
 	return processed;
 }
@@ -787,17 +867,15 @@ static void bcm_sysport_tx_reclaim_one(struct bcm_sysport_tx_ring *ring,
 	struct device *kdev = &priv->pdev->dev;
 
 	if (cb->skb) {
-		ring->bytes += cb->skb->len;
 		*bytes_compl += cb->skb->len;
 		dma_unmap_single(kdev, dma_unmap_addr(cb, dma_addr),
 				 dma_unmap_len(cb, dma_len),
 				 DMA_TO_DEVICE);
-		ring->packets++;
 		(*pkts_compl)++;
 		bcm_sysport_free_cb(cb);
 	/* SKB fragment */
 	} else if (dma_unmap_addr(cb, dma_addr)) {
-		ring->bytes += dma_unmap_len(cb, dma_len);
+		*bytes_compl += dma_unmap_len(cb, dma_len);
 		dma_unmap_page(kdev, dma_unmap_addr(cb, dma_addr),
 			       dma_unmap_len(cb, dma_len), DMA_TO_DEVICE);
 		dma_unmap_addr_set(cb, dma_addr, 0);
@@ -808,10 +886,12 @@ static void bcm_sysport_tx_reclaim_one(struct bcm_sysport_tx_ring *ring,
 static unsigned int __bcm_sysport_tx_reclaim(struct bcm_sysport_priv *priv,
 					     struct bcm_sysport_tx_ring *ring)
 {
-	struct net_device *ndev = priv->netdev;
-	unsigned int c_index, last_c_index, last_tx_cn, num_tx_cbs;
 	unsigned int pkts_compl = 0, bytes_compl = 0;
+	struct net_device *ndev = priv->netdev;
+	unsigned int txbds_processed = 0;
 	struct bcm_sysport_cb *cb;
+	unsigned int txbds_ready;
+	unsigned int c_index;
 	u32 hw_ind;
 
 	/* Clear status before servicing to reduce spurious interrupts */
@@ -824,30 +904,29 @@ static unsigned int __bcm_sysport_tx_reclaim(struct bcm_sysport_priv *priv,
 	/* Compute how many descriptors have been processed since last call */
 	hw_ind = tdma_readl(priv, TDMA_DESC_RING_PROD_CONS_INDEX(ring->index));
 	c_index = (hw_ind >> RING_CONS_INDEX_SHIFT) & RING_CONS_INDEX_MASK;
-	ring->p_index = (hw_ind & RING_PROD_INDEX_MASK);
-
-	last_c_index = ring->c_index;
-	num_tx_cbs = ring->size;
-
-	c_index &= (num_tx_cbs - 1);
-
-	if (c_index >= last_c_index)
-		last_tx_cn = c_index - last_c_index;
-	else
-		last_tx_cn = num_tx_cbs - last_c_index + c_index;
+	txbds_ready = (c_index - ring->c_index) & RING_CONS_INDEX_MASK;
 
 	netif_dbg(priv, tx_done, ndev,
-		  "ring=%d c_index=%d last_tx_cn=%d last_c_index=%d\n",
-		  ring->index, c_index, last_tx_cn, last_c_index);
+		  "ring=%d old_c_index=%u c_index=%u txbds_ready=%u\n",
+		  ring->index, ring->c_index, c_index, txbds_ready);
 
-	while (last_tx_cn-- > 0) {
-		cb = ring->cbs + last_c_index;
+	while (txbds_processed < txbds_ready) {
+		cb = &ring->cbs[ring->clean_index];
 		bcm_sysport_tx_reclaim_one(ring, cb, &bytes_compl, &pkts_compl);
 
 		ring->desc_count++;
-		last_c_index++;
-		last_c_index &= (num_tx_cbs - 1);
+		txbds_processed++;
+
+		if (likely(ring->clean_index < ring->size - 1))
+			ring->clean_index++;
+		else
+			ring->clean_index = 0;
 	}
+
+	u64_stats_update_begin(&priv->syncp);
+	ring->packets += pkts_compl;
+	ring->bytes += bytes_compl;
+	u64_stats_update_end(&priv->syncp);
 
 	ring->c_index = c_index;
 
@@ -924,6 +1003,7 @@ static int bcm_sysport_poll(struct napi_struct *napi, int budget)
 {
 	struct bcm_sysport_priv *priv =
 		container_of(napi, struct bcm_sysport_priv, napi);
+	struct net_dim_sample dim_sample;
 	unsigned int work_done = 0;
 
 	work_done = bcm_sysport_desc_rx(priv, budget);
@@ -946,22 +1026,78 @@ static int bcm_sysport_poll(struct napi_struct *napi, int budget)
 		intrl2_0_mask_clear(priv, INTRL2_0_RDMA_MBDONE);
 	}
 
+	if (priv->dim.use_dim) {
+		net_dim_sample(priv->dim.event_ctr, priv->dim.packets,
+			       priv->dim.bytes, &dim_sample);
+		net_dim(&priv->dim.dim, dim_sample);
+	}
+
 	return work_done;
+}
+
+static void mpd_enable_set(struct bcm_sysport_priv *priv, bool enable)
+{
+	u32 reg, bit;
+
+	reg = umac_readl(priv, UMAC_MPD_CTRL);
+	if (enable)
+		reg |= MPD_EN;
+	else
+		reg &= ~MPD_EN;
+	umac_writel(priv, reg, UMAC_MPD_CTRL);
+
+	if (priv->is_lite)
+		bit = RBUF_ACPI_EN_LITE;
+	else
+		bit = RBUF_ACPI_EN;
+
+	reg = rbuf_readl(priv, RBUF_CONTROL);
+	if (enable)
+		reg |= bit;
+	else
+		reg &= ~bit;
+	rbuf_writel(priv, reg, RBUF_CONTROL);
 }
 
 static void bcm_sysport_resume_from_wol(struct bcm_sysport_priv *priv)
 {
 	u32 reg;
 
-	/* Stop monitoring MPD interrupt */
-	intrl2_0_mask_set(priv, INTRL2_0_MPD);
+	/* Disable RXCHK, active filters and Broadcom tag matching */
+	reg = rxchk_readl(priv, RXCHK_CONTROL);
+	reg &= ~(RXCHK_BRCM_TAG_MATCH_MASK <<
+		 RXCHK_BRCM_TAG_MATCH_SHIFT | RXCHK_EN | RXCHK_BRCM_TAG_EN);
+	rxchk_writel(priv, reg, RXCHK_CONTROL);
 
 	/* Clear the MagicPacket detection logic */
-	reg = umac_readl(priv, UMAC_MPD_CTRL);
-	reg &= ~MPD_EN;
-	umac_writel(priv, reg, UMAC_MPD_CTRL);
+	mpd_enable_set(priv, false);
+
+	reg = intrl2_0_readl(priv, INTRL2_CPU_STATUS);
+	if (reg & INTRL2_0_MPD)
+		netdev_info(priv->netdev, "Wake-on-LAN (MPD) interrupt!\n");
+
+	if (reg & INTRL2_0_BRCM_MATCH_TAG) {
+		reg = rxchk_readl(priv, RXCHK_BRCM_TAG_MATCH_STATUS) &
+				  RXCHK_BRCM_TAG_MATCH_MASK;
+		netdev_info(priv->netdev,
+			    "Wake-on-LAN (filters 0x%02x) interrupt!\n", reg);
+	}
 
 	netif_dbg(priv, wol, priv->netdev, "resumed from WOL\n");
+}
+
+static void bcm_sysport_dim_work(struct work_struct *work)
+{
+	struct net_dim *dim = container_of(work, struct net_dim, work);
+	struct bcm_sysport_net_dim *ndim =
+			container_of(dim, struct bcm_sysport_net_dim, dim);
+	struct bcm_sysport_priv *priv =
+			container_of(ndim, struct bcm_sysport_priv, dim);
+	struct net_dim_cq_moder cur_profile =
+			net_dim_get_rx_moderation(dim->mode, dim->profile_ix);
+
+	bcm_sysport_set_rx_coalesce(priv, cur_profile.usec, cur_profile.pkts);
+	dim->state = NET_DIM_START_MEASURE;
 }
 
 /* RX and misc interrupt routine */
@@ -982,6 +1118,7 @@ static irqreturn_t bcm_sysport_rx_isr(int irq, void *dev_id)
 	}
 
 	if (priv->irq0_stat & INTRL2_0_RDMA_MBDONE) {
+		priv->dim.event_ctr++;
 		if (likely(napi_schedule_prep(&priv->napi))) {
 			/* disable RX interrupts */
 			intrl2_0_mask_set(priv, INTRL2_0_RDMA_MBDONE);
@@ -994,11 +1131,6 @@ static irqreturn_t bcm_sysport_rx_isr(int irq, void *dev_id)
 	 */
 	if (priv->irq0_stat & INTRL2_0_TX_RING_FULL)
 		bcm_sysport_tx_reclaim_all(priv);
-
-	if (priv->irq0_stat & INTRL2_0_MPD) {
-		netdev_info(priv->netdev, "Wake-on-LAN interrupt!\n");
-		bcm_sysport_resume_from_wol(priv);
-	}
 
 	if (!priv->is_lite)
 		goto out;
@@ -1085,7 +1217,7 @@ static struct sk_buff *bcm_sysport_insert_tsb(struct sk_buff *skb,
 	u32 csum_info;
 	u8 ip_proto;
 	u16 csum_start;
-	u16 ip_ver;
+	__be16 ip_ver;
 
 	/* Re-allocate SKB if needed */
 	if (unlikely(skb_headroom(skb) < sizeof(*tsb))) {
@@ -1099,17 +1231,17 @@ static struct sk_buff *bcm_sysport_insert_tsb(struct sk_buff *skb,
 		skb = nskb;
 	}
 
-	tsb = (struct bcm_tsb *)skb_push(skb, sizeof(*tsb));
+	tsb = skb_push(skb, sizeof(*tsb));
 	/* Zero-out TSB by default */
 	memset(tsb, 0, sizeof(*tsb));
 
 	if (skb->ip_summed == CHECKSUM_PARTIAL) {
-		ip_ver = htons(skb->protocol);
+		ip_ver = skb->protocol;
 		switch (ip_ver) {
-		case ETH_P_IP:
+		case htons(ETH_P_IP):
 			ip_proto = ip_hdr(skb)->protocol;
 			break;
-		case ETH_P_IPV6:
+		case htons(ETH_P_IPV6):
 			ip_proto = ipv6_hdr(skb)->nexthdr;
 			break;
 		default:
@@ -1123,7 +1255,8 @@ static struct sk_buff *bcm_sysport_insert_tsb(struct sk_buff *skb,
 
 		if (ip_proto == IPPROTO_TCP || ip_proto == IPPROTO_UDP) {
 			csum_info |= L4_LENGTH_VALID;
-			if (ip_proto == IPPROTO_UDP && ip_ver == ETH_P_IP)
+			if (ip_proto == IPPROTO_UDP &&
+			    ip_ver == htons(ETH_P_IP))
 				csum_info |= L4_UDP;
 		} else {
 			csum_info = 0;
@@ -1161,18 +1294,6 @@ static netdev_tx_t bcm_sysport_xmit(struct sk_buff *skb,
 		netif_tx_stop_queue(txq);
 		netdev_err(dev, "queue %d awake and ring full!\n", queue);
 		ret = NETDEV_TX_BUSY;
-		goto out;
-	}
-
-	/* The Ethernet switch we are interfaced with needs packets to be at
-	 * least 64 bytes (including FCS) otherwise they will be discarded when
-	 * they enter the switch port logic. When Broadcom tags are enabled, we
-	 * need to make sure that packets are at least 68 bytes
-	 * (including FCS and tag) because the length verification is done after
-	 * the Broadcom tag is stripped off the ingress packet.
-	 */
-	if (skb_put_padto(skb, ETH_ZLEN + ENET_BRCM_TAG_LEN)) {
-		ret = NETDEV_TX_OK;
 		goto out;
 	}
 
@@ -1318,6 +1439,37 @@ out:
 		phy_print_status(phydev);
 }
 
+static void bcm_sysport_init_dim(struct bcm_sysport_priv *priv,
+				 void (*cb)(struct work_struct *work))
+{
+	struct bcm_sysport_net_dim *dim = &priv->dim;
+
+	INIT_WORK(&dim->dim.work, cb);
+	dim->dim.mode = NET_DIM_CQ_PERIOD_MODE_START_FROM_EQE;
+	dim->event_ctr = 0;
+	dim->packets = 0;
+	dim->bytes = 0;
+}
+
+static void bcm_sysport_init_rx_coalesce(struct bcm_sysport_priv *priv)
+{
+	struct bcm_sysport_net_dim *dim = &priv->dim;
+	struct net_dim_cq_moder moder;
+	u32 usecs, pkts;
+
+	usecs = priv->rx_coalesce_usecs;
+	pkts = priv->rx_max_coalesced_frames;
+
+	/* If DIM was enabled, re-apply default parameters */
+	if (dim->use_dim) {
+		moder = net_dim_get_def_rx_moderation(dim->dim.mode);
+		usecs = moder.usec;
+		pkts = moder.pkts;
+	}
+
+	bcm_sysport_set_rx_coalesce(priv, usecs, pkts);
+}
+
 static int bcm_sysport_init_tx_ring(struct bcm_sysport_priv *priv,
 				    unsigned int index)
 {
@@ -1354,6 +1506,7 @@ static int bcm_sysport_init_tx_ring(struct bcm_sysport_priv *priv,
 	netif_tx_napi_add(priv->netdev, &ring->napi, bcm_sysport_tx_poll, 64);
 	ring->index = index;
 	ring->size = size;
+	ring->clean_index = 0;
 	ring->alloc_size = ring->size;
 	ring->desc_cpu = p;
 	ring->desc_count = ring->size;
@@ -1364,8 +1517,36 @@ static int bcm_sysport_init_tx_ring(struct bcm_sysport_priv *priv,
 	tdma_writel(priv, 0, TDMA_DESC_RING_COUNT(index));
 	tdma_writel(priv, 1, TDMA_DESC_RING_INTR_CONTROL(index));
 	tdma_writel(priv, 0, TDMA_DESC_RING_PROD_CONS_INDEX(index));
-	tdma_writel(priv, RING_IGNORE_STATUS, TDMA_DESC_RING_MAPPING(index));
+
+	/* Configure QID and port mapping */
+	reg = tdma_readl(priv, TDMA_DESC_RING_MAPPING(index));
+	reg &= ~(RING_QID_MASK | RING_PORT_ID_MASK << RING_PORT_ID_SHIFT);
+	if (ring->inspect) {
+		reg |= ring->switch_queue & RING_QID_MASK;
+		reg |= ring->switch_port << RING_PORT_ID_SHIFT;
+	} else {
+		reg |= RING_IGNORE_STATUS;
+	}
+	tdma_writel(priv, reg, TDMA_DESC_RING_MAPPING(index));
 	tdma_writel(priv, 0, TDMA_DESC_RING_PCP_DEI_VID(index));
+
+	/* Enable ACB algorithm 2 */
+	reg = tdma_readl(priv, TDMA_CONTROL);
+	reg |= tdma_control_bit(priv, ACB_ALGO);
+	tdma_writel(priv, reg, TDMA_CONTROL);
+
+	/* Do not use tdma_control_bit() here because TSB_SWAP1 collides
+	 * with the original definition of ACB_ALGO
+	 */
+	reg = tdma_readl(priv, TDMA_CONTROL);
+	if (priv->is_lite)
+		reg &= ~BIT(TSB_SWAP1);
+	/* Set a correct TSB format based on host endian */
+	if (!IS_ENABLED(CONFIG_CPU_BIG_ENDIAN))
+		reg |= tdma_control_bit(priv, TSB_SWAP0);
+	else
+		reg &= ~tdma_control_bit(priv, TSB_SWAP0);
+	tdma_writel(priv, reg, TDMA_CONTROL);
 
 	/* Program the number of descriptors as MAX_THRESHOLD and half of
 	 * its size for the hysteresis trigger
@@ -1382,8 +1563,9 @@ static int bcm_sysport_init_tx_ring(struct bcm_sysport_priv *priv,
 	napi_enable(&ring->napi);
 
 	netif_dbg(priv, hw, priv->netdev,
-		  "TDMA cfg, size=%d, desc_cpu=%p\n",
-		  ring->size, ring->desc_cpu);
+		  "TDMA cfg, size=%d, desc_cpu=%p switch q=%d,port=%d\n",
+		  ring->size, ring->desc_cpu, ring->switch_queue,
+		  ring->switch_port);
 
 	return 0;
 }
@@ -1528,8 +1710,6 @@ static int bcm_sysport_init_rx_ring(struct bcm_sysport_priv *priv)
 	rdma_writel(priv, 0, RDMA_END_ADDR_HI);
 	rdma_writel(priv, priv->num_rx_desc_words - 1, RDMA_END_ADDR_LO);
 
-	rdma_writel(priv, 1, RDMA_MBDONE_INTR);
-
 	netif_dbg(priv, hw, priv->netdev,
 		  "RDMA cfg, num_rx_bds=%d, rx_bds=%p\n",
 		  priv->num_rx_bds, priv->rx_bds);
@@ -1673,22 +1853,23 @@ static int bcm_sysport_change_mac(struct net_device *dev, void *p)
 	return 0;
 }
 
-static struct net_device_stats *bcm_sysport_get_nstats(struct net_device *dev)
+static void bcm_sysport_get_stats64(struct net_device *dev,
+				    struct rtnl_link_stats64 *stats)
 {
 	struct bcm_sysport_priv *priv = netdev_priv(dev);
-	unsigned long tx_bytes = 0, tx_packets = 0;
-	struct bcm_sysport_tx_ring *ring;
-	unsigned int q;
+	struct bcm_sysport_stats64 *stats64 = &priv->stats64;
+	unsigned int start;
 
-	for (q = 0; q < dev->num_tx_queues; q++) {
-		ring = &priv->tx_rings[q];
-		tx_bytes += ring->bytes;
-		tx_packets += ring->packets;
-	}
+	netdev_stats_to_stats64(stats, &dev->stats);
 
-	dev->stats.tx_bytes = tx_bytes;
-	dev->stats.tx_packets = tx_packets;
-	return &dev->stats;
+	bcm_sysport_update_tx_stats(priv, &stats->tx_bytes,
+				    &stats->tx_packets);
+
+	do {
+		start = u64_stats_fetch_begin_irq(&priv->syncp);
+		stats->rx_packets = stats64->rx_packets;
+		stats->rx_bytes = stats64->rx_bytes;
+	} while (u64_stats_fetch_retry_irq(&priv->syncp, start));
 }
 
 static void bcm_sysport_netif_start(struct net_device *dev)
@@ -1696,6 +1877,8 @@ static void bcm_sysport_netif_start(struct net_device *dev)
 	struct bcm_sysport_priv *priv = netdev_priv(dev);
 
 	/* Enable NAPI */
+	bcm_sysport_init_dim(priv, bcm_sysport_dim_work);
+	bcm_sysport_init_rx_coalesce(priv);
 	napi_enable(&priv->napi);
 
 	/* Enable RX interrupt and TX ring full interrupt */
@@ -1708,9 +1891,6 @@ static void bcm_sysport_netif_start(struct net_device *dev)
 		intrl2_1_mask_clear(priv, 0xffffffff);
 	else
 		intrl2_0_mask_clear(priv, INTRL2_0_TDMA_MBDONE_MASK);
-
-	/* Last call before we start the real business */
-	netif_tx_start_all_queues(dev);
 }
 
 static void rbuf_init(struct bcm_sysport_priv *priv)
@@ -1720,10 +1900,14 @@ static void rbuf_init(struct bcm_sysport_priv *priv)
 	reg = rbuf_readl(priv, RBUF_CONTROL);
 	reg |= RBUF_4B_ALGN | RBUF_RSB_EN;
 	/* Set a correct RSB format on SYSTEMPORT Lite */
-	if (priv->is_lite) {
+	if (priv->is_lite)
 		reg &= ~RBUF_RSB_SWAP1;
+
+	/* Set a correct RSB format based on host endian */
+	if (!IS_ENABLED(CONFIG_CPU_BIG_ENDIAN))
 		reg |= RBUF_RSB_SWAP0;
-	}
+	else
+		reg &= ~RBUF_RSB_SWAP0;
 	rbuf_writel(priv, reg, RBUF_CONTROL);
 }
 
@@ -1739,15 +1923,17 @@ static inline void bcm_sysport_mask_all_intrs(struct bcm_sysport_priv *priv)
 
 static inline void gib_set_pad_extension(struct bcm_sysport_priv *priv)
 {
-	u32 __maybe_unused reg;
+	u32 reg;
 
-	/* Include Broadcom tag in pad extension */
+	reg = gib_readl(priv, GIB_CONTROL);
+	/* Include Broadcom tag in pad extension and fix up IPG_LENGTH */
 	if (netdev_uses_dsa(priv->netdev)) {
-		reg = gib_readl(priv, GIB_CONTROL);
 		reg &= ~(GIB_PAD_EXTENSION_MASK << GIB_PAD_EXTENSION_SHIFT);
 		reg |= ENET_BRCM_TAG_LEN << GIB_PAD_EXTENSION_SHIFT;
-		gib_writel(priv, reg, GIB_CONTROL);
 	}
+	reg &= ~(GIB_IPG_LEN_MASK << GIB_IPG_LEN_SHIFT);
+	reg |= 12 << GIB_IPG_LEN_SHIFT;
+	gib_writel(priv, reg, GIB_CONTROL);
 }
 
 static int bcm_sysport_open(struct net_device *dev)
@@ -1782,8 +1968,8 @@ static int bcm_sysport_open(struct net_device *dev)
 	if (!priv->is_lite)
 		priv->crc_fwd = !!(umac_readl(priv, UMAC_CMD) & CMD_CRC_FWD);
 	else
-		priv->crc_fwd = !!(gib_readl(priv, GIB_CONTROL) &
-				   GIB_FCS_STRIP);
+		priv->crc_fwd = !((gib_readl(priv, GIB_CONTROL) &
+				  GIB_FCS_STRIP) >> GIB_FCS_STRIP_SHIFT);
 
 	phydev = of_phy_connect(dev, priv->phy_dn, bcm_sysport_adj_link,
 				0, priv->phy_interface);
@@ -1850,6 +2036,8 @@ static int bcm_sysport_open(struct net_device *dev)
 
 	bcm_sysport_netif_start(dev);
 
+	netif_tx_start_all_queues(dev);
+
 	return 0;
 
 out_clear_rx_int:
@@ -1873,8 +2061,9 @@ static void bcm_sysport_netif_stop(struct net_device *dev)
 	struct bcm_sysport_priv *priv = netdev_priv(dev);
 
 	/* stop all software from updating hardware */
-	netif_tx_stop_all_queues(dev);
+	netif_tx_disable(dev);
 	napi_disable(&priv->napi);
+	cancel_work_sync(&priv->dim.dim.work);
 	phy_stop(dev->phydev);
 
 	/* mask all interrupts */
@@ -1925,6 +2114,132 @@ static int bcm_sysport_stop(struct net_device *dev)
 	return 0;
 }
 
+static int bcm_sysport_rule_find(struct bcm_sysport_priv *priv,
+				 u64 location)
+{
+	unsigned int index;
+	u32 reg;
+
+	for_each_set_bit(index, priv->filters, RXCHK_BRCM_TAG_MAX) {
+		reg = rxchk_readl(priv, RXCHK_BRCM_TAG(index));
+		reg >>= RXCHK_BRCM_TAG_CID_SHIFT;
+		reg &= RXCHK_BRCM_TAG_CID_MASK;
+		if (reg == location)
+			return index;
+	}
+
+	return -EINVAL;
+}
+
+static int bcm_sysport_rule_get(struct bcm_sysport_priv *priv,
+				struct ethtool_rxnfc *nfc)
+{
+	int index;
+
+	/* This is not a rule that we know about */
+	index = bcm_sysport_rule_find(priv, nfc->fs.location);
+	if (index < 0)
+		return -EOPNOTSUPP;
+
+	nfc->fs.ring_cookie = RX_CLS_FLOW_WAKE;
+
+	return 0;
+}
+
+static int bcm_sysport_rule_set(struct bcm_sysport_priv *priv,
+				struct ethtool_rxnfc *nfc)
+{
+	unsigned int index;
+	u32 reg;
+
+	/* We cannot match locations greater than what the classification ID
+	 * permits (256 entries)
+	 */
+	if (nfc->fs.location > RXCHK_BRCM_TAG_CID_MASK)
+		return -E2BIG;
+
+	/* We cannot support flows that are not destined for a wake-up */
+	if (nfc->fs.ring_cookie != RX_CLS_FLOW_WAKE)
+		return -EOPNOTSUPP;
+
+	/* All filters are already in use, we cannot match more rules */
+	if (bitmap_weight(priv->filters, RXCHK_BRCM_TAG_MAX) ==
+	    RXCHK_BRCM_TAG_MAX)
+		return -ENOSPC;
+
+	index = find_first_zero_bit(priv->filters, RXCHK_BRCM_TAG_MAX);
+	if (index > RXCHK_BRCM_TAG_MAX)
+		return -ENOSPC;
+
+	/* Location is the classification ID, and index is the position
+	 * within one of our 8 possible filters to be programmed
+	 */
+	reg = rxchk_readl(priv, RXCHK_BRCM_TAG(index));
+	reg &= ~(RXCHK_BRCM_TAG_CID_MASK << RXCHK_BRCM_TAG_CID_SHIFT);
+	reg |= nfc->fs.location << RXCHK_BRCM_TAG_CID_SHIFT;
+	rxchk_writel(priv, reg, RXCHK_BRCM_TAG(index));
+	rxchk_writel(priv, 0xff00ffff, RXCHK_BRCM_TAG_MASK(index));
+
+	set_bit(index, priv->filters);
+
+	return 0;
+}
+
+static int bcm_sysport_rule_del(struct bcm_sysport_priv *priv,
+				u64 location)
+{
+	int index;
+
+	/* This is not a rule that we know about */
+	index = bcm_sysport_rule_find(priv, location);
+	if (index < 0)
+		return -EOPNOTSUPP;
+
+	/* No need to disable this filter if it was enabled, this will
+	 * be taken care of during suspend time by bcm_sysport_suspend_to_wol
+	 */
+	clear_bit(index, priv->filters);
+
+	return 0;
+}
+
+static int bcm_sysport_get_rxnfc(struct net_device *dev,
+				 struct ethtool_rxnfc *nfc, u32 *rule_locs)
+{
+	struct bcm_sysport_priv *priv = netdev_priv(dev);
+	int ret = -EOPNOTSUPP;
+
+	switch (nfc->cmd) {
+	case ETHTOOL_GRXCLSRULE:
+		ret = bcm_sysport_rule_get(priv, nfc);
+		break;
+	default:
+		break;
+	}
+
+	return ret;
+}
+
+static int bcm_sysport_set_rxnfc(struct net_device *dev,
+				 struct ethtool_rxnfc *nfc)
+{
+	struct bcm_sysport_priv *priv = netdev_priv(dev);
+	int ret = -EOPNOTSUPP;
+
+	switch (nfc->cmd) {
+	case ETHTOOL_SRXCLSRLINS:
+		ret = bcm_sysport_rule_set(priv, nfc);
+		break;
+	case ETHTOOL_SRXCLSRLDEL:
+		ret = bcm_sysport_rule_del(priv, nfc->fs.location);
+		break;
+	default:
+		break;
+	}
+
+	return ret;
+}
+
 static const struct ethtool_ops bcm_sysport_ethtool_ops = {
 	.get_drvinfo		= bcm_sysport_get_drvinfo,
 	.get_msglevel		= bcm_sysport_get_msglvl,
@@ -1939,7 +2254,32 @@ static const struct ethtool_ops bcm_sysport_ethtool_ops = {
 	.set_coalesce		= bcm_sysport_set_coalesce,
 	.get_link_ksettings     = phy_ethtool_get_link_ksettings,
 	.set_link_ksettings     = phy_ethtool_set_link_ksettings,
+	.get_rxnfc		= bcm_sysport_get_rxnfc,
+	.set_rxnfc		= bcm_sysport_set_rxnfc,
 };
+
+static u16 bcm_sysport_select_queue(struct net_device *dev, struct sk_buff *skb,
+				    struct net_device *sb_dev,
+				    select_queue_fallback_t fallback)
+{
+	struct bcm_sysport_priv *priv = netdev_priv(dev);
+	u16 queue = skb_get_queue_mapping(skb);
+	struct bcm_sysport_tx_ring *tx_ring;
+	unsigned int q, port;
+
+	if (!netdev_uses_dsa(dev))
+		return fallback(dev, skb, NULL);
+
+	/* DSA tagging layer will have configured the correct queue */
+	q = BRCM_TAG_GET_QUEUE(queue);
+	port = BRCM_TAG_GET_PORT(queue);
+	tx_ring = priv->ring_map[q + port * priv->per_port_num_tx_queues];
+
+	if (unlikely(!tx_ring))
+		return fallback(dev, skb, NULL);
+
+	return tx_ring->index;
+}
 
 static const struct net_device_ops bcm_sysport_netdev_ops = {
 	.ndo_start_xmit		= bcm_sysport_xmit,
@@ -1952,8 +2292,87 @@ static const struct net_device_ops bcm_sysport_netdev_ops = {
 #ifdef CONFIG_NET_POLL_CONTROLLER
 	.ndo_poll_controller	= bcm_sysport_poll_controller,
 #endif
-	.ndo_get_stats		= bcm_sysport_get_nstats,
+	.ndo_get_stats64	= bcm_sysport_get_stats64,
+	.ndo_select_queue	= bcm_sysport_select_queue,
 };
+
+static int bcm_sysport_map_queues(struct notifier_block *nb,
+				  struct dsa_notifier_register_info *info)
+{
+	struct bcm_sysport_tx_ring *ring;
+	struct bcm_sysport_priv *priv;
+	struct net_device *slave_dev;
+	unsigned int num_tx_queues;
+	unsigned int q, start, port;
+	struct net_device *dev;
+
+	priv = container_of(nb, struct bcm_sysport_priv, dsa_notifier);
+	if (priv->netdev != info->master)
+		return 0;
+
+	dev = info->master;
+
+	/* We can't be setting up queue inspection for non directly attached
+	 * switches
+	 */
+	if (info->switch_number)
+		return 0;
+
+	if (dev->netdev_ops != &bcm_sysport_netdev_ops)
+		return 0;
+
+	port = info->port_number;
+	slave_dev = info->info.dev;
+
+	/* On SYSTEMPORT Lite we have twice as less queues, so we cannot do a
+	 * 1:1 mapping, we can only do a 2:1 mapping. By reducing the number of
+	 * per-port (slave_dev) network devices queue, we achieve just that.
+	 * This need to happen now before any slave network device is used such
+	 * it accurately reflects the number of real TX queues.
+	 */
+	if (priv->is_lite)
+		netif_set_real_num_tx_queues(slave_dev,
+					     slave_dev->num_tx_queues / 2);
+
+	num_tx_queues = slave_dev->real_num_tx_queues;
+
+	if (priv->per_port_num_tx_queues &&
+	    priv->per_port_num_tx_queues != num_tx_queues)
+		netdev_warn(slave_dev, "asymmetric number of per-port queues\n");
+
+	priv->per_port_num_tx_queues = num_tx_queues;
+
+	start = find_first_zero_bit(&priv->queue_bitmap, dev->num_tx_queues);
+	for (q = 0; q < num_tx_queues; q++) {
+		ring = &priv->tx_rings[q + start];
+
+		/* Just remember the mapping actual programming done
+		 * during bcm_sysport_init_tx_ring
+		 */
+		ring->switch_queue = q;
+		ring->switch_port = port;
+		ring->inspect = true;
+		priv->ring_map[q + port * num_tx_queues] = ring;
+
+		/* Set all queues as being used now */
+		set_bit(q + start, &priv->queue_bitmap);
+	}
+
+	return 0;
+}
+
+static int bcm_sysport_dsa_notifier(struct notifier_block *nb,
+				    unsigned long event, void *ptr)
+{
+	struct dsa_notifier_register_info *info;
+
+	if (event != DSA_PORT_REGISTER)
+		return NOTIFY_DONE;
+
+	info = ptr;
+
+	return notifier_from_errno(bcm_sysport_map_queues(nb, info));
+}
 
 #define REV_FMT	"v%2x.%02x"
 
@@ -2100,10 +2519,21 @@ static int bcm_sysport_probe(struct platform_device *pdev)
 	/* libphy will adjust the link state accordingly */
 	netif_carrier_off(dev);
 
+	priv->rx_max_coalesced_frames = 1;
+	u64_stats_init(&priv->syncp);
+
+	priv->dsa_notifier.notifier_call = bcm_sysport_dsa_notifier;
+
+	ret = register_dsa_notifier(&priv->dsa_notifier);
+	if (ret) {
+		dev_err(&pdev->dev, "failed to register DSA notifier\n");
+		goto err_deregister_fixed_link;
+	}
+
 	ret = register_netdev(dev);
 	if (ret) {
 		dev_err(&pdev->dev, "failed to register net_device\n");
-		goto err_deregister_fixed_link;
+		goto err_deregister_notifier;
 	}
 
 	priv->rev = topctrl_readl(priv, REV_CNTL) & REV_MASK;
@@ -2116,6 +2546,8 @@ static int bcm_sysport_probe(struct platform_device *pdev)
 
 	return 0;
 
+err_deregister_notifier:
+	unregister_dsa_notifier(&priv->dsa_notifier);
 err_deregister_fixed_link:
 	if (of_phy_is_fixed_link(dn))
 		of_phy_deregister_fixed_link(dn);
@@ -2127,11 +2559,13 @@ err_free_netdev:
 static int bcm_sysport_remove(struct platform_device *pdev)
 {
 	struct net_device *dev = dev_get_drvdata(&pdev->dev);
+	struct bcm_sysport_priv *priv = netdev_priv(dev);
 	struct device_node *dn = pdev->dev.of_node;
 
 	/* Not much to do, ndo_close has been called
 	 * and we use managed allocations
 	 */
+	unregister_dsa_notifier(&priv->dsa_notifier);
 	unregister_netdev(dev);
 	if (of_phy_is_fixed_link(dn))
 		of_phy_deregister_fixed_link(dn);
@@ -2141,20 +2575,47 @@ static int bcm_sysport_remove(struct platform_device *pdev)
 	return 0;
 }
 
-#ifdef CONFIG_PM_SLEEP
 static int bcm_sysport_suspend_to_wol(struct bcm_sysport_priv *priv)
 {
 	struct net_device *ndev = priv->netdev;
 	unsigned int timeout = 1000;
+	unsigned int index, i = 0;
 	u32 reg;
 
-	/* Password has already been programmed */
 	reg = umac_readl(priv, UMAC_MPD_CTRL);
-	reg |= MPD_EN;
+	if (priv->wolopts & (WAKE_MAGIC | WAKE_MAGICSECURE))
+		reg |= MPD_EN;
 	reg &= ~PSW_EN;
-	if (priv->wolopts & WAKE_MAGICSECURE)
+	if (priv->wolopts & WAKE_MAGICSECURE) {
+		/* Program the SecureOn password */
+		umac_writel(priv, get_unaligned_be16(&priv->sopass[0]),
+			    UMAC_PSW_MS);
+		umac_writel(priv, get_unaligned_be32(&priv->sopass[2]),
+			    UMAC_PSW_LS);
 		reg |= PSW_EN;
+	}
 	umac_writel(priv, reg, UMAC_MPD_CTRL);
+
+	if (priv->wolopts & WAKE_FILTER) {
+		/* Turn on ACPI matching to steal packets from RBUF */
+		reg = rbuf_readl(priv, RBUF_CONTROL);
+		if (priv->is_lite)
+			reg |= RBUF_ACPI_EN_LITE;
+		else
+			reg |= RBUF_ACPI_EN;
+		rbuf_writel(priv, reg, RBUF_CONTROL);
+
+		/* Enable RXCHK, active filters and Broadcom tag matching */
+		reg = rxchk_readl(priv, RXCHK_CONTROL);
+		reg &= ~(RXCHK_BRCM_TAG_MATCH_MASK <<
+			 RXCHK_BRCM_TAG_MATCH_SHIFT);
+		for_each_set_bit(index, priv->filters, RXCHK_BRCM_TAG_MAX) {
+			reg |= BIT(RXCHK_BRCM_TAG_MATCH_SHIFT + i);
+			i++;
+		}
+		reg |= RXCHK_EN | RXCHK_BRCM_TAG_EN;
+		rxchk_writel(priv, reg, RXCHK_CONTROL);
+	}
 
 	/* Make sure RBUF entered WoL mode as result */
 	do {
@@ -2167,9 +2628,7 @@ static int bcm_sysport_suspend_to_wol(struct bcm_sysport_priv *priv)
 
 	/* Do not leave the UniMAC RBUF matching only MPD packets */
 	if (!timeout) {
-		reg = umac_readl(priv, UMAC_MPD_CTRL);
-		reg &= ~MPD_EN;
-		umac_writel(priv, reg, UMAC_MPD_CTRL);
+		mpd_enable_set(priv, false);
 		netif_err(priv, wol, ndev, "failed to enter WOL mode\n");
 		return -ETIMEDOUT;
 	}
@@ -2177,15 +2636,12 @@ static int bcm_sysport_suspend_to_wol(struct bcm_sysport_priv *priv)
 	/* UniMAC receive needs to be turned on */
 	umac_enable_set(priv, CMD_RX_EN, 1);
 
-	/* Enable the interrupt wake-up source */
-	intrl2_0_mask_clear(priv, INTRL2_0_MPD);
-
 	netif_dbg(priv, wol, ndev, "entered WOL mode\n");
 
 	return 0;
 }
 
-static int bcm_sysport_suspend(struct device *d)
+static int __maybe_unused bcm_sysport_suspend(struct device *d)
 {
 	struct net_device *dev = dev_get_drvdata(d);
 	struct bcm_sysport_priv *priv = netdev_priv(dev);
@@ -2196,11 +2652,11 @@ static int bcm_sysport_suspend(struct device *d)
 	if (!netif_running(dev))
 		return 0;
 
+	netif_device_detach(dev);
+
 	bcm_sysport_netif_stop(dev);
 
 	phy_suspend(dev->phydev);
-
-	netif_device_detach(dev);
 
 	/* Disable UniMAC RX */
 	umac_enable_set(priv, CMD_RX_EN, 0);
@@ -2247,7 +2703,7 @@ static int bcm_sysport_suspend(struct device *d)
 	return ret;
 }
 
-static int bcm_sysport_resume(struct device *d)
+static int __maybe_unused bcm_sysport_resume(struct device *d)
 {
 	struct net_device *dev = dev_get_drvdata(d);
 	struct bcm_sysport_priv *priv = netdev_priv(dev);
@@ -2284,8 +2740,6 @@ static int bcm_sysport_resume(struct device *d)
 		netdev_err(dev, "failed to initialize RX ring\n");
 		goto out_free_rx_ring;
 	}
-
-	netif_device_attach(dev);
 
 	/* RX pipe enable */
 	topctrl_writel(priv, 0, RX_FLUSH_CNTL);
@@ -2331,6 +2785,8 @@ static int bcm_sysport_resume(struct device *d)
 
 	bcm_sysport_netif_start(dev);
 
+	netif_device_attach(dev);
+
 	return 0;
 
 out_free_rx_ring:
@@ -2340,7 +2796,6 @@ out_free_tx_rings:
 		bcm_sysport_fini_tx_ring(priv, i);
 	return ret;
 }
-#endif
 
 static SIMPLE_DEV_PM_OPS(bcm_sysport_pm_ops,
 		bcm_sysport_suspend, bcm_sysport_resume);

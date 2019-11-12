@@ -34,7 +34,7 @@
 #define OTPC_CMD_READ                0x0
 #define OTPC_CMD_OTP_PROG_ENABLE     0x2
 #define OTPC_CMD_OTP_PROG_DISABLE    0x3
-#define OTPC_CMD_PROGRAM             0xA
+#define OTPC_CMD_PROGRAM             0x8
 
 /* OTPC Status Bits */
 #define OTPC_STAT_CMD_DONE           BIT(1)
@@ -209,7 +209,7 @@ static int bcm_otpc_write(void *context, unsigned int offset, void *val,
 		set_command(priv->base, OTPC_CMD_PROGRAM);
 		set_cpu_address(priv->base, address++);
 		for (i = 0; i < priv->map->otpc_row_size; i++) {
-			writel(*buf, priv->base + priv->map->data_r_offset[i]);
+			writel(*buf, priv->base + priv->map->data_w_offset[i]);
 			buf++;
 			bytes_written += sizeof(*buf);
 		}
@@ -232,7 +232,6 @@ static struct nvmem_config bcm_otpc_nvmem_config = {
 	.read_only = false,
 	.word_size = 4,
 	.stride = 4,
-	.owner = THIS_MODULE,
 	.reg_read = bcm_otpc_read,
 	.reg_write = bcm_otpc_write,
 };
@@ -263,8 +262,7 @@ static int bcm_otpc_probe(struct platform_device *pdev)
 	else if (of_device_is_compatible(dev->of_node, "brcm,ocotp-v2"))
 		priv->map = &otp_map_v2;
 	else {
-		dev_err(&pdev->dev,
-			"%s otpc config map not defined\n", __func__);
+		dev_err(dev, "%s otpc config map not defined\n", __func__);
 		return -EINVAL;
 	}
 
@@ -303,27 +301,17 @@ static int bcm_otpc_probe(struct platform_device *pdev)
 
 	priv->config = &bcm_otpc_nvmem_config;
 
-	nvmem = nvmem_register(&bcm_otpc_nvmem_config);
+	nvmem = devm_nvmem_register(dev, &bcm_otpc_nvmem_config);
 	if (IS_ERR(nvmem)) {
 		dev_err(dev, "error registering nvmem config\n");
 		return PTR_ERR(nvmem);
 	}
 
-	platform_set_drvdata(pdev, nvmem);
-
 	return 0;
-}
-
-static int bcm_otpc_remove(struct platform_device *pdev)
-{
-	struct nvmem_device *nvmem = platform_get_drvdata(pdev);
-
-	return nvmem_unregister(nvmem);
 }
 
 static struct platform_driver bcm_otpc_driver = {
 	.probe	= bcm_otpc_probe,
-	.remove	= bcm_otpc_remove,
 	.driver = {
 		.name	= "brcm-otpc",
 		.of_match_table = bcm_otpc_dt_ids,

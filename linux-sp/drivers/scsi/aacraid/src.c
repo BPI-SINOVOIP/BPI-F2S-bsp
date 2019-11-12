@@ -255,7 +255,8 @@ static int src_sync_cmd(struct aac_dev *dev, u32 command,
 	 */
 	src_writel(dev, MUnit.IDR, INBOUNDDOORBELL_0 << SRC_IDR_SHIFT);
 
-	if (!dev->sync_mode || command != SEND_SYNCHRONOUS_FIB) {
+	if ((!dev->sync_mode || command != SEND_SYNCHRONOUS_FIB) &&
+		!dev->in_soft_reset) {
 		ok = 0;
 		start = jiffies;
 
@@ -408,7 +409,8 @@ static void aac_src_start_adapter(struct aac_dev *dev)
 
 	init = dev->init;
 	if (dev->comm_interface == AAC_COMM_MESSAGE_TYPE3) {
-		init->r8.host_elapsed_seconds = cpu_to_le32(get_seconds());
+		init->r8.host_elapsed_seconds =
+			cpu_to_le32(ktime_get_real_seconds());
 		src_sync_cmd(dev, INIT_STRUCT_BASE_ADDRESS,
 			lower_32_bits(dev->init_pa),
 			upper_32_bits(dev->init_pa),
@@ -416,7 +418,8 @@ static void aac_src_start_adapter(struct aac_dev *dev)
 			(AAC_MAX_HRRQ - 1) * sizeof(struct _rrq),
 			0, 0, 0, NULL, NULL, NULL, NULL, NULL);
 	} else {
-		init->r7.host_elapsed_seconds = cpu_to_le32(get_seconds());
+		init->r7.host_elapsed_seconds =
+			cpu_to_le32(ktime_get_real_seconds());
 		// We can only use a 32 bit address here
 		src_sync_cmd(dev, INIT_STRUCT_BASE_ADDRESS,
 			(u32)(ulong)dev->init_pa, 0, 0, 0, 0, 0,
@@ -679,6 +682,25 @@ void aac_set_intx_mode(struct aac_dev *dev)
 	}
 }
 
+static void aac_clear_omr(struct aac_dev *dev)
+{
+	u32 omr_value = 0;
+
+	omr_value = src_readl(dev, MUnit.OMR);
+
+	/*
+	 * Check for PCI Errors or Kernel Panic
+	 */
+	if ((omr_value == INVALID_OMR) || (omr_value & KERNEL_PANIC))
+		omr_value = 0;
+
+	/*
+	 * Preserve MSIX Value if any
+	 */
+	src_writel(dev, MUnit.OMR, omr_value & AAC_INT_MODE_MSIX);
+	src_readl(dev, MUnit.OMR);
+}
+
 static void aac_dump_fw_fib_iop_reset(struct aac_dev *dev)
 {
 	__le32 supported_options3;
@@ -694,39 +716,63 @@ static void aac_dump_fw_fib_iop_reset(struct aac_dev *dev)
 			0, 0, 0,  0, 0, 0, NULL, NULL, NULL, NULL, NULL);
 }
 
-static void aac_send_iop_reset(struct aac_dev *dev, int bled)
+static bool aac_is_ctrl_up_and_running(struct aac_dev *dev)
 {
-	u32 var, reset_mask;
+	bool ctrl_up = true;
+	unsigned long status, start;
+	bool is_up = false;
 
+	start = jiffies;
+	do {
+		schedule();
+		status = src_readl(dev, MUnit.OMR);
+
+		if (status == 0xffffffff)
+			status = 0;
+
+		if (status & KERNEL_BOOTING) {
+			start = jiffies;
+			continue;
+		}
+
+		if (time_after(jiffies, start+HZ*SOFT_RESET_TIME)) {
+			ctrl_up = false;
+			break;
+		}
+
+		is_up = status & KERNEL_UP_AND_RUNNING;
+
+	} while (!is_up);
+
+	return ctrl_up;
+}
+
+static void aac_notify_fw_of_iop_reset(struct aac_dev *dev)
+{
+	aac_adapter_sync_cmd(dev, IOP_RESET_ALWAYS, 0, 0, 0, 0, 0, 0, NULL,
+						NULL, NULL, NULL, NULL);
+}
+
+static void aac_send_iop_reset(struct aac_dev *dev)
+{
 	aac_dump_fw_fib_iop_reset(dev);
 
-	bled = aac_adapter_sync_cmd(dev, IOP_RESET_ALWAYS,
-				    0, 0, 0, 0, 0, 0, &var,
-				    &reset_mask, NULL, NULL, NULL);
-
-	if ((bled || var != 0x00000001) && !dev->doorbell_mask)
-		bled = -EINVAL;
-	else if (dev->doorbell_mask) {
-		reset_mask = dev->doorbell_mask;
-		bled = 0;
-		var = 0x00000001;
-	}
+	aac_notify_fw_of_iop_reset(dev);
 
 	aac_set_intx_mode(dev);
 
-	if (!bled && (dev->supplement_adapter_info.supported_options2 &
-	    AAC_OPTION_DOORBELL_RESET)) {
-		src_writel(dev, MUnit.IDR, reset_mask);
-	} else {
-		src_writel(dev, MUnit.IDR, 0x100);
-	}
-	msleep(30000);
+	aac_clear_omr(dev);
+
+	src_writel(dev, MUnit.IDR, IOP_SRC_RESET_MASK);
+
+	msleep(5000);
 }
 
 static void aac_send_hardware_soft_reset(struct aac_dev *dev)
 {
 	u_int32_t val;
 
+	aac_clear_omr(dev);
 	val = readl(((char *)(dev->base) + IBW_SWR_OFFSET));
 	val |= 0x01;
 	writel(val, ((char *)(dev->base) + IBW_SWR_OFFSET));
@@ -735,14 +781,14 @@ static void aac_send_hardware_soft_reset(struct aac_dev *dev)
 
 static int aac_src_restart_adapter(struct aac_dev *dev, int bled, u8 reset_type)
 {
-	unsigned long status, start;
+	bool is_ctrl_up;
+	int ret = 0;
 
 	if (bled < 0)
 		goto invalid_out;
 
 	if (bled)
-		pr_err("%s%d: adapter kernel panic'd %x.\n",
-				dev->name, dev->id, bled);
+		dev_err(&dev->pdev->dev, "adapter kernel panic'd %x.\n", bled);
 
 	/*
 	 * When there is a BlinkLED, IOP_RESET has not effect
@@ -752,48 +798,55 @@ static int aac_src_restart_adapter(struct aac_dev *dev, int bled, u8 reset_type)
 
 	dev->a_ops.adapter_enable_int = aac_src_disable_interrupt;
 
-	switch (reset_type) {
-	case IOP_HWSOFT_RESET:
-		aac_send_iop_reset(dev, bled);
+	dev_err(&dev->pdev->dev, "Controller reset type is %d\n", reset_type);
+
+	if (reset_type & HW_IOP_RESET) {
+		dev_info(&dev->pdev->dev, "Issuing IOP reset\n");
+		aac_send_iop_reset(dev);
+
 		/*
-		 * Check to see if KERNEL_UP_AND_RUNNING
-		 * Wait for the adapter to be up and running.
-		 * If !KERNEL_UP_AND_RUNNING issue HW Soft Reset
+		 * Creates a delay or wait till up and running comes thru
 		 */
-		status = src_readl(dev, MUnit.OMR);
-		if (dev->sa_firmware
-		 && !(status & KERNEL_UP_AND_RUNNING)) {
-			start = jiffies;
-			do {
-				status = src_readl(dev, MUnit.OMR);
-				if (time_after(jiffies,
-				 start+HZ*SOFT_RESET_TIME)) {
-					aac_send_hardware_soft_reset(dev);
-					start = jiffies;
-				}
-			} while (!(status & KERNEL_UP_AND_RUNNING));
+		is_ctrl_up = aac_is_ctrl_up_and_running(dev);
+		if (!is_ctrl_up)
+			dev_err(&dev->pdev->dev, "IOP reset failed\n");
+		else {
+			dev_info(&dev->pdev->dev, "IOP reset succeeded\n");
+			goto set_startup;
 		}
-		break;
-	case HW_SOFT_RESET:
-		if (dev->sa_firmware) {
-			aac_send_hardware_soft_reset(dev);
-			aac_set_intx_mode(dev);
-		}
-		break;
-	default:
-		aac_send_iop_reset(dev, bled);
-		break;
 	}
 
-invalid_out:
+	if (!dev->sa_firmware) {
+		dev_err(&dev->pdev->dev, "ARC Reset attempt failed\n");
+		ret = -ENODEV;
+		goto out;
+	}
 
-	if (src_readl(dev, MUnit.OMR) & KERNEL_PANIC)
-		return -ENODEV;
+	if (reset_type & HW_SOFT_RESET) {
+		dev_info(&dev->pdev->dev, "Issuing SOFT reset\n");
+		aac_send_hardware_soft_reset(dev);
+		dev->msi_enabled = 0;
 
+		is_ctrl_up = aac_is_ctrl_up_and_running(dev);
+		if (!is_ctrl_up) {
+			dev_err(&dev->pdev->dev, "SOFT reset failed\n");
+			ret = -ENODEV;
+			goto out;
+		} else
+			dev_info(&dev->pdev->dev, "SOFT reset succeeded\n");
+	}
+
+set_startup:
 	if (startup_timeout < 300)
 		startup_timeout = 300;
 
-	return 0;
+out:
+	return ret;
+
+invalid_out:
+	if (src_readl(dev, MUnit.OMR) & KERNEL_PANIC)
+		ret = -ENODEV;
+goto out;
 }
 
 /**
@@ -840,9 +893,13 @@ int aac_src_init(struct aac_dev *dev)
 	/* Failure to reset here is an option ... */
 	dev->a_ops.adapter_sync_cmd = src_sync_cmd;
 	dev->a_ops.adapter_enable_int = aac_src_disable_interrupt;
-	if ((aac_reset_devices || reset_devices) &&
-		!aac_src_restart_adapter(dev, 0, IOP_HWSOFT_RESET))
-		++restart;
+
+	if (dev->init_reset) {
+		dev->init_reset = false;
+		if (!aac_src_restart_adapter(dev, 0, IOP_HWSOFT_RESET))
+			++restart;
+	}
+
 	/*
 	 *	Check to see if the board panic'd while booting.
 	 */
@@ -960,6 +1017,148 @@ error_iounmap:
 	return -1;
 }
 
+static int aac_src_wait_sync(struct aac_dev *dev, int *status)
+{
+	unsigned long start = jiffies;
+	unsigned long usecs = 0;
+	int delay = 5 * HZ;
+	int rc = 1;
+
+	while (time_before(jiffies, start+delay)) {
+		/*
+		 * Delay 5 microseconds to let Mon960 get info.
+		 */
+		udelay(5);
+
+		/*
+		 * Mon960 will set doorbell0 bit when it has completed the
+		 * command.
+		 */
+		if (aac_src_get_sync_status(dev) & OUTBOUNDDOORBELL_0) {
+			/*
+			 * Clear: the doorbell.
+			 */
+			if (dev->msi_enabled)
+				aac_src_access_devreg(dev, AAC_CLEAR_SYNC_BIT);
+			else
+				src_writel(dev, MUnit.ODR_C,
+					OUTBOUNDDOORBELL_0 << SRC_ODR_SHIFT);
+			rc = 0;
+
+			break;
+		}
+
+		/*
+		 * Yield the processor in case we are slow
+		 */
+		usecs = 1 * USEC_PER_MSEC;
+		usleep_range(usecs, usecs + 50);
+	}
+	/*
+	 * Pull the synch status from Mailbox 0.
+	 */
+	if (status && !rc) {
+		status[0] = readl(&dev->IndexRegs->Mailbox[0]);
+		status[1] = readl(&dev->IndexRegs->Mailbox[1]);
+		status[2] = readl(&dev->IndexRegs->Mailbox[2]);
+		status[3] = readl(&dev->IndexRegs->Mailbox[3]);
+		status[4] = readl(&dev->IndexRegs->Mailbox[4]);
+	}
+
+	return rc;
+}
+
+/**
+ *  aac_src_soft_reset	-	perform soft reset to speed up
+ *  access
+ *
+ *  Assumptions: That the controller is in a state where we can
+ *  bring it back to life with an init struct. We can only use
+ *  fast sync commands, as the timeout is 5 seconds.
+ *
+ *  @dev: device to configure
+ *
+ */
+
+static int aac_src_soft_reset(struct aac_dev *dev)
+{
+	u32 status_omr = src_readl(dev, MUnit.OMR);
+	u32 status[5];
+	int rc = 1;
+	int state = 0;
+	char *state_str[7] = {
+		"GET_ADAPTER_PROPERTIES Failed",
+		"GET_ADAPTER_PROPERTIES timeout",
+		"SOFT_RESET not supported",
+		"DROP_IO Failed",
+		"DROP_IO timeout",
+		"Check Health failed"
+	};
+
+	if (status_omr == INVALID_OMR)
+		return 1;       // pcie hosed
+
+	if (!(status_omr & KERNEL_UP_AND_RUNNING))
+		return 1;       // not up and running
+
+	/*
+	 * We go into soft reset mode to allow us to handle response
+	 */
+	dev->in_soft_reset = 1;
+	dev->msi_enabled = status_omr & AAC_INT_MODE_MSIX;
+
+	/* Get adapter properties */
+	rc = aac_adapter_sync_cmd(dev, GET_ADAPTER_PROPERTIES, 0, 0, 0,
+		0, 0, 0, status+0, status+1, status+2, status+3, status+4);
+	if (rc)
+		goto out;
+
+	state++;
+	if (aac_src_wait_sync(dev, status)) {
+		rc = 1;
+		goto out;
+	}
+
+	state++;
+	if (!(status[1] & le32_to_cpu(AAC_OPT_EXTENDED) &&
+		(status[4] & le32_to_cpu(AAC_EXTOPT_SOFT_RESET)))) {
+		rc = 2;
+		goto out;
+	}
+
+	if ((status[1] & le32_to_cpu(AAC_OPT_EXTENDED)) &&
+		(status[4] & le32_to_cpu(AAC_EXTOPT_SA_FIRMWARE)))
+		dev->sa_firmware = 1;
+
+	state++;
+	rc = aac_adapter_sync_cmd(dev, DROP_IO, 0, 0, 0, 0, 0, 0,
+		 status+0, status+1, status+2, status+3, status+4);
+
+	if (rc)
+		goto out;
+
+	state++;
+	if (aac_src_wait_sync(dev, status)) {
+		rc = 3;
+		goto out;
+	}
+
+	if (status[1])
+		dev_err(&dev->pdev->dev, "%s: %d outstanding I/O pending\n",
+			__func__, status[1]);
+
+	state++;
+	rc = aac_src_check_health(dev);
+
+out:
+	dev->in_soft_reset = 0;
+	dev->msi_enabled = 0;
+	if (rc)
+		dev_err(&dev->pdev->dev, "%s: %s status = %d", __func__,
+			state_str[state], rc);
+
+return rc;
+}
 /**
  *  aac_srcv_init	-	initialize an SRCv card
  *  @dev: device to configure
@@ -986,9 +1185,15 @@ int aac_srcv_init(struct aac_dev *dev)
 	/* Failure to reset here is an option ... */
 	dev->a_ops.adapter_sync_cmd = src_sync_cmd;
 	dev->a_ops.adapter_enable_int = aac_src_disable_interrupt;
-	if ((aac_reset_devices || reset_devices) &&
-		!aac_src_restart_adapter(dev, 0, IOP_HWSOFT_RESET))
-		++restart;
+
+	if (dev->init_reset) {
+		dev->init_reset = false;
+		if (aac_src_soft_reset(dev)) {
+			aac_src_restart_adapter(dev, 0, IOP_HWSOFT_RESET);
+			++restart;
+		}
+	}
+
 	/*
 	 *	Check to see if flash update is running.
 	 *	Wait for the adapter to be up and running. Wait up to 5 minutes
@@ -1036,13 +1241,16 @@ int aac_srcv_init(struct aac_dev *dev)
 		printk(KERN_ERR "%s%d: adapter monitor panic.\n", dev->name, instance);
 		goto error_iounmap;
 	}
+
 	start = jiffies;
 	/*
 	 *	Wait for the adapter to be up and running. Wait up to 3 minutes
 	 */
-	while (!((status = src_readl(dev, MUnit.OMR)) &
-		KERNEL_UP_AND_RUNNING) ||
-		status == 0xffffffff) {
+	do {
+		status = src_readl(dev, MUnit.OMR);
+		if (status == INVALID_OMR)
+			status = 0;
+
 		if ((restart &&
 		  (status & (KERNEL_PANIC|SELF_TEST_FAILED|MONITOR_PANIC))) ||
 		  time_after(jiffies, start+HZ*startup_timeout)) {
@@ -1062,7 +1270,8 @@ int aac_srcv_init(struct aac_dev *dev)
 			++restart;
 		}
 		msleep(1);
-	}
+	} while (!(status & KERNEL_UP_AND_RUNNING));
+
 	if (restart && aac_commit)
 		aac_commit = 1;
 	/*
@@ -1198,13 +1407,23 @@ void aac_src_access_devreg(struct aac_dev *dev, int mode)
 
 static int aac_src_get_sync_status(struct aac_dev *dev)
 {
+	int msix_val = 0;
+	int legacy_val = 0;
 
-	int val;
+	msix_val = src_readl(dev, MUnit.ODR_MSI) & SRC_MSI_READ_MASK ? 1 : 0;
 
-	if (dev->msi_enabled)
-		val = src_readl(dev, MUnit.ODR_MSI) & 0x1000 ? 1 : 0;
-	else
-		val = src_readl(dev, MUnit.ODR_R) >> SRC_ODR_SHIFT;
+	if (!dev->msi_enabled) {
+		/*
+		 * if Legacy int status indicates cmd is not complete
+		 * sample MSIx register to see if it indiactes cmd complete,
+		 * if yes set the controller in MSIx mode and consider cmd
+		 * completed
+		 */
+		legacy_val = src_readl(dev, MUnit.ODR_R) >> SRC_ODR_SHIFT;
+		if (!(legacy_val & 1) && msix_val)
+			dev->msi_enabled = 1;
+		return legacy_val;
+	}
 
-	return val;
+	return msix_val;
 }

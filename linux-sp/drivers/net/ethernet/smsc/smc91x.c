@@ -1539,11 +1539,10 @@ smc_ethtool_get_link_ksettings(struct net_device *dev,
 			       struct ethtool_link_ksettings *cmd)
 {
 	struct smc_local *lp = netdev_priv(dev);
-	int ret;
 
 	if (lp->phy_type != 0) {
 		spin_lock_irq(&lp->lock);
-		ret = mii_ethtool_get_link_ksettings(&lp->mii, cmd);
+		mii_ethtool_get_link_ksettings(&lp->mii, cmd);
 		spin_unlock_irq(&lp->lock);
 	} else {
 		u32 supported = SUPPORTED_10baseT_Half |
@@ -1562,11 +1561,9 @@ smc_ethtool_get_link_ksettings(struct net_device *dev,
 
 		ethtool_convert_legacy_u32_to_link_mode(
 			cmd->link_modes.supported, supported);
-
-		ret = 0;
 	}
 
-	return ret;
+	return 0;
 }
 
 static int
@@ -2022,17 +2019,10 @@ static int smc_probe(struct net_device *dev, void __iomem *ioaddr,
 #  endif
 	if (lp->cfg.flags & SMC91X_USE_DMA) {
 		dma_cap_mask_t mask;
-		struct pxad_param param;
 
 		dma_cap_zero(mask);
 		dma_cap_set(DMA_SLAVE, mask);
-		param.prio = PXAD_PRIO_LOWEST;
-		param.drcmr = -1UL;
-
-		lp->dma_chan =
-			dma_request_slave_channel_compat(mask, pxad_filter_fn,
-							 &param, &dev->dev,
-							 "data");
+		lp->dma_chan = dma_request_channel(mask, NULL, NULL);
 	}
 #endif
 
@@ -2488,7 +2478,7 @@ static int smc_drv_resume(struct device *dev)
 	return 0;
 }
 
-static struct dev_pm_ops smc_drv_pm_ops = {
+static const struct dev_pm_ops smc_drv_pm_ops = {
 	.suspend	= smc_drv_suspend,
 	.resume		= smc_drv_resume,
 };

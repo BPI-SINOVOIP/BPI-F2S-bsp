@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  *  drivers/tty/serial/8250/8250_pxa.c -- driver for PXA on-board UARTS
  *  Copyright:	(C) 2013 Sergei Ianovich <ynvich@gmail.com>
@@ -7,12 +8,6 @@
  *  Copyright:	(C) 2003 Monta Vista Software, Inc.
  *
  *  Based on drivers/serial/8250.c by Russell King.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
  */
 
 #include <linux/device.h>
@@ -117,6 +112,10 @@ static int serial_pxa_probe(struct platform_device *pdev)
 	ret = clk_prepare(data->clk);
 	if (ret)
 		return ret;
+
+	ret = of_alias_get_id(pdev->dev.of_node, "serial");
+	if (ret >= 0)
+		uart.port.line = ret;
 
 	uart.port.type = PORT_XSCALE;
 	uart.port.iotype = UPIO_MEM32;

@@ -12,7 +12,7 @@ MODULE_DESCRIPTION("TASCAM FireWire series Driver");
 MODULE_AUTHOR("Takashi Sakamoto <o-takashi@sakamocchi.jp>");
 MODULE_LICENSE("GPL v2");
 
-static struct snd_tscm_spec model_specs[] = {
+static const struct snd_tscm_spec model_specs[] = {
 	{
 		.name = "FW-1884",
 		.has_adat = true,
@@ -93,6 +93,7 @@ static void tscm_free(struct snd_tscm *tscm)
 	fw_unit_put(tscm->unit);
 
 	mutex_destroy(&tscm->mutex);
+	kfree(tscm);
 }
 
 static void tscm_card_free(struct snd_card *card)

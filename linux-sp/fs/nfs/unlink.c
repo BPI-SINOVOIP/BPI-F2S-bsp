@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *  linux/fs/nfs/unlink.c
  *
@@ -84,7 +85,7 @@ static const struct rpc_call_ops nfs_unlink_ops = {
 	.rpc_call_prepare = nfs_unlink_prepare,
 };
 
-static void nfs_do_call_unlink(struct nfs_unlinkdata *data)
+static void nfs_do_call_unlink(struct inode *inode, struct nfs_unlinkdata *data)
 {
 	struct rpc_message msg = {
 		.rpc_argp = &data->args,
@@ -104,7 +105,7 @@ static void nfs_do_call_unlink(struct nfs_unlinkdata *data)
 	data->args.fh = NFS_FH(dir);
 	nfs_fattr_init(data->res.dir_attr);
 
-	NFS_PROTO(dir)->unlink_setup(&msg, dir);
+	NFS_PROTO(dir)->unlink_setup(&msg, data->dentry, inode);
 
 	task_setup_data.rpc_client = NFS_CLIENT(dir);
 	task = rpc_run_task(&task_setup_data);
@@ -112,7 +113,7 @@ static void nfs_do_call_unlink(struct nfs_unlinkdata *data)
 		rpc_put_task_async(task);
 }
 
-static int nfs_call_unlink(struct dentry *dentry, struct nfs_unlinkdata *data)
+static int nfs_call_unlink(struct dentry *dentry, struct inode *inode, struct nfs_unlinkdata *data)
 {
 	struct inode *dir = d_inode(dentry->d_parent);
 	struct dentry *alias;
@@ -152,7 +153,7 @@ static int nfs_call_unlink(struct dentry *dentry, struct nfs_unlinkdata *data)
 		return ret;
 	}
 	data->dentry = alias;
-	nfs_do_call_unlink(data);
+	nfs_do_call_unlink(inode, data);
 	return 1;
 }
 
@@ -230,7 +231,7 @@ nfs_complete_unlink(struct dentry *dentry, struct inode *inode)
 	dentry->d_fsdata = NULL;
 	spin_unlock(&dentry->d_lock);
 
-	if (NFS_STALE(inode) || !nfs_call_unlink(dentry, data))
+	if (NFS_STALE(inode) || !nfs_call_unlink(dentry, inode, data))
 		nfs_free_unlinkdata(data);
 }
 
@@ -287,6 +288,19 @@ static void nfs_async_rename_release(void *calldata)
 
 	if (d_really_is_positive(data->old_dentry))
 		nfs_mark_for_revalidate(d_inode(data->old_dentry));
+
+	/* The result of the rename is unknown. Play it safe by
+	 * forcing a new lookup */
+	if (data->cancelled) {
+		spin_lock(&data->old_dir->i_lock);
+		nfs_force_lookup_revalidate(data->old_dir);
+		spin_unlock(&data->old_dir->i_lock);
+		if (data->new_dir != data->old_dir) {
+			spin_lock(&data->new_dir->i_lock);
+			nfs_force_lookup_revalidate(data->new_dir);
+			spin_unlock(&data->new_dir->i_lock);
+		}
+	}
 
 	dput(data->old_dentry);
 	dput(data->new_dentry);
@@ -372,7 +386,7 @@ nfs_async_rename(struct inode *old_dir, struct inode *new_dir,
 
 	nfs_sb_active(old_dir->i_sb);
 
-	NFS_PROTO(data->old_dir)->rename_setup(&msg, old_dir);
+	NFS_PROTO(data->old_dir)->rename_setup(&msg, old_dentry, new_dentry);
 
 	return rpc_run_task(&task_setup_data);
 }
@@ -434,6 +448,7 @@ nfs_sillyrename(struct inode *dir, struct dentry *dentry)
 	unsigned char silly[SILLYNAME_LEN + 1];
 	unsigned long long fileid;
 	struct dentry *sdentry;
+	struct inode *inode = d_inode(dentry);
 	struct rpc_task *task;
 	int            error = -EBUSY;
 
@@ -448,9 +463,6 @@ nfs_sillyrename(struct inode *dir, struct dentry *dentry)
 		goto out;
 
 	fileid = NFS_FILEID(d_inode(dentry));
-
-	/* Return delegation in anticipation of the rename */
-	NFS_PROTO(d_inode(dentry))->return_delegation(d_inode(dentry));
 
 	sdentry = NULL;
 	do {
@@ -473,6 +485,8 @@ nfs_sillyrename(struct inode *dir, struct dentry *dentry)
 		if (IS_ERR(sdentry))
 			goto out;
 	} while (d_inode(sdentry) != NULL); /* need negative lookup */
+
+	ihold(inode);
 
 	/* queue unlink first. Can't do this from rpc_release as it
 	 * has to allocate memory
@@ -498,6 +512,12 @@ nfs_sillyrename(struct inode *dir, struct dentry *dentry)
 	case 0:
 		/* The rename succeeded */
 		nfs_set_verifier(dentry, nfs_save_change_attribute(dir));
+		spin_lock(&inode->i_lock);
+		NFS_I(inode)->attr_gencount = nfs_inc_attr_generation_counter();
+		NFS_I(inode)->cache_validity |= NFS_INO_INVALID_CHANGE
+			| NFS_INO_INVALID_CTIME
+			| NFS_INO_REVAL_FORCED;
+		spin_unlock(&inode->i_lock);
 		d_move(dentry, sdentry);
 		break;
 	case -ERESTARTSYS:
@@ -508,6 +528,7 @@ nfs_sillyrename(struct inode *dir, struct dentry *dentry)
 	}
 	rpc_put_task(task);
 out_dput:
+	iput(inode);
 	dput(sdentry);
 out:
 	return error;

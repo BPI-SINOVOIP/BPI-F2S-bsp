@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2012 Hauke Mehrtens <hauke@hauke-m.de>
  *
@@ -49,8 +50,6 @@ struct usb_ehci_pdata {
 	unsigned	no_io_watchdog:1;
 	unsigned	reset_on_resume:1;
 	unsigned	dma_mask_64:1;
-	unsigned	port_power_on:1;
-	unsigned	port_power_off:1;
 
 	/* Turn on all power and clocks */
 	int (*power_on)(struct platform_device *pdev);

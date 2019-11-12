@@ -33,7 +33,7 @@ struct sama5d4_wdt {
 	unsigned long		last_ping;
 };
 
-static int wdt_timeout = WDT_DEFAULT_TIMEOUT;
+static int wdt_timeout;
 static bool nowayout = WATCHDOG_NOWAYOUT;
 
 module_param(wdt_timeout, int, 0);
@@ -212,7 +212,7 @@ static int sama5d4_wdt_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	wdd = &wdt->wdd;
-	wdd->timeout = wdt_timeout;
+	wdd->timeout = WDT_DEFAULT_TIMEOUT;
 	wdd->info = &sama5d4_wdt_info;
 	wdd->ops = &sama5d4_wdt_ops;
 	wdd->min_timeout = MIN_WDT_TIMEOUT;
@@ -228,15 +228,13 @@ static int sama5d4_wdt_probe(struct platform_device *pdev)
 
 	wdt->reg_base = regs;
 
-	if (pdev->dev.of_node) {
-		irq = irq_of_parse_and_map(pdev->dev.of_node, 0);
-		if (!irq)
-			dev_warn(&pdev->dev, "failed to get IRQ from DT\n");
+	irq = irq_of_parse_and_map(pdev->dev.of_node, 0);
+	if (!irq)
+		dev_warn(&pdev->dev, "failed to get IRQ from DT\n");
 
-		ret = of_sama5d4_wdt_init(pdev->dev.of_node, wdt);
-		if (ret)
-			return ret;
-	}
+	ret = of_sama5d4_wdt_init(pdev->dev.of_node, wdt);
+	if (ret)
+		return ret;
 
 	if ((wdt->mr & AT91_WDT_WDFIEN) && irq) {
 		ret = devm_request_irq(&pdev->dev, irq, sama5d4_wdt_irq_handler,
@@ -275,7 +273,7 @@ static int sama5d4_wdt_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, wdt);
 
 	dev_info(&pdev->dev, "initialized (timeout = %d sec, nowayout = %d)\n",
-		 wdt_timeout, nowayout);
+		 wdd->timeout, nowayout);
 
 	return 0;
 }
@@ -302,6 +300,11 @@ static int sama5d4_wdt_resume(struct device *dev)
 {
 	struct sama5d4_wdt *wdt = dev_get_drvdata(dev);
 
+	/*
+	 * FIXME: writing MR also pings the watchdog which may not be desired.
+	 * This should only be done when the registers are lost on suspend but
+	 * there is no way to get this information right now.
+	 */
 	sama5d4_wdt_init(wdt);
 
 	return 0;

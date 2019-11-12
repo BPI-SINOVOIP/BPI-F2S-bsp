@@ -336,7 +336,7 @@ static void snd_ymfpci_pcm_interrupt(struct snd_ymfpci *chip, struct snd_ymfpci_
 			unsigned int subs = ypcm->substream->number;
 			unsigned int next_bank = 1 - chip->active_bank;
 			struct snd_ymfpci_playback_bank *bank;
-			u32 volume;
+			__le32 volume;
 			
 			bank = &voice->bank[next_bank];
 			volume = cpu_to_le32(chip->pcm_mixer[subs].left << 15);
@@ -505,7 +505,7 @@ static void snd_ymfpci_pcm_init_voice(struct snd_ymfpci_pcm *ypcm, unsigned int 
 	u32 lpfK = snd_ymfpci_calc_lpfK(runtime->rate);
 	struct snd_ymfpci_playback_bank *bank;
 	unsigned int nbank;
-	u32 vol_left, vol_right;
+	__le32 vol_left, vol_right;
 	u8 use_left, use_right;
 	unsigned long flags;
 
@@ -781,7 +781,7 @@ static snd_pcm_uframes_t snd_ymfpci_capture_pointer(struct snd_pcm_substream *su
 
 static void snd_ymfpci_irq_wait(struct snd_ymfpci *chip)
 {
-	wait_queue_t wait;
+	wait_queue_entry_t wait;
 	int loops = 4;
 
 	while (loops-- > 0) {
@@ -845,7 +845,7 @@ static irqreturn_t snd_ymfpci_interrupt(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
-static struct snd_pcm_hardware snd_ymfpci_playback =
+static const struct snd_pcm_hardware snd_ymfpci_playback =
 {
 	.info =			(SNDRV_PCM_INFO_MMAP |
 				 SNDRV_PCM_INFO_MMAP_VALID | 
@@ -867,7 +867,7 @@ static struct snd_pcm_hardware snd_ymfpci_playback =
 	.fifo_size =		0,
 };
 
-static struct snd_pcm_hardware snd_ymfpci_capture =
+static const struct snd_pcm_hardware snd_ymfpci_capture =
 {
 	.info =			(SNDRV_PCM_INFO_MMAP |
 				 SNDRV_PCM_INFO_MMAP_VALID |
@@ -2135,7 +2135,7 @@ static int snd_ymfpci_memalloc(struct snd_ymfpci *chip)
 
 	chip->bank_base_playback = ptr;
 	chip->bank_base_playback_addr = ptr_addr;
-	chip->ctrl_playback = (u32 *)ptr;
+	chip->ctrl_playback = (__le32 *)ptr;
 	chip->ctrl_playback[0] = cpu_to_le32(YDSXG_PLAYBACK_VOICES);
 	ptr += ALIGN(playback_ctrl_size, 0x100);
 	ptr_addr += ALIGN(playback_ctrl_size, 0x100);
@@ -2399,59 +2399,60 @@ int snd_ymfpci_create(struct snd_card *card,
 		dev_err(chip->card->dev,
 			"unable to grab memory region 0x%lx-0x%lx\n",
 			chip->reg_area_phys, chip->reg_area_phys + 0x8000 - 1);
-		snd_ymfpci_free(chip);
-		return -EBUSY;
+		err = -EBUSY;
+		goto free_chip;
 	}
 	if (request_irq(pci->irq, snd_ymfpci_interrupt, IRQF_SHARED,
 			KBUILD_MODNAME, chip)) {
 		dev_err(chip->card->dev, "unable to grab IRQ %d\n", pci->irq);
-		snd_ymfpci_free(chip);
-		return -EBUSY;
+		err = -EBUSY;
+		goto free_chip;
 	}
 	chip->irq = pci->irq;
 
 	snd_ymfpci_aclink_reset(pci);
 	if (snd_ymfpci_codec_ready(chip, 0) < 0) {
-		snd_ymfpci_free(chip);
-		return -EIO;
+		err = -EIO;
+		goto free_chip;
 	}
 
 	err = snd_ymfpci_request_firmware(chip);
 	if (err < 0) {
 		dev_err(chip->card->dev, "firmware request failed: %d\n", err);
-		snd_ymfpci_free(chip);
-		return err;
+		goto free_chip;
 	}
 	snd_ymfpci_download_image(chip);
 
 	udelay(100); /* seems we need a delay after downloading image.. */
 
 	if (snd_ymfpci_memalloc(chip) < 0) {
-		snd_ymfpci_free(chip);
-		return -EIO;
+		err = -EIO;
+		goto free_chip;
 	}
 
-	if ((err = snd_ymfpci_ac3_init(chip)) < 0) {
-		snd_ymfpci_free(chip);
-		return err;
-	}
+	err = snd_ymfpci_ac3_init(chip);
+	if (err < 0)
+		goto free_chip;
 
 #ifdef CONFIG_PM_SLEEP
-	chip->saved_regs = kmalloc(YDSXGR_NUM_SAVED_REGS * sizeof(u32),
-				   GFP_KERNEL);
+	chip->saved_regs = kmalloc_array(YDSXGR_NUM_SAVED_REGS, sizeof(u32),
+					 GFP_KERNEL);
 	if (chip->saved_regs == NULL) {
-		snd_ymfpci_free(chip);
-		return -ENOMEM;
+		err = -ENOMEM;
+		goto free_chip;
 	}
 #endif
 
-	if ((err = snd_device_new(card, SNDRV_DEV_LOWLEVEL, chip, &ops)) < 0) {
-		snd_ymfpci_free(chip);
-		return err;
-	}
+	err = snd_device_new(card, SNDRV_DEV_LOWLEVEL, chip, &ops);
+	if (err < 0)
+		goto free_chip;
 
 	snd_ymfpci_proc_init(card, chip);
 
 	*rchip = chip;
 	return 0;
+
+free_chip:
+	snd_ymfpci_free(chip);
+	return err;
 }

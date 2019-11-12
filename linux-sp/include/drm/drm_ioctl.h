@@ -109,13 +109,6 @@ enum drm_ioctl_flags {
 	 */
 	DRM_ROOT_ONLY		= BIT(2),
 	/**
-	 * @DRM_CONTROL_ALLOW:
-	 *
-	 * Deprecated, do not use. Control nodes are in the process of getting
-	 * removed.
-	 */
-	DRM_CONTROL_ALLOW	= BIT(3),
-	/**
 	 * @DRM_UNLOCKED:
 	 *
 	 * Whether &drm_ioctl_desc.func should be called with the DRM BKL held
@@ -172,6 +165,7 @@ struct drm_ioctl_desc {
 
 int drm_ioctl_permit(u32 flags, struct drm_file *file_priv);
 long drm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);
+long drm_ioctl_kernel(struct file *, drm_ioctl_t, void *, u32);
 #ifdef CONFIG_COMPAT
 long drm_compat_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);
 #else

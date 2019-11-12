@@ -20,9 +20,6 @@
 #include <sound/core.h>
 #include <sound/dmaengine_pcm.h>
 #include <sound/initval.h>
-#include <sound/pcm.h>
-#include <sound/pcm_params.h>
-#include <sound/soc.h>
 
 #define ZX_I2S_PROCESS_CTRL	0x04
 #define ZX_I2S_TIMING_CTRL	0x08
@@ -197,7 +194,7 @@ static int zx_i2s_set_fmt(struct snd_soc_dai *cpu_dai, unsigned int fmt)
 		val |= (ZX_I2S_TIMING_I2S | ZX_I2S_TIMING_LSB_JUSTIF);
 		break;
 	default:
-		dev_err(cpu_dai->dev, "Unknown i2s timeing\n");
+		dev_err(cpu_dai->dev, "Unknown i2s timing\n");
 		return -EINVAL;
 	}
 
@@ -228,11 +225,12 @@ static int zx_i2s_hw_params(struct snd_pcm_substream *substream,
 	struct zx_i2s_info *i2s = snd_soc_dai_get_drvdata(socdai);
 	struct snd_dmaengine_dai_dma_data *dma_data;
 	unsigned int lane, ch_num, len, ret = 0;
+	unsigned int ts_width = 32;
 	unsigned long val;
 	unsigned long chn_cfg;
 
 	dma_data = snd_soc_dai_get_dma_data(socdai, substream);
-	dma_data->addr_width = params_width(params) >> 3;
+	dma_data->addr_width = ts_width >> 3;
 
 	val = readl_relaxed(i2s->reg_base + ZX_I2S_TIMING_CTRL);
 	val &= ~(ZX_I2S_TIMING_TS_WIDTH_MASK | ZX_I2S_TIMING_DATA_SIZE_MASK |
@@ -253,7 +251,7 @@ static int zx_i2s_hw_params(struct snd_pcm_substream *substream,
 		dev_err(socdai->dev, "Unknown data format\n");
 		return -EINVAL;
 	}
-	val |= ZX_I2S_TIMING_TS_WIDTH(len) | ZX_I2S_TIMING_DATA_SIZE(len);
+	val |= ZX_I2S_TIMING_TS_WIDTH(ts_width) | ZX_I2S_TIMING_DATA_SIZE(len);
 
 	ch_num = params_channels(params);
 	switch (ch_num) {
@@ -356,7 +354,7 @@ static void zx_i2s_shutdown(struct snd_pcm_substream *substream,
 	clk_disable_unprepare(zx_i2s->dai_pclk);
 }
 
-static struct snd_soc_dai_ops zx_i2s_dai_ops = {
+static const struct snd_soc_dai_ops zx_i2s_dai_ops = {
 	.trigger	= zx_i2s_trigger,
 	.hw_params	= zx_i2s_hw_params,
 	.set_fmt	= zx_i2s_set_fmt,

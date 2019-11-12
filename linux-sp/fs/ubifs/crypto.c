@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 #include "ubifs.h"
 
 static int ubifs_crypt_get_context(struct inode *inode, void *ctx, size_t len)
@@ -9,21 +10,18 @@ static int ubifs_crypt_get_context(struct inode *inode, void *ctx, size_t len)
 static int ubifs_crypt_set_context(struct inode *inode, const void *ctx,
 				   size_t len, void *fs_data)
 {
+	/*
+	 * Creating an encryption context is done unlocked since we
+	 * operate on a new inode which is not visible to other users
+	 * at this point. So, no need to check whether inode is locked.
+	 */
 	return ubifs_xattr_set(inode, UBIFS_XATTR_NAME_ENCRYPTION_CONTEXT,
-			       ctx, len, 0);
+			       ctx, len, 0, false);
 }
 
 static bool ubifs_crypt_empty_dir(struct inode *inode)
 {
 	return ubifs_check_dir_empty(inode) == 0;
-}
-
-static unsigned int ubifs_crypt_max_namelen(struct inode *inode)
-{
-	if (S_ISLNK(inode->i_mode))
-		return UBIFS_MAX_INO_DATA;
-	else
-		return UBIFS_MAX_NLEN;
 }
 
 int ubifs_encrypt(const struct inode *inode, struct ubifs_data_node *dn,
@@ -34,7 +32,7 @@ int ubifs_encrypt(const struct inode *inode, struct ubifs_data_node *dn,
 	struct page *ret;
 	unsigned int pad_len = round_up(in_len, UBIFS_CIPHER_BLOCK_SIZE);
 
-	ubifs_assert(pad_len <= *out_len);
+	ubifs_assert(c, pad_len <= *out_len);
 	dn->compr_size = cpu_to_le16(in_len);
 
 	/* pad to full block cipher length */
@@ -65,7 +63,7 @@ int ubifs_decrypt(const struct inode *inode, struct ubifs_data_node *dn,
 		return -EINVAL;
 	}
 
-	ubifs_assert(dlen <= UBIFS_BLOCK_SIZE);
+	ubifs_assert(c, dlen <= UBIFS_BLOCK_SIZE);
 	err = fscrypt_decrypt_page(inode, virt_to_page(&dn->data), dlen,
 			offset_in_page(&dn->data), block);
 	if (err) {
@@ -82,7 +80,6 @@ const struct fscrypt_operations ubifs_crypt_operations = {
 	.key_prefix		= "ubifs:",
 	.get_context		= ubifs_crypt_get_context,
 	.set_context		= ubifs_crypt_set_context,
-	.is_encrypted		= __ubifs_crypt_is_encrypted,
 	.empty_dir		= ubifs_crypt_empty_dir,
-	.max_namelen		= ubifs_crypt_max_namelen,
+	.max_namelen		= UBIFS_MAX_NLEN,
 };

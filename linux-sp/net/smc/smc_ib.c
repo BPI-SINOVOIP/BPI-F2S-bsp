@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *  Shared Memory Communications over RDMA (SMC-R) and RoCE
  *
@@ -13,13 +14,17 @@
 
 #include <linux/random.h>
 #include <linux/workqueue.h>
+#include <linux/scatterlist.h>
 #include <rdma/ib_verbs.h>
+#include <rdma/ib_cache.h>
 
 #include "smc_pnet.h"
 #include "smc_ib.h"
 #include "smc_core.h"
 #include "smc_wr.h"
 #include "smc.h"
+
+#define SMC_MAX_CQE 32766	/* max. # of completion queue elements */
 
 #define SMC_QP_MIN_RNR_TIMER		5
 #define SMC_QP_TIMEOUT			15 /* 4096 * 2 ** timeout usec */
@@ -64,7 +69,7 @@ static int smc_ib_modify_qp_rtr(struct smc_link *lnk)
 	qp_attr.path_mtu = min(lnk->path_mtu, lnk->peer_mtu);
 	qp_attr.ah_attr.type = RDMA_AH_ATTR_TYPE_ROCE;
 	rdma_ah_set_port_num(&qp_attr.ah_attr, lnk->ibport);
-	rdma_ah_set_grh(&qp_attr.ah_attr, NULL, 0, 0, 1, 0);
+	rdma_ah_set_grh(&qp_attr.ah_attr, NULL, 0, lnk->sgid_index, 1, 0);
 	rdma_ah_set_dgid_raw(&qp_attr.ah_attr, lnk->peer_gid);
 	memcpy(&qp_attr.ah_attr.roce.dmac, lnk->peer_mac,
 	       sizeof(lnk->peer_mac));
@@ -108,8 +113,7 @@ int smc_ib_modify_qp_reset(struct smc_link *lnk)
 
 int smc_ib_ready_link(struct smc_link *lnk)
 {
-	struct smc_link_group *lgr =
-		container_of(lnk, struct smc_link_group, lnk[0]);
+	struct smc_link_group *lgr = smc_get_lgr(lnk);
 	int rc = 0;
 
 	rc = smc_ib_modify_qp_init(lnk);
@@ -139,170 +143,22 @@ out:
 	return rc;
 }
 
-/* process context wrapper for might_sleep smc_ib_remember_port_attr */
-static void smc_ib_port_event_work(struct work_struct *work)
+static int smc_ib_fill_mac(struct smc_ib_device *smcibdev, u8 ibport)
 {
-	struct smc_ib_device *smcibdev = container_of(
-		work, struct smc_ib_device, port_event_work);
-	u8 port_idx;
-
-	for_each_set_bit(port_idx, &smcibdev->port_event_mask, SMC_MAX_PORTS) {
-		smc_ib_remember_port_attr(smcibdev, port_idx + 1);
-		clear_bit(port_idx, &smcibdev->port_event_mask);
-	}
-}
-
-/* can be called in IRQ context */
-static void smc_ib_global_event_handler(struct ib_event_handler *handler,
-					struct ib_event *ibevent)
-{
-	struct smc_ib_device *smcibdev;
-	u8 port_idx;
-
-	smcibdev = container_of(handler, struct smc_ib_device, event_handler);
-
-	switch (ibevent->event) {
-	case IB_EVENT_PORT_ERR:
-		port_idx = ibevent->element.port_num - 1;
-		set_bit(port_idx, &smcibdev->port_event_mask);
-		schedule_work(&smcibdev->port_event_work);
-		/* fall through */
-	case IB_EVENT_DEVICE_FATAL:
-		/* tbd in follow-on patch:
-		 * abnormal close of corresponding connections
-		 */
-		break;
-	case IB_EVENT_PORT_ACTIVE:
-		port_idx = ibevent->element.port_num - 1;
-		set_bit(port_idx, &smcibdev->port_event_mask);
-		schedule_work(&smcibdev->port_event_work);
-		break;
-	default:
-		break;
-	}
-}
-
-void smc_ib_dealloc_protection_domain(struct smc_link *lnk)
-{
-	ib_dealloc_pd(lnk->roce_pd);
-	lnk->roce_pd = NULL;
-}
-
-int smc_ib_create_protection_domain(struct smc_link *lnk)
-{
-	int rc;
-
-	lnk->roce_pd = ib_alloc_pd(lnk->smcibdev->ibdev,
-				   IB_PD_UNSAFE_GLOBAL_RKEY);
-	rc = PTR_ERR_OR_ZERO(lnk->roce_pd);
-	if (IS_ERR(lnk->roce_pd))
-		lnk->roce_pd = NULL;
-	return rc;
-}
-
-static void smc_ib_qp_event_handler(struct ib_event *ibevent, void *priv)
-{
-	switch (ibevent->event) {
-	case IB_EVENT_DEVICE_FATAL:
-	case IB_EVENT_GID_CHANGE:
-	case IB_EVENT_PORT_ERR:
-	case IB_EVENT_QP_ACCESS_ERR:
-		/* tbd in follow-on patch:
-		 * abnormal close of corresponding connections
-		 */
-		break;
-	default:
-		break;
-	}
-}
-
-void smc_ib_destroy_queue_pair(struct smc_link *lnk)
-{
-	ib_destroy_qp(lnk->roce_qp);
-	lnk->roce_qp = NULL;
-}
-
-/* create a queue pair within the protection domain for a link */
-int smc_ib_create_queue_pair(struct smc_link *lnk)
-{
-	struct ib_qp_init_attr qp_attr = {
-		.event_handler = smc_ib_qp_event_handler,
-		.qp_context = lnk,
-		.send_cq = lnk->smcibdev->roce_cq_send,
-		.recv_cq = lnk->smcibdev->roce_cq_recv,
-		.srq = NULL,
-		.cap = {
-			.max_send_wr = SMC_WR_BUF_CNT,
-				/* include unsolicited rdma_writes as well,
-				 * there are max. 2 RDMA_WRITE per 1 WR_SEND
-				 */
-			.max_recv_wr = SMC_WR_BUF_CNT * 3,
-			.max_send_sge = SMC_IB_MAX_SEND_SGE,
-			.max_recv_sge = 1,
-		},
-		.sq_sig_type = IB_SIGNAL_REQ_WR,
-		.qp_type = IB_QPT_RC,
-	};
-	int rc;
-
-	lnk->roce_qp = ib_create_qp(lnk->roce_pd, &qp_attr);
-	rc = PTR_ERR_OR_ZERO(lnk->roce_qp);
-	if (IS_ERR(lnk->roce_qp))
-		lnk->roce_qp = NULL;
-	else
-		smc_wr_remember_qp_attr(lnk);
-	return rc;
-}
-
-/* map a new TX or RX buffer to DMA */
-int smc_ib_buf_map(struct smc_ib_device *smcibdev, int buf_size,
-		   struct smc_buf_desc *buf_slot,
-		   enum dma_data_direction data_direction)
-{
+	const struct ib_gid_attr *attr;
 	int rc = 0;
 
-	if (buf_slot->dma_addr[SMC_SINGLE_LINK])
-		return rc; /* already mapped */
-	buf_slot->dma_addr[SMC_SINGLE_LINK] =
-		ib_dma_map_single(smcibdev->ibdev, buf_slot->cpu_addr,
-				  buf_size, data_direction);
-	if (ib_dma_mapping_error(smcibdev->ibdev,
-				 buf_slot->dma_addr[SMC_SINGLE_LINK]))
-		rc = -EIO;
-	return rc;
-}
+	attr = rdma_get_gid_attr(smcibdev->ibdev, ibport, 0);
+	if (IS_ERR(attr))
+		return -ENODEV;
 
-void smc_ib_buf_unmap(struct smc_ib_device *smcibdev, int buf_size,
-		      struct smc_buf_desc *buf_slot,
-		      enum dma_data_direction data_direction)
-{
-	if (!buf_slot->dma_addr[SMC_SINGLE_LINK])
-		return; /* already unmapped */
-	ib_dma_unmap_single(smcibdev->ibdev, *buf_slot->dma_addr, buf_size,
-			    data_direction);
-	buf_slot->dma_addr[SMC_SINGLE_LINK] = 0;
-}
+	if (attr->ndev)
+		memcpy(smcibdev->mac[ibport - 1], attr->ndev->dev_addr,
+		       ETH_ALEN);
+	else
+		rc = -ENODEV;
 
-static int smc_ib_fill_gid_and_mac(struct smc_ib_device *smcibdev, u8 ibport)
-{
-	struct net_device *ndev;
-	int rc;
-
-	rc = ib_query_gid(smcibdev->ibdev, ibport, 0,
-			  &smcibdev->gid[ibport - 1], NULL);
-	/* the SMC protocol requires specification of the roce MAC address;
-	 * if net_device cannot be determined, it can be derived from gid 0
-	 */
-	ndev = smcibdev->ibdev->get_netdev(smcibdev->ibdev, ibport);
-	if (ndev) {
-		memcpy(&smcibdev->mac, ndev->dev_addr, ETH_ALEN);
-	} else if (!rc) {
-		memcpy(&smcibdev->mac[ibport - 1][0],
-		       &smcibdev->gid[ibport - 1].raw[8], 3);
-		memcpy(&smcibdev->mac[ibport - 1][3],
-		       &smcibdev->gid[ibport - 1].raw[13], 3);
-		smcibdev->mac[ibport - 1][0] &= ~0x02;
-	}
+	rdma_put_gid_attr(attr);
 	return rc;
 }
 
@@ -324,7 +180,36 @@ bool smc_ib_port_active(struct smc_ib_device *smcibdev, u8 ibport)
 	return smcibdev->pattr[ibport - 1].state == IB_PORT_ACTIVE;
 }
 
-int smc_ib_remember_port_attr(struct smc_ib_device *smcibdev, u8 ibport)
+/* determine the gid for an ib-device port and vlan id */
+int smc_ib_determine_gid(struct smc_ib_device *smcibdev, u8 ibport,
+			 unsigned short vlan_id, u8 gid[], u8 *sgid_index)
+{
+	const struct ib_gid_attr *attr;
+	int i;
+
+	for (i = 0; i < smcibdev->pattr[ibport - 1].gid_tbl_len; i++) {
+		attr = rdma_get_gid_attr(smcibdev->ibdev, ibport, i);
+		if (IS_ERR(attr))
+			continue;
+
+		if (attr->ndev &&
+		    ((!vlan_id && !is_vlan_dev(attr->ndev)) ||
+		     (vlan_id && is_vlan_dev(attr->ndev) &&
+		      vlan_dev_vlan_id(attr->ndev) == vlan_id)) &&
+		    attr->gid_type == IB_GID_TYPE_ROCE) {
+			if (gid)
+				memcpy(gid, &attr->gid, SMC_GID_SIZE);
+			if (sgid_index)
+				*sgid_index = attr->index;
+			rdma_put_gid_attr(attr);
+			return 0;
+		}
+		rdma_put_gid_attr(attr);
+	}
+	return -ENODEV;
+}
+
+static int smc_ib_remember_port_attr(struct smc_ib_device *smcibdev, u8 ibport)
 {
 	int rc;
 
@@ -334,7 +219,8 @@ int smc_ib_remember_port_attr(struct smc_ib_device *smcibdev, u8 ibport)
 			   &smcibdev->pattr[ibport - 1]);
 	if (rc)
 		goto out;
-	rc = smc_ib_fill_gid_and_mac(smcibdev, ibport);
+	/* the SMC protocol requires specification of the RoCE MAC address */
+	rc = smc_ib_fill_mac(smcibdev, ibport);
 	if (rc)
 		goto out;
 	if (!strncmp(local_systemid, SMC_LOCAL_SYSTEMID_RESET,
@@ -346,12 +232,245 @@ out:
 	return rc;
 }
 
+/* process context wrapper for might_sleep smc_ib_remember_port_attr */
+static void smc_ib_port_event_work(struct work_struct *work)
+{
+	struct smc_ib_device *smcibdev = container_of(
+		work, struct smc_ib_device, port_event_work);
+	u8 port_idx;
+
+	for_each_set_bit(port_idx, &smcibdev->port_event_mask, SMC_MAX_PORTS) {
+		smc_ib_remember_port_attr(smcibdev, port_idx + 1);
+		clear_bit(port_idx, &smcibdev->port_event_mask);
+		if (!smc_ib_port_active(smcibdev, port_idx + 1))
+			smc_port_terminate(smcibdev, port_idx + 1);
+	}
+}
+
+/* can be called in IRQ context */
+static void smc_ib_global_event_handler(struct ib_event_handler *handler,
+					struct ib_event *ibevent)
+{
+	struct smc_ib_device *smcibdev;
+	u8 port_idx;
+
+	smcibdev = container_of(handler, struct smc_ib_device, event_handler);
+
+	switch (ibevent->event) {
+	case IB_EVENT_PORT_ERR:
+	case IB_EVENT_DEVICE_FATAL:
+	case IB_EVENT_PORT_ACTIVE:
+		port_idx = ibevent->element.port_num - 1;
+		set_bit(port_idx, &smcibdev->port_event_mask);
+		schedule_work(&smcibdev->port_event_work);
+		break;
+	default:
+		break;
+	}
+}
+
+void smc_ib_dealloc_protection_domain(struct smc_link *lnk)
+{
+	if (lnk->roce_pd)
+		ib_dealloc_pd(lnk->roce_pd);
+	lnk->roce_pd = NULL;
+}
+
+int smc_ib_create_protection_domain(struct smc_link *lnk)
+{
+	int rc;
+
+	lnk->roce_pd = ib_alloc_pd(lnk->smcibdev->ibdev, 0);
+	rc = PTR_ERR_OR_ZERO(lnk->roce_pd);
+	if (IS_ERR(lnk->roce_pd))
+		lnk->roce_pd = NULL;
+	return rc;
+}
+
+static void smc_ib_qp_event_handler(struct ib_event *ibevent, void *priv)
+{
+	struct smc_ib_device *smcibdev =
+		(struct smc_ib_device *)ibevent->device;
+	u8 port_idx;
+
+	switch (ibevent->event) {
+	case IB_EVENT_DEVICE_FATAL:
+	case IB_EVENT_GID_CHANGE:
+	case IB_EVENT_PORT_ERR:
+	case IB_EVENT_QP_ACCESS_ERR:
+		port_idx = ibevent->element.port_num - 1;
+		set_bit(port_idx, &smcibdev->port_event_mask);
+		schedule_work(&smcibdev->port_event_work);
+		break;
+	default:
+		break;
+	}
+}
+
+void smc_ib_destroy_queue_pair(struct smc_link *lnk)
+{
+	if (lnk->roce_qp)
+		ib_destroy_qp(lnk->roce_qp);
+	lnk->roce_qp = NULL;
+}
+
+/* create a queue pair within the protection domain for a link */
+int smc_ib_create_queue_pair(struct smc_link *lnk)
+{
+	struct ib_qp_init_attr qp_attr = {
+		.event_handler = smc_ib_qp_event_handler,
+		.qp_context = lnk,
+		.send_cq = lnk->smcibdev->roce_cq_send,
+		.recv_cq = lnk->smcibdev->roce_cq_recv,
+		.srq = NULL,
+		.cap = {
+				/* include unsolicited rdma_writes as well,
+				 * there are max. 2 RDMA_WRITE per 1 WR_SEND
+				 */
+			.max_send_wr = SMC_WR_BUF_CNT * 3,
+			.max_recv_wr = SMC_WR_BUF_CNT * 3,
+			.max_send_sge = SMC_IB_MAX_SEND_SGE,
+			.max_recv_sge = 1,
+		},
+		.sq_sig_type = IB_SIGNAL_REQ_WR,
+		.qp_type = IB_QPT_RC,
+	};
+	int rc;
+
+	lnk->roce_qp = ib_create_qp(lnk->roce_pd, &qp_attr);
+	rc = PTR_ERR_OR_ZERO(lnk->roce_qp);
+	if (IS_ERR(lnk->roce_qp))
+		lnk->roce_qp = NULL;
+	else
+		smc_wr_remember_qp_attr(lnk);
+	return rc;
+}
+
+void smc_ib_put_memory_region(struct ib_mr *mr)
+{
+	ib_dereg_mr(mr);
+}
+
+static int smc_ib_map_mr_sg(struct smc_buf_desc *buf_slot)
+{
+	unsigned int offset = 0;
+	int sg_num;
+
+	/* map the largest prefix of a dma mapped SG list */
+	sg_num = ib_map_mr_sg(buf_slot->mr_rx[SMC_SINGLE_LINK],
+			      buf_slot->sgt[SMC_SINGLE_LINK].sgl,
+			      buf_slot->sgt[SMC_SINGLE_LINK].orig_nents,
+			      &offset, PAGE_SIZE);
+
+	return sg_num;
+}
+
+/* Allocate a memory region and map the dma mapped SG list of buf_slot */
+int smc_ib_get_memory_region(struct ib_pd *pd, int access_flags,
+			     struct smc_buf_desc *buf_slot)
+{
+	if (buf_slot->mr_rx[SMC_SINGLE_LINK])
+		return 0; /* already done */
+
+	buf_slot->mr_rx[SMC_SINGLE_LINK] =
+		ib_alloc_mr(pd, IB_MR_TYPE_MEM_REG, 1 << buf_slot->order);
+	if (IS_ERR(buf_slot->mr_rx[SMC_SINGLE_LINK])) {
+		int rc;
+
+		rc = PTR_ERR(buf_slot->mr_rx[SMC_SINGLE_LINK]);
+		buf_slot->mr_rx[SMC_SINGLE_LINK] = NULL;
+		return rc;
+	}
+
+	if (smc_ib_map_mr_sg(buf_slot) != 1)
+		return -EINVAL;
+
+	return 0;
+}
+
+/* synchronize buffer usage for cpu access */
+void smc_ib_sync_sg_for_cpu(struct smc_ib_device *smcibdev,
+			    struct smc_buf_desc *buf_slot,
+			    enum dma_data_direction data_direction)
+{
+	struct scatterlist *sg;
+	unsigned int i;
+
+	/* for now there is just one DMA address */
+	for_each_sg(buf_slot->sgt[SMC_SINGLE_LINK].sgl, sg,
+		    buf_slot->sgt[SMC_SINGLE_LINK].nents, i) {
+		if (!sg_dma_len(sg))
+			break;
+		ib_dma_sync_single_for_cpu(smcibdev->ibdev,
+					   sg_dma_address(sg),
+					   sg_dma_len(sg),
+					   data_direction);
+	}
+}
+
+/* synchronize buffer usage for device access */
+void smc_ib_sync_sg_for_device(struct smc_ib_device *smcibdev,
+			       struct smc_buf_desc *buf_slot,
+			       enum dma_data_direction data_direction)
+{
+	struct scatterlist *sg;
+	unsigned int i;
+
+	/* for now there is just one DMA address */
+	for_each_sg(buf_slot->sgt[SMC_SINGLE_LINK].sgl, sg,
+		    buf_slot->sgt[SMC_SINGLE_LINK].nents, i) {
+		if (!sg_dma_len(sg))
+			break;
+		ib_dma_sync_single_for_device(smcibdev->ibdev,
+					      sg_dma_address(sg),
+					      sg_dma_len(sg),
+					      data_direction);
+	}
+}
+
+/* Map a new TX or RX buffer SG-table to DMA */
+int smc_ib_buf_map_sg(struct smc_ib_device *smcibdev,
+		      struct smc_buf_desc *buf_slot,
+		      enum dma_data_direction data_direction)
+{
+	int mapped_nents;
+
+	mapped_nents = ib_dma_map_sg(smcibdev->ibdev,
+				     buf_slot->sgt[SMC_SINGLE_LINK].sgl,
+				     buf_slot->sgt[SMC_SINGLE_LINK].orig_nents,
+				     data_direction);
+	if (!mapped_nents)
+		return -ENOMEM;
+
+	return mapped_nents;
+}
+
+void smc_ib_buf_unmap_sg(struct smc_ib_device *smcibdev,
+			 struct smc_buf_desc *buf_slot,
+			 enum dma_data_direction data_direction)
+{
+	if (!buf_slot->sgt[SMC_SINGLE_LINK].sgl->dma_address)
+		return; /* already unmapped */
+
+	ib_dma_unmap_sg(smcibdev->ibdev,
+			buf_slot->sgt[SMC_SINGLE_LINK].sgl,
+			buf_slot->sgt[SMC_SINGLE_LINK].orig_nents,
+			data_direction);
+	buf_slot->sgt[SMC_SINGLE_LINK].sgl->dma_address = 0;
+}
+
 long smc_ib_setup_per_ibdev(struct smc_ib_device *smcibdev)
 {
 	struct ib_cq_init_attr cqattr =	{
-		.cqe = SMC_WR_MAX_CQE, .comp_vector = 0 };
+		.cqe = SMC_MAX_CQE, .comp_vector = 0 };
+	int cqe_size_order, smc_order;
 	long rc;
 
+	/* the calculated number of cq entries fits to mlx5 cq allocation */
+	cqe_size_order = cache_line_size() == 128 ? 7 : 6;
+	smc_order = MAX_ORDER - cqe_size_order - 1;
+	if (SMC_MAX_CQE + 2 > (0x00000001 << smc_order) * PAGE_SIZE)
+		cqattr.cqe = (0x00000001 << smc_order) * PAGE_SIZE - 2;
 	smcibdev->roce_cq_send = ib_create_cq(smcibdev->ibdev,
 					      smc_wr_tx_cq_handler, NULL,
 					      smcibdev, &cqattr);
@@ -368,9 +487,6 @@ long smc_ib_setup_per_ibdev(struct smc_ib_device *smcibdev)
 		smcibdev->roce_cq_recv = NULL;
 		goto err;
 	}
-	INIT_IB_EVENT_HANDLER(&smcibdev->event_handler, smcibdev->ibdev,
-			      smc_ib_global_event_handler);
-	ib_register_event_handler(&smcibdev->event_handler);
 	smc_wr_add_dev(smcibdev);
 	smcibdev->initialized = 1;
 	return rc;
@@ -384,8 +500,8 @@ static void smc_ib_cleanup_per_ibdev(struct smc_ib_device *smcibdev)
 {
 	if (!smcibdev->initialized)
 		return;
+	smcibdev->initialized = 0;
 	smc_wr_remove_dev(smcibdev);
-	ib_unregister_event_handler(&smcibdev->event_handler);
 	ib_destroy_cq(smcibdev->roce_cq_recv);
 	ib_destroy_cq(smcibdev->roce_cq_send);
 }
@@ -396,6 +512,8 @@ static struct ib_client smc_ib_client;
 static void smc_ib_add_dev(struct ib_device *ibdev)
 {
 	struct smc_ib_device *smcibdev;
+	u8 port_cnt;
+	int i;
 
 	if (ibdev->node_type != RDMA_NODE_IB_CA)
 		return;
@@ -411,6 +529,21 @@ static void smc_ib_add_dev(struct ib_device *ibdev)
 	list_add_tail(&smcibdev->list, &smc_ib_devices.list);
 	spin_unlock(&smc_ib_devices.lock);
 	ib_set_client_data(ibdev, &smc_ib_client, smcibdev);
+	INIT_IB_EVENT_HANDLER(&smcibdev->event_handler, smcibdev->ibdev,
+			      smc_ib_global_event_handler);
+	ib_register_event_handler(&smcibdev->event_handler);
+
+	/* trigger reading of the port attributes */
+	port_cnt = smcibdev->ibdev->phys_port_cnt;
+	for (i = 0;
+	     i < min_t(size_t, port_cnt, SMC_MAX_PORTS);
+	     i++) {
+		set_bit(i, &smcibdev->port_event_mask);
+		/* determine pnetids of the port */
+		smc_pnetid_by_dev_port(ibdev->dev.parent, i,
+				       smcibdev->pnetid[i]);
+	}
+	schedule_work(&smcibdev->port_event_work);
 }
 
 /* callback function for ib_register_client() */
@@ -425,6 +558,7 @@ static void smc_ib_remove_dev(struct ib_device *ibdev, void *client_data)
 	spin_unlock(&smc_ib_devices.lock);
 	smc_pnet_remove_by_ibdev(smcibdev);
 	smc_ib_cleanup_per_ibdev(smcibdev);
+	ib_unregister_event_handler(&smcibdev->event_handler);
 	kfree(smcibdev);
 }
 

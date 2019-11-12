@@ -1,15 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0
 /******************************************************************************
  *
  * Copyright(c) 2007 - 2011 Realtek Corporation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of version 2 of the GNU General Public License as
- * published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
- * more details.
  *
  ******************************************************************************/
 #define _RTL8723B_PHYCFG_C_
@@ -153,7 +145,7 @@ static u32 phy_RFSerialRead_8723B(
 	NewOffset = Offset;
 
 	if (eRFPath == RF_PATH_A) {
-		tmplong2 = PHY_QueryBBReg(Adapter, rFPGA0_XA_HSSIParameter2|MaskforPhySet, bMaskDWord);;
+		tmplong2 = PHY_QueryBBReg(Adapter, rFPGA0_XA_HSSIParameter2|MaskforPhySet, bMaskDWord);
 		tmplong2 = (tmplong2 & (~bLSSIReadAddress)) | (NewOffset<<23) | bLSSIReadEdge;	/* T65 RF */
 		PHY_SetBBReg(Adapter, rFPGA0_XA_HSSIParameter2|MaskforPhySet, bMaskDWord, tmplong2&(~bLSSIReadEdge));
 	} else {
@@ -385,8 +377,7 @@ s32 PHY_MACConfig8723B(struct adapter *Adapter)
 	/*  Config MAC */
 	/*  */
 	rtStatus = phy_ConfigMACWithParaFile(Adapter, pszMACRegFile);
-	if (rtStatus == _FAIL)
-	{
+	if (rtStatus == _FAIL) {
 		ODM_ConfigMACWithHeaderFile(&pHalData->odmpriv);
 		rtStatus = _SUCCESS;
 	}
@@ -459,8 +450,7 @@ static int phy_BB8723b_Config_ParaFile(struct adapter *Adapter)
 		Adapter->registrypriv.RegEnableTxPowerLimit == 1 ||
 		(Adapter->registrypriv.RegEnableTxPowerLimit == 2 && pHalData->EEPROMRegulatory == 1)
 	) {
-		if (PHY_ConfigRFWithPowerLimitTableParaFile(Adapter, pszRFTxPwrLmtFile) == _FAIL)
-		{
+		if (PHY_ConfigRFWithPowerLimitTableParaFile(Adapter, pszRFTxPwrLmtFile) == _FAIL) {
 			if (HAL_STATUS_SUCCESS != ODM_ConfigRFWithHeaderFile(&pHalData->odmpriv, CONFIG_RF_TXPWR_LMT, (ODM_RF_RADIO_PATH_E)0))
 				rtStatus = _FAIL;
 		}
@@ -474,8 +464,8 @@ static int phy_BB8723b_Config_ParaFile(struct adapter *Adapter)
 	/*  */
 	/*  1. Read PHY_REG.TXT BB INIT!! */
 	/*  */
-	if (phy_ConfigBBWithParaFile(Adapter, pszBBRegFile, CONFIG_BB_PHY_REG) == _FAIL)
-	{
+	if (phy_ConfigBBWithParaFile(Adapter, pszBBRegFile, CONFIG_BB_PHY_REG) ==
+		_FAIL) {
 		if (HAL_STATUS_SUCCESS != ODM_ConfigBBWithHeaderFile(&pHalData->odmpriv, CONFIG_BB_PHY_REG))
 			rtStatus = _FAIL;
 	}
@@ -491,8 +481,8 @@ static int phy_BB8723b_Config_ParaFile(struct adapter *Adapter)
 		Adapter->registrypriv.RegEnableTxPowerByRate == 1 ||
 		(Adapter->registrypriv.RegEnableTxPowerByRate == 2 && pHalData->EEPROMRegulatory != 2)
 	) {
-		if (phy_ConfigBBWithPgParaFile(Adapter, pszBBRegPgFile) == _FAIL)
-		{
+		if (phy_ConfigBBWithPgParaFile(Adapter, pszBBRegPgFile) ==
+			_FAIL) {
 			if (HAL_STATUS_SUCCESS != ODM_ConfigBBWithHeaderFile(&pHalData->odmpriv, CONFIG_BB_PHY_REG_PG))
 				rtStatus = _FAIL;
 		}
@@ -514,8 +504,8 @@ static int phy_BB8723b_Config_ParaFile(struct adapter *Adapter)
 	/*  */
 	/*  2. Read BB AGC table Initialization */
 	/*  */
-	if (phy_ConfigBBWithParaFile(Adapter, pszAGCTableFile, CONFIG_BB_AGC_TAB) == _FAIL)
-	{
+	if (phy_ConfigBBWithParaFile(Adapter, pszAGCTableFile,
+				     CONFIG_BB_AGC_TAB) == _FAIL) {
 		if (HAL_STATUS_SUCCESS != ODM_ConfigBBWithHeaderFile(&pHalData->odmpriv, CONFIG_BB_AGC_TAB))
 			rtStatus = _FAIL;
 	}
@@ -698,7 +688,7 @@ u8 PHY_GetTxPowerIndex_8723B(
 	txPower = (s8) PHY_GetTxPowerIndexBase(padapter, RFPath, Rate, BandWidth, Channel, &bIn24G);
 	powerDiffByRate = PHY_GetTxPowerByRate(padapter, BAND_ON_2_4G, ODM_RF_PATH_A, RF_1TX, Rate);
 
-	limit = PHY_GetTxPowerLimit(
+	limit = phy_get_tx_pwr_lmt(
 		padapter,
 		padapter->registrypriv.RegPwrTblSel,
 		(u8)(!bIn24G),

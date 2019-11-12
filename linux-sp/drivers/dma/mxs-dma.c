@@ -1,12 +1,8 @@
-/*
- * Copyright 2011 Freescale Semiconductor, Inc. All Rights Reserved.
- *
- * Refer to drivers/dma/imx-sdma.c
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- */
+// SPDX-License-Identifier: GPL-2.0
+//
+// Copyright 2011 Freescale Semiconductor, Inc. All Rights Reserved.
+//
+// Refer to drivers/dma/imx-sdma.c
 
 #include <linux/init.h>
 #include <linux/types.h>
@@ -617,7 +613,7 @@ static struct dma_async_tx_descriptor *mxs_dma_prep_dma_cyclic(
 
 	if (period_len > MAX_XFER_BYTES) {
 		dev_err(mxs_dma->dma_device.dev,
-				"maximum period size exceeded: %d > %d\n",
+				"maximum period size exceeded: %zu > %d\n",
 				period_len, MAX_XFER_BYTES);
 		goto err_out;
 	}

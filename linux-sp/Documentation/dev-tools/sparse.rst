@@ -67,7 +67,7 @@ __releases - The specified lock is held on function entry, but not exit.
 
 If the function enters and exits without the lock held, acquiring and
 releasing the lock inside the function in a balanced way, no
-annotation is needed.  The tree annotations above are for cases where
+annotation is needed.  The three annotations above are for cases where
 sparse would otherwise report a context imbalance.
 
 Getting sparse
@@ -103,9 +103,3 @@ have already built it.
 
 The optional make variable CF can be used to pass arguments to sparse.  The
 build system passes -Wbitwise to sparse automatically.
-
-Checking RCU annotations
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-RCU annotations are not checked by default.  To enable RCU annotation
-checks, include -DCONFIG_SPARSE_RCU_POINTER in your CF flags.

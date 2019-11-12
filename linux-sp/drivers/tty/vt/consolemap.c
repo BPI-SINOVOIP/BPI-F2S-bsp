@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * consolemap.c
  *
@@ -230,7 +231,7 @@ static void set_inverse_trans_unicode(struct vc_data *conp,
 	q = p->inverse_trans_unicode;
 	if (!q) {
 		q = p->inverse_trans_unicode =
-			kmalloc(MAX_GLYPH * sizeof(u16), GFP_KERNEL);
+			kmalloc_array(MAX_GLYPH, sizeof(u16), GFP_KERNEL);
 		if (!q)
 			return;
 	}
@@ -322,15 +323,13 @@ int con_set_trans_old(unsigned char __user * arg)
 {
 	int i;
 	unsigned short inbuf[E_TABSZ];
+	unsigned char ubuf[E_TABSZ];
 
-	if (!access_ok(VERIFY_READ, arg, E_TABSZ))
+	if (copy_from_user(ubuf, arg, E_TABSZ))
 		return -EFAULT;
 
-	for (i = 0; i < E_TABSZ ; i++) {
-		unsigned char uc;
-		__get_user(uc, arg+i);
-		inbuf[i] = UNI_DIRECT_BASE | uc;
-	}
+	for (i = 0; i < E_TABSZ ; i++)
+		inbuf[i] = UNI_DIRECT_BASE | ubuf[i];
 
 	console_lock();
 	memcpy(translations[USER_MAP], inbuf, sizeof(inbuf));
@@ -345,9 +344,6 @@ int con_get_trans_old(unsigned char __user * arg)
 	unsigned short *p = translations[USER_MAP];
 	unsigned char outbuf[E_TABSZ];
 
-	if (!access_ok(VERIFY_WRITE, arg, E_TABSZ))
-		return -EFAULT;
-
 	console_lock();
 	for (i = 0; i < E_TABSZ ; i++)
 	{
@@ -356,21 +352,15 @@ int con_get_trans_old(unsigned char __user * arg)
 	}
 	console_unlock();
 
-	for (i = 0; i < E_TABSZ ; i++)
-		__put_user(outbuf[i], arg+i);
-	return 0;
+	return copy_to_user(arg, outbuf, sizeof(outbuf)) ? -EFAULT : 0;
 }
 
 int con_set_trans_new(ushort __user * arg)
 {
-	int i;
 	unsigned short inbuf[E_TABSZ];
 
-	if (!access_ok(VERIFY_READ, arg, E_TABSZ*sizeof(unsigned short)))
+	if (copy_from_user(inbuf, arg, sizeof(inbuf)))
 		return -EFAULT;
-
-	for (i = 0; i < E_TABSZ ; i++)
-		__get_user(inbuf[i], arg+i);
 
 	console_lock();
 	memcpy(translations[USER_MAP], inbuf, sizeof(inbuf));
@@ -381,19 +371,13 @@ int con_set_trans_new(ushort __user * arg)
 
 int con_get_trans_new(ushort __user * arg)
 {
-	int i;
 	unsigned short outbuf[E_TABSZ];
-
-	if (!access_ok(VERIFY_WRITE, arg, E_TABSZ*sizeof(unsigned short)))
-		return -EFAULT;
 
 	console_lock();
 	memcpy(outbuf, translations[USER_MAP], sizeof(outbuf));
 	console_unlock();
 
-	for (i = 0; i < E_TABSZ ; i++)
-		__put_user(outbuf[i], arg+i);
-	return 0;
+	return copy_to_user(arg, outbuf, sizeof(outbuf)) ? -EFAULT : 0;
 }
 
 /*
@@ -495,7 +479,8 @@ con_insert_unipair(struct uni_pagedir *p, u_short unicode, u_short fontpos)
 
 	p1 = p->uni_pgdir[n = unicode >> 11];
 	if (!p1) {
-		p1 = p->uni_pgdir[n] = kmalloc(32*sizeof(u16 *), GFP_KERNEL);
+		p1 = p->uni_pgdir[n] = kmalloc_array(32, sizeof(u16 *),
+						     GFP_KERNEL);
 		if (!p1) return -ENOMEM;
 		for (i = 0; i < 32; i++)
 			p1[i] = NULL;
@@ -503,7 +488,7 @@ con_insert_unipair(struct uni_pagedir *p, u_short unicode, u_short fontpos)
 
 	p2 = p1[n = (unicode >> 6) & 0x1f];
 	if (!p2) {
-		p2 = p1[n] = kmalloc(64*sizeof(u16), GFP_KERNEL);
+		p2 = p1[n] = kmalloc_array(64, sizeof(u16), GFP_KERNEL);
 		if (!p2) return -ENOMEM;
 		memset(p2, 0xff, 64*sizeof(u16)); /* No glyphs for the characters (yet) */
 	}
@@ -557,14 +542,9 @@ int con_set_unimap(struct vc_data *vc, ushort ct, struct unipair __user *list)
 	if (!ct)
 		return 0;
 
-	unilist = kmalloc_array(ct, sizeof(struct unipair), GFP_KERNEL);
-	if (!unilist)
-		return -ENOMEM;
-
-	for (i = ct, plist = unilist; i; i--, plist++, list++) {
-		__get_user(plist->unicode, &list->unicode);
-		__get_user(plist->fontpos, &list->fontpos);
-	}
+	unilist = memdup_user(list, ct * sizeof(struct unipair));
+	if (IS_ERR(unilist))
+		return PTR_ERR(unilist);
 
 	console_lock();
 
@@ -757,11 +737,11 @@ EXPORT_SYMBOL(con_copy_unimap);
  */
 int con_get_unimap(struct vc_data *vc, ushort ct, ushort __user *uct, struct unipair __user *list)
 {
-	int i, j, k;
+	int i, j, k, ret = 0;
 	ushort ect;
 	u16 **p1, *p2;
 	struct uni_pagedir *p;
-	struct unipair *unilist, *plist;
+	struct unipair *unilist;
 
 	unilist = kmalloc_array(ct, sizeof(struct unipair), GFP_KERNEL);
 	if (!unilist)
@@ -792,13 +772,11 @@ int con_get_unimap(struct vc_data *vc, ushort ct, ushort __user *uct, struct uni
 		}
 	}
 	console_unlock();
-	for (i = min(ect, ct), plist = unilist; i; i--, list++, plist++) {
-		__put_user(plist->unicode, &list->unicode);
-		__put_user(plist->fontpos, &list->fontpos);
-	}
-	__put_user(ect, uct);
+	if (copy_to_user(list, unilist, min(ect, ct) * sizeof(struct unipair)))
+		ret = -EFAULT;
+	put_user(ect, uct);
 	kfree(unilist);
-	return ((ect <= ct) ? 0 : -ENOMEM);
+	return ret ? ret : (ect <= ct) ? 0 : -ENOMEM;
 }
 
 /*

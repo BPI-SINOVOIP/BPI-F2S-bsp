@@ -71,7 +71,7 @@ struct pstore_record {
 	struct pstore_info	*psi;
 	enum pstore_type_id	type;
 	u64			id;
-	struct timespec		time;
+	struct timespec64	time;
 	char			*buf;
 	ssize_t			size;
 	ssize_t			ecc_notice_size;
@@ -90,7 +90,10 @@ struct pstore_record {
  *
  * @buf_lock:	spinlock to serialize access to @buf
  * @buf:	preallocated crash dump buffer
- * @bufsize:	size of @buf available for crash dump writes
+ * @bufsize:	size of @buf available for crash dump bytes (must match
+ *		smallest number of bytes available for writing to a
+ *		backend entry, since compressed bytes don't take kindly
+ *		to being truncated)
  *
  * @read_mutex:	serializes @open, @read, @close, and @erase callbacks
  * @flags:	bitfield of frontends the backend can accept writes for
@@ -138,7 +141,10 @@ struct pstore_record {
  *		memory allocation may be broken during an Oops. Regardless,
  *		@buf must be proccesed or copied before returning. The
  *		backend is also expected to write @id with something that
- 8		can help identify this record to a future @erase callback.
+ *		can help identify this record to a future @erase callback.
+ *		The @time field will be prepopulated with the current time,
+ *		when available. The @size field will have the size of data
+ *		in @buf.
  *
  *	Returns 0 on success, and non-zero on error.
  *

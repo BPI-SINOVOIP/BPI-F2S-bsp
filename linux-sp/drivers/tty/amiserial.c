@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Serial driver for the amiga builtin port.
  *
@@ -570,18 +571,6 @@ static int startup(struct tty_struct *tty, struct serial_state *info)
 	info->xmit.head = info->xmit.tail = 0;
 
 	/*
-	 * Set up the tty->alt_speed kludge
-	 */
-	if ((port->flags & ASYNC_SPD_MASK) == ASYNC_SPD_HI)
-		tty->alt_speed = 57600;
-	if ((port->flags & ASYNC_SPD_MASK) == ASYNC_SPD_VHI)
-		tty->alt_speed = 115200;
-	if ((port->flags & ASYNC_SPD_MASK) == ASYNC_SPD_SHI)
-		tty->alt_speed = 230400;
-	if ((port->flags & ASYNC_SPD_MASK) == ASYNC_SPD_WARP)
-		tty->alt_speed = 460800;
-
-	/*
 	 * and set the speed of the serial port
 	 */
 	change_speed(tty, info, NULL);
@@ -1084,14 +1073,9 @@ static int set_serial_info(struct tty_struct *tty, struct serial_state *state,
 check_and_exit:
 	if (tty_port_initialized(port)) {
 		if (change_spd) {
-			if ((port->flags & ASYNC_SPD_MASK) == ASYNC_SPD_HI)
-				tty->alt_speed = 57600;
-			if ((port->flags & ASYNC_SPD_MASK) == ASYNC_SPD_VHI)
-				tty->alt_speed = 115200;
-			if ((port->flags & ASYNC_SPD_MASK) == ASYNC_SPD_SHI)
-				tty->alt_speed = 230400;
-			if ((port->flags & ASYNC_SPD_MASK) == ASYNC_SPD_WARP)
-				tty->alt_speed = 460800;
+			/* warn about deprecation unless clearing */
+			if (new_serial.flags & ASYNC_SPD_MASK)
+				dev_warn_ratelimited(tty->dev, "use of SPD flags is deprecated\n");
 			change_speed(tty, state, NULL);
 		}
 	} else
@@ -1582,19 +1566,6 @@ static int rs_proc_show(struct seq_file *m, void *v)
 	return 0;
 }
 
-static int rs_proc_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, rs_proc_show, NULL);
-}
-
-static const struct file_operations rs_proc_fops = {
-	.owner		= THIS_MODULE,
-	.open		= rs_proc_open,
-	.read		= seq_read,
-	.llseek		= seq_lseek,
-	.release	= single_release,
-};
-
 /*
  * ---------------------------------------------------------------------
  * rs_init() and friends
@@ -1636,7 +1607,7 @@ static const struct tty_operations serial_ops = {
 	.tiocmget = rs_tiocmget,
 	.tiocmset = rs_tiocmset,
 	.get_icount = rs_get_icount,
-	.proc_fops = &rs_proc_fops,
+	.proc_show = rs_proc_show,
 };
 
 static int amiga_carrier_raised(struct tty_port *port)

@@ -8,6 +8,7 @@
  * published by the Free Software Foundation.
  */
 
+#include <linux/cpufeature.h>
 #include <linux/crc32.h>
 #include <linux/init.h>
 #include <linux/kernel.h>
@@ -187,6 +188,7 @@ static struct shash_alg crc32_pmull_algs[] = { {
 	.base.cra_name		= "crc32",
 	.base.cra_driver_name	= "crc32-arm-ce",
 	.base.cra_priority	= 200,
+	.base.cra_flags		= CRYPTO_ALG_OPTIONAL_KEY,
 	.base.cra_blocksize	= 1,
 	.base.cra_module	= THIS_MODULE,
 }, {
@@ -202,6 +204,7 @@ static struct shash_alg crc32_pmull_algs[] = { {
 	.base.cra_name		= "crc32c",
 	.base.cra_driver_name	= "crc32c-arm-ce",
 	.base.cra_priority	= 200,
+	.base.cra_flags		= CRYPTO_ALG_OPTIONAL_KEY,
 	.base.cra_blocksize	= 1,
 	.base.cra_module	= THIS_MODULE,
 } };
@@ -232,6 +235,11 @@ static void __exit crc32_pmull_mod_exit(void)
 	crypto_unregister_shashes(crc32_pmull_algs,
 				  ARRAY_SIZE(crc32_pmull_algs));
 }
+
+static const struct cpu_feature crc32_cpu_feature[] = {
+	{ cpu_feature(CRC32) }, { cpu_feature(PMULL) }, { }
+};
+MODULE_DEVICE_TABLE(cpu, crc32_cpu_feature);
 
 module_init(crc32_pmull_mod_init);
 module_exit(crc32_pmull_mod_exit);

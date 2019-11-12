@@ -1,16 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * RTL8188EU monitor interface
  *
  * Copyright (C) 2015 Jakub Sitnicki
- *
- * This program is free software; you can redistribute it and/or modify it under
- * the terms of the GNU General Public License version 2 as published by the
- * Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
- * FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
- * details.
  */
 
 #include <linux/ieee80211.h>
@@ -53,7 +45,7 @@ static void mon_recv_decrypted(struct net_device *dev, const u8 *data,
 	skb = netdev_alloc_skb(dev, data_len);
 	if (!skb)
 		return;
-	memcpy(skb_put(skb, data_len), data, data_len);
+	skb_put_data(skb, data, data_len);
 
 	/*
 	 * Frame data is not encrypted. Strip off protection so

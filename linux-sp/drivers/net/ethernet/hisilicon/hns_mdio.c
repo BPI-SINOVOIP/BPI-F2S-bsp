@@ -261,7 +261,7 @@ static int hns_mdio_write(struct mii_bus *bus,
 
 		/* config the data needed writing */
 		cmd_reg_cfg = devad;
-		op = MDIO_C45_WRITE_ADDR;
+		op = MDIO_C45_WRITE_DATA;
 	}
 
 	MDIO_SET_REG_FIELD(mdio_dev, MDIO_WDATA_REG, MDIO_WDATA_DATA_M,
@@ -321,7 +321,7 @@ static int hns_mdio_read(struct mii_bus *bus, int phy_id, int regnum)
 		}
 
 		hns_mdio_cmd_write(mdio_dev, is_c45,
-				   MDIO_C45_WRITE_ADDR, phy_id, devad);
+				   MDIO_C45_READ, phy_id, devad);
 	}
 
 	/* Step 5: waitting for MDIO_COMMAND_REG 's mdio_start==0,*/

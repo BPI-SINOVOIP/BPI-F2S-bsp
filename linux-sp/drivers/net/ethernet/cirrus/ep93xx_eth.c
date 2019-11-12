@@ -332,7 +332,7 @@ static int ep93xx_poll(struct napi_struct *napi, int budget)
 	return rx;
 }
 
-static int ep93xx_xmit(struct sk_buff *skb, struct net_device *dev)
+static netdev_tx_t ep93xx_xmit(struct sk_buff *skb, struct net_device *dev)
 {
 	struct ep93xx_priv *ep = netdev_priv(dev);
 	struct ep93xx_tdesc *txd;
@@ -702,7 +702,10 @@ static int ep93xx_get_link_ksettings(struct net_device *dev,
 				     struct ethtool_link_ksettings *cmd)
 {
 	struct ep93xx_priv *ep = netdev_priv(dev);
-	return mii_ethtool_get_link_ksettings(&ep->mii, cmd);
+
+	mii_ethtool_get_link_ksettings(&ep->mii, cmd);
+
+	return 0;
 }
 
 static int ep93xx_set_link_ksettings(struct net_device *dev,

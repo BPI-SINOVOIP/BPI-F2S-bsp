@@ -152,7 +152,7 @@ static int ge_b850v3_lvds_get_modes(struct drm_connector *connector)
 	ge_b850v3_lvds_ptr->edid = (struct edid *)stdp2690_get_edid(client);
 
 	if (ge_b850v3_lvds_ptr->edid) {
-		drm_mode_connector_update_edid_property(connector,
+		drm_connector_update_edid_property(connector,
 						      ge_b850v3_lvds_ptr->edid);
 		num_modes = drm_add_edid_modes(connector,
 					       ge_b850v3_lvds_ptr->edid);
@@ -193,7 +193,6 @@ static enum drm_connector_status ge_b850v3_lvds_detect(
 }
 
 static const struct drm_connector_funcs ge_b850v3_lvds_connector_funcs = {
-	.dpms = drm_atomic_helper_connector_dpms,
 	.fill_modes = drm_helper_probe_single_connector_modes,
 	.detect = ge_b850v3_lvds_detect,
 	.destroy = drm_connector_cleanup,
@@ -242,7 +241,7 @@ static int ge_b850v3_lvds_attach(struct drm_bridge *bridge)
 		return ret;
 	}
 
-	ret = drm_mode_connector_attach_encoder(connector, bridge->encoder);
+	ret = drm_connector_attach_encoder(connector, bridge->encoder);
 	if (ret)
 		return ret;
 

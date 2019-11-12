@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 #ifndef __NET_ACT_API_H
 #define __NET_ACT_API_H
 
@@ -5,17 +6,15 @@
  * Public action API for classifiers/qdiscs
 */
 
+#include <linux/refcount.h>
 #include <net/sch_generic.h>
 #include <net/pkt_sched.h>
 #include <net/net_namespace.h>
 #include <net/netns/generic.h>
 
-
-struct tcf_hashinfo {
-	struct hlist_head	*htab;
-	unsigned int		hmask;
-	spinlock_t		lock;
-	u32			index;
+struct tcf_idrinfo {
+	spinlock_t	lock;
+	struct idr	action_idr;
 };
 
 struct tc_action_ops;
@@ -24,58 +23,31 @@ struct tc_action {
 	const struct tc_action_ops	*ops;
 	__u32				type; /* for backward compat(TCA_OLD_COMPAT) */
 	__u32				order;
-	struct list_head		list;
-	struct tcf_hashinfo		*hinfo;
+	struct tcf_idrinfo		*idrinfo;
 
-	struct hlist_node		tcfa_head;
 	u32				tcfa_index;
-	int				tcfa_refcnt;
-	int				tcfa_bindcnt;
-	u32				tcfa_capab;
+	refcount_t			tcfa_refcnt;
+	atomic_t			tcfa_bindcnt;
 	int				tcfa_action;
 	struct tcf_t			tcfa_tm;
 	struct gnet_stats_basic_packed	tcfa_bstats;
 	struct gnet_stats_queue		tcfa_qstats;
 	struct net_rate_estimator __rcu *tcfa_rate_est;
 	spinlock_t			tcfa_lock;
-	struct rcu_head			tcfa_rcu;
 	struct gnet_stats_basic_cpu __percpu *cpu_bstats;
 	struct gnet_stats_queue __percpu *cpu_qstats;
-	struct tc_cookie	*act_cookie;
+	struct tc_cookie	__rcu *act_cookie;
+	struct tcf_chain	*goto_chain;
 };
-#define tcf_head	common.tcfa_head
 #define tcf_index	common.tcfa_index
 #define tcf_refcnt	common.tcfa_refcnt
 #define tcf_bindcnt	common.tcfa_bindcnt
-#define tcf_capab	common.tcfa_capab
 #define tcf_action	common.tcfa_action
 #define tcf_tm		common.tcfa_tm
 #define tcf_bstats	common.tcfa_bstats
 #define tcf_qstats	common.tcfa_qstats
 #define tcf_rate_est	common.tcfa_rate_est
 #define tcf_lock	common.tcfa_lock
-#define tcf_rcu		common.tcfa_rcu
-
-static inline unsigned int tcf_hash(u32 index, unsigned int hmask)
-{
-	return index & hmask;
-}
-
-static inline int tcf_hashinfo_init(struct tcf_hashinfo *hf, unsigned int mask)
-{
-	int i;
-
-	spin_lock_init(&hf->lock);
-	hf->index = 0;
-	hf->hmask = mask;
-	hf->htab = kzalloc((mask + 1) * sizeof(struct hlist_head),
-			   GFP_KERNEL);
-	if (!hf->htab)
-		return -ENOMEM;
-	for (i = 0; i < mask + 1; i++)
-		INIT_HLIST_HEAD(&hf->htab[i]);
-	return 0;
-}
 
 /* Update lastuse only if needed, to avoid dirtying a cache line.
  * We use a temp variable to avoid fetching jiffies twice.
@@ -110,83 +82,100 @@ struct tc_action_ops {
 	size_t	size;
 	struct module		*owner;
 	int     (*act)(struct sk_buff *, const struct tc_action *,
-		       struct tcf_result *);
+		       struct tcf_result *); /* called under RCU BH lock*/
 	int     (*dump)(struct sk_buff *, struct tc_action *, int, int);
-	void	(*cleanup)(struct tc_action *, int bind);
-	int     (*lookup)(struct net *, struct tc_action **, u32);
+	void	(*cleanup)(struct tc_action *);
+	int     (*lookup)(struct net *net, struct tc_action **a, u32 index,
+			  struct netlink_ext_ack *extack);
 	int     (*init)(struct net *net, struct nlattr *nla,
 			struct nlattr *est, struct tc_action **act, int ovr,
-			int bind);
+			int bind, bool rtnl_held,
+			struct netlink_ext_ack *extack);
 	int     (*walk)(struct net *, struct sk_buff *,
-			struct netlink_callback *, int, const struct tc_action_ops *);
+			struct netlink_callback *, int,
+			const struct tc_action_ops *,
+			struct netlink_ext_ack *);
 	void	(*stats_update)(struct tc_action *, u64, u32, u64);
-	int	(*get_dev)(const struct tc_action *a, struct net *net,
-			   struct net_device **mirred_dev);
+	size_t  (*get_fill_size)(const struct tc_action *act);
+	struct net_device *(*get_dev)(const struct tc_action *a);
+	void	(*put_dev)(struct net_device *dev);
 };
 
 struct tc_action_net {
-	struct tcf_hashinfo *hinfo;
+	struct tcf_idrinfo *idrinfo;
 	const struct tc_action_ops *ops;
 };
 
 static inline
 int tc_action_net_init(struct tc_action_net *tn,
-		       const struct tc_action_ops *ops, unsigned int mask)
+		       const struct tc_action_ops *ops)
 {
 	int err = 0;
 
-	tn->hinfo = kmalloc(sizeof(*tn->hinfo), GFP_KERNEL);
-	if (!tn->hinfo)
+	tn->idrinfo = kmalloc(sizeof(*tn->idrinfo), GFP_KERNEL);
+	if (!tn->idrinfo)
 		return -ENOMEM;
 	tn->ops = ops;
-	err = tcf_hashinfo_init(tn->hinfo, mask);
-	if (err)
-		kfree(tn->hinfo);
+	spin_lock_init(&tn->idrinfo->lock);
+	idr_init(&tn->idrinfo->action_idr);
 	return err;
 }
 
-void tcf_hashinfo_destroy(const struct tc_action_ops *ops,
-			  struct tcf_hashinfo *hinfo);
+void tcf_idrinfo_destroy(const struct tc_action_ops *ops,
+			 struct tcf_idrinfo *idrinfo);
 
-static inline void tc_action_net_exit(struct tc_action_net *tn)
+static inline void tc_action_net_exit(struct list_head *net_list,
+				      unsigned int id)
 {
-	tcf_hashinfo_destroy(tn->ops, tn->hinfo);
-	kfree(tn->hinfo);
+	struct net *net;
+
+	rtnl_lock();
+	list_for_each_entry(net, net_list, exit_list) {
+		struct tc_action_net *tn = net_generic(net, id);
+
+		tcf_idrinfo_destroy(tn->ops, tn->idrinfo);
+		kfree(tn->idrinfo);
+	}
+	rtnl_unlock();
 }
 
 int tcf_generic_walker(struct tc_action_net *tn, struct sk_buff *skb,
 		       struct netlink_callback *cb, int type,
-		       const struct tc_action_ops *ops);
-int tcf_hash_search(struct tc_action_net *tn, struct tc_action **a, u32 index);
-u32 tcf_hash_new_index(struct tc_action_net *tn);
-bool tcf_hash_check(struct tc_action_net *tn, u32 index, struct tc_action **a,
-		    int bind);
-int tcf_hash_create(struct tc_action_net *tn, u32 index, struct nlattr *est,
-		    struct tc_action **a, const struct tc_action_ops *ops, int bind,
-		    bool cpustats);
-void tcf_hash_cleanup(struct tc_action *a, struct nlattr *est);
-void tcf_hash_insert(struct tc_action_net *tn, struct tc_action *a);
+		       const struct tc_action_ops *ops,
+		       struct netlink_ext_ack *extack);
+int tcf_idr_search(struct tc_action_net *tn, struct tc_action **a, u32 index);
+int tcf_idr_create(struct tc_action_net *tn, u32 index, struct nlattr *est,
+		   struct tc_action **a, const struct tc_action_ops *ops,
+		   int bind, bool cpustats);
+void tcf_idr_insert(struct tc_action_net *tn, struct tc_action *a);
 
-int __tcf_hash_release(struct tc_action *a, bool bind, bool strict);
+void tcf_idr_cleanup(struct tc_action_net *tn, u32 index);
+int tcf_idr_check_alloc(struct tc_action_net *tn, u32 *index,
+			struct tc_action **a, int bind);
+int __tcf_idr_release(struct tc_action *a, bool bind, bool strict);
 
-static inline int tcf_hash_release(struct tc_action *a, bool bind)
+static inline int tcf_idr_release(struct tc_action *a, bool bind)
 {
-	return __tcf_hash_release(a, bind, false);
+	return __tcf_idr_release(a, bind, false);
 }
 
 int tcf_register_action(struct tc_action_ops *a, struct pernet_operations *ops);
 int tcf_unregister_action(struct tc_action_ops *a,
 			  struct pernet_operations *ops);
-int tcf_action_destroy(struct list_head *actions, int bind);
+int tcf_action_destroy(struct tc_action *actions[], int bind);
 int tcf_action_exec(struct sk_buff *skb, struct tc_action **actions,
 		    int nr_actions, struct tcf_result *res);
-int tcf_action_init(struct net *net, struct nlattr *nla,
-				  struct nlattr *est, char *n, int ovr,
-				  int bind, struct list_head *);
-struct tc_action *tcf_action_init_1(struct net *net, struct nlattr *nla,
-				    struct nlattr *est, char *n, int ovr,
-				    int bind);
-int tcf_action_dump(struct sk_buff *skb, struct list_head *, int, int);
+int tcf_action_init(struct net *net, struct tcf_proto *tp, struct nlattr *nla,
+		    struct nlattr *est, char *name, int ovr, int bind,
+		    struct tc_action *actions[], size_t *attr_size,
+		    bool rtnl_held, struct netlink_ext_ack *extack);
+struct tc_action *tcf_action_init_1(struct net *net, struct tcf_proto *tp,
+				    struct nlattr *nla, struct nlattr *est,
+				    char *name, int ovr, int bind,
+				    bool rtnl_held,
+				    struct netlink_ext_ack *extack);
+int tcf_action_dump(struct sk_buff *skb, struct tc_action *actions[], int bind,
+		    int ref);
 int tcf_action_dump_old(struct sk_buff *skb, struct tc_action *a, int, int);
 int tcf_action_dump_1(struct sk_buff *skb, struct tc_action *a, int, int);
 int tcf_action_copy_stats(struct sk_buff *, struct tc_action *, int);
@@ -203,5 +192,36 @@ static inline void tcf_action_stats_update(struct tc_action *a, u64 bytes,
 	a->ops->stats_update(a, bytes, packets, lastuse);
 #endif
 }
+
+#ifdef CONFIG_NET_CLS_ACT
+int tc_setup_cb_egdev_register(const struct net_device *dev,
+			       tc_setup_cb_t *cb, void *cb_priv);
+void tc_setup_cb_egdev_unregister(const struct net_device *dev,
+				  tc_setup_cb_t *cb, void *cb_priv);
+int tc_setup_cb_egdev_call(const struct net_device *dev,
+			   enum tc_setup_type type, void *type_data,
+			   bool err_stop);
+#else
+static inline
+int tc_setup_cb_egdev_register(const struct net_device *dev,
+			       tc_setup_cb_t *cb, void *cb_priv)
+{
+	return 0;
+}
+
+static inline
+void tc_setup_cb_egdev_unregister(const struct net_device *dev,
+				  tc_setup_cb_t *cb, void *cb_priv)
+{
+}
+
+static inline
+int tc_setup_cb_egdev_call(const struct net_device *dev,
+			   enum tc_setup_type type, void *type_data,
+			   bool err_stop)
+{
+	return 0;
+}
+#endif
 
 #endif

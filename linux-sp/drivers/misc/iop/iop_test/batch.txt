@@ -1,4 +1,0 @@
-mkdir /mnt
-mount -t vfat /dev/sda1 /mnt
-cd /mnt
-./mipicsi_test

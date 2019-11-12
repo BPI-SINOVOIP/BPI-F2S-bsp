@@ -1,7 +1,5 @@
 /*
- * drivers/gpu/drm/omapdrm/omap_fbdev.c
- *
- * Copyright (C) 2011 Texas Instruments
+ * Copyright (C) 2011 Texas Instruments Incorporated - http://www.ti.com/
  * Author: Rob Clark <rob@ti.com>
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -82,18 +80,21 @@ fallback:
 
 static struct fb_ops omap_fb_ops = {
 	.owner = THIS_MODULE,
-	DRM_FB_HELPER_DEFAULT_OPS,
 
-	/* Note: to properly handle manual update displays, we wrap the
-	 * basic fbdev ops which write to the framebuffer
-	 */
+	.fb_check_var	= drm_fb_helper_check_var,
+	.fb_set_par	= drm_fb_helper_set_par,
+	.fb_setcmap	= drm_fb_helper_setcmap,
+	.fb_blank	= drm_fb_helper_blank,
+	.fb_pan_display = omap_fbdev_pan_display,
+	.fb_debug_enter = drm_fb_helper_debug_enter,
+	.fb_debug_leave = drm_fb_helper_debug_leave,
+	.fb_ioctl	= drm_fb_helper_ioctl,
+
 	.fb_read = drm_fb_helper_sys_read,
 	.fb_write = drm_fb_helper_sys_write,
 	.fb_fillrect = drm_fb_helper_sys_fillrect,
 	.fb_copyarea = drm_fb_helper_sys_copyarea,
 	.fb_imageblit = drm_fb_helper_sys_imageblit,
-
-	.fb_pan_display = omap_fbdev_pan_display,
 };
 
 static int omap_fbdev_create(struct drm_fb_helper *helper,
@@ -106,7 +107,7 @@ static int omap_fbdev_create(struct drm_fb_helper *helper,
 	union omap_gem_size gsize;
 	struct fb_info *fbi = NULL;
 	struct drm_mode_fb_cmd2 mode_cmd = {0};
-	dma_addr_t paddr;
+	dma_addr_t dma_addr;
 	int ret;
 
 	sizes->surface_bpp = 32;
@@ -162,21 +163,18 @@ static int omap_fbdev_create(struct drm_fb_helper *helper,
 	 * to it).  Then we just need to be sure that we are able to re-
 	 * pin it in case of an opps.
 	 */
-	ret = omap_gem_get_paddr(fbdev->bo, &paddr, true);
+	ret = omap_gem_pin(fbdev->bo, &dma_addr);
 	if (ret) {
-		dev_err(dev->dev,
-			"could not map (paddr)!  Skipping framebuffer alloc\n");
+		dev_err(dev->dev, "could not pin framebuffer\n");
 		ret = -ENOMEM;
 		goto fail;
 	}
-
-	mutex_lock(&dev->struct_mutex);
 
 	fbi = drm_fb_helper_alloc_fbi(helper);
 	if (IS_ERR(fbi)) {
 		dev_err(dev->dev, "failed to allocate fb info\n");
 		ret = PTR_ERR(fbi);
-		goto fail_unlock;
+		goto fail;
 	}
 
 	DBG("fbi=%p, dev=%p", fbi, dev);
@@ -185,7 +183,6 @@ static int omap_fbdev_create(struct drm_fb_helper *helper,
 	helper->fb = fb;
 
 	fbi->par = helper;
-	fbi->flags = FBINFO_DEFAULT;
 	fbi->fbops = &omap_fb_ops;
 
 	strcpy(fbi->fix.id, MODULE_NAME);
@@ -193,11 +190,11 @@ static int omap_fbdev_create(struct drm_fb_helper *helper,
 	drm_fb_helper_fill_fix(fbi, fb->pitches[0], fb->format->depth);
 	drm_fb_helper_fill_var(fbi, helper, sizes->fb_width, sizes->fb_height);
 
-	dev->mode_config.fb_base = paddr;
+	dev->mode_config.fb_base = dma_addr;
 
-	fbi->screen_base = omap_gem_vaddr(fbdev->bo);
+	fbi->screen_buffer = omap_gem_vaddr(fbdev->bo);
 	fbi->screen_size = fbdev->bo->size;
-	fbi->fix.smem_start = paddr;
+	fbi->fix.smem_start = dma_addr;
 	fbi->fix.smem_len = fbdev->bo->size;
 
 	/* if we have DMM, then we can use it for scrolling by just
@@ -213,12 +210,8 @@ static int omap_fbdev_create(struct drm_fb_helper *helper,
 	DBG("par=%p, %dx%d", fbi->par, fbi->var.xres, fbi->var.yres);
 	DBG("allocated %dx%d fb", fbdev->fb->width, fbdev->fb->height);
 
-	mutex_unlock(&dev->struct_mutex);
-
 	return 0;
 
-fail_unlock:
-	mutex_unlock(&dev->struct_mutex);
 fail:
 
 	if (ret) {
@@ -243,12 +236,15 @@ static struct drm_fb_helper *get_fb(struct fb_info *fbi)
 }
 
 /* initialize fbdev helper */
-struct drm_fb_helper *omap_fbdev_init(struct drm_device *dev)
+void omap_fbdev_init(struct drm_device *dev)
 {
 	struct omap_drm_private *priv = dev->dev_private;
 	struct omap_fbdev *fbdev = NULL;
 	struct drm_fb_helper *helper;
 	int ret = 0;
+
+	if (!priv->num_crtcs || !priv->num_connectors)
+		return;
 
 	fbdev = kzalloc(sizeof(*fbdev), GFP_KERNEL);
 	if (!fbdev)
@@ -261,10 +257,8 @@ struct drm_fb_helper *omap_fbdev_init(struct drm_device *dev)
 	drm_fb_helper_prepare(dev, helper, &omap_fb_helper_funcs);
 
 	ret = drm_fb_helper_init(dev, helper, priv->num_connectors);
-	if (ret) {
-		dev_err(dev->dev, "could not init fbdev: ret=%d\n", ret);
+	if (ret)
 		goto fail;
-	}
 
 	ret = drm_fb_helper_single_add_all_connectors(helper);
 	if (ret)
@@ -276,7 +270,7 @@ struct drm_fb_helper *omap_fbdev_init(struct drm_device *dev)
 
 	priv->fbdev = helper;
 
-	return helper;
+	return;
 
 fini:
 	drm_fb_helper_fini(helper);
@@ -284,12 +278,9 @@ fail:
 	kfree(fbdev);
 
 	dev_warn(dev->dev, "omap_fbdev_init failed\n");
-	/* well, limp along without an fbdev.. maybe X11 will work? */
-
-	return NULL;
 }
 
-void omap_fbdev_free(struct drm_device *dev)
+void omap_fbdev_fini(struct drm_device *dev)
 {
 	struct omap_drm_private *priv = dev->dev_private;
 	struct drm_fb_helper *helper = priv->fbdev;
@@ -297,14 +288,18 @@ void omap_fbdev_free(struct drm_device *dev)
 
 	DBG();
 
+	if (!helper)
+		return;
+
 	drm_fb_helper_unregister_fbi(helper);
 
 	drm_fb_helper_fini(helper);
 
-	fbdev = to_omap_fbdev(priv->fbdev);
+	fbdev = to_omap_fbdev(helper);
 
-	/* release the ref taken in omap_fbdev_create() */
-	omap_gem_put_paddr(fbdev->bo);
+	/* unpin the GEM object pinned in omap_fbdev_create() */
+	if (fbdev->bo)
+		omap_gem_unpin(fbdev->bo);
 
 	/* this will free the backing object */
 	if (fbdev->fb)

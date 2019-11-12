@@ -27,7 +27,6 @@
 #include <linux/iio/trigger_consumer.h>
 #include <linux/iio/triggered_buffer.h>
 #include <linux/regmap.h>
-#include <linux/delay.h>
 #include "bmg160.h"
 
 #define BMG160_IRQ_NAME		"bmg160_event"
@@ -583,11 +582,10 @@ static int bmg160_read_raw(struct iio_dev *indio_dev,
 	case IIO_CHAN_INFO_LOW_PASS_FILTER_3DB_FREQUENCY:
 		return bmg160_get_filter(data, val);
 	case IIO_CHAN_INFO_SCALE:
-		*val = 0;
 		switch (chan->type) {
 		case IIO_TEMP:
-			*val2 = 500000;
-			return IIO_VAL_INT_PLUS_MICRO;
+			*val = 500;
+			return IIO_VAL_INT;
 		case IIO_ANGL_VEL:
 		{
 			int i;
@@ -595,6 +593,7 @@ static int bmg160_read_raw(struct iio_dev *indio_dev,
 			for (i = 0; i < ARRAY_SIZE(bmg160_scale_table); ++i) {
 				if (bmg160_scale_table[i].dps_range ==
 							data->dps_range) {
+					*val = 0;
 					*val2 = bmg160_scale_table[i].scale;
 					return IIO_VAL_INT_PLUS_MICRO;
 				}
@@ -858,7 +857,6 @@ static const struct iio_info bmg160_info = {
 	.write_event_value	= bmg160_write_event,
 	.write_event_config	= bmg160_write_event_config,
 	.read_event_config	= bmg160_read_event_config,
-	.driver_module		= THIS_MODULE,
 };
 
 static const unsigned long bmg160_accel_scan_masks[] = {
@@ -956,7 +954,6 @@ static int bmg160_data_rdy_trigger_set_state(struct iio_trigger *trig,
 static const struct iio_trigger_ops bmg160_trigger_ops = {
 	.set_trigger_state = bmg160_data_rdy_trigger_set_state,
 	.try_reenable = bmg160_trig_try_reen,
-	.owner = THIS_MODULE,
 };
 
 static irqreturn_t bmg160_event_handler(int irq, void *private)

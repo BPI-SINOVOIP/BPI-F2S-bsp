@@ -37,7 +37,7 @@ u64 kvm_pmu_get_counter_value(struct kvm_vcpu *vcpu, u64 select_idx)
 
 	reg = (select_idx == ARMV8_PMU_CYCLE_IDX)
 	      ? PMCCNTR_EL0 : PMEVCNTR0_EL0 + select_idx;
-	counter = vcpu_sys_reg(vcpu, reg);
+	counter = __vcpu_sys_reg(vcpu, reg);
 
 	/* The real counter value is equal to the value of counter register plus
 	 * the value perf event counts.
@@ -61,7 +61,7 @@ void kvm_pmu_set_counter_value(struct kvm_vcpu *vcpu, u64 select_idx, u64 val)
 
 	reg = (select_idx == ARMV8_PMU_CYCLE_IDX)
 	      ? PMCCNTR_EL0 : PMEVCNTR0_EL0 + select_idx;
-	vcpu_sys_reg(vcpu, reg) += (s64)val - kvm_pmu_get_counter_value(vcpu, select_idx);
+	__vcpu_sys_reg(vcpu, reg) += (s64)val - kvm_pmu_get_counter_value(vcpu, select_idx);
 }
 
 /**
@@ -78,7 +78,7 @@ static void kvm_pmu_stop_counter(struct kvm_vcpu *vcpu, struct kvm_pmc *pmc)
 		counter = kvm_pmu_get_counter_value(vcpu, pmc->idx);
 		reg = (pmc->idx == ARMV8_PMU_CYCLE_IDX)
 		       ? PMCCNTR_EL0 : PMEVCNTR0_EL0 + pmc->idx;
-		vcpu_sys_reg(vcpu, reg) = counter;
+		__vcpu_sys_reg(vcpu, reg) = counter;
 		perf_event_disable(pmc->perf_event);
 		perf_event_release_kernel(pmc->perf_event);
 		pmc->perf_event = NULL;
@@ -125,7 +125,7 @@ void kvm_pmu_vcpu_destroy(struct kvm_vcpu *vcpu)
 
 u64 kvm_pmu_valid_counter_mask(struct kvm_vcpu *vcpu)
 {
-	u64 val = vcpu_sys_reg(vcpu, PMCR_EL0) >> ARMV8_PMU_PMCR_N_SHIFT;
+	u64 val = __vcpu_sys_reg(vcpu, PMCR_EL0) >> ARMV8_PMU_PMCR_N_SHIFT;
 
 	val &= ARMV8_PMU_PMCR_N_MASK;
 	if (val == 0)
@@ -147,7 +147,7 @@ void kvm_pmu_enable_counter(struct kvm_vcpu *vcpu, u64 val)
 	struct kvm_pmu *pmu = &vcpu->arch.pmu;
 	struct kvm_pmc *pmc;
 
-	if (!(vcpu_sys_reg(vcpu, PMCR_EL0) & ARMV8_PMU_PMCR_E) || !val)
+	if (!(__vcpu_sys_reg(vcpu, PMCR_EL0) & ARMV8_PMU_PMCR_E) || !val)
 		return;
 
 	for (i = 0; i < ARMV8_PMU_MAX_COUNTERS; i++) {
@@ -193,32 +193,14 @@ static u64 kvm_pmu_overflow_status(struct kvm_vcpu *vcpu)
 {
 	u64 reg = 0;
 
-	if ((vcpu_sys_reg(vcpu, PMCR_EL0) & ARMV8_PMU_PMCR_E)) {
-		reg = vcpu_sys_reg(vcpu, PMOVSSET_EL0);
-		reg &= vcpu_sys_reg(vcpu, PMCNTENSET_EL0);
-		reg &= vcpu_sys_reg(vcpu, PMINTENSET_EL1);
+	if ((__vcpu_sys_reg(vcpu, PMCR_EL0) & ARMV8_PMU_PMCR_E)) {
+		reg = __vcpu_sys_reg(vcpu, PMOVSSET_EL0);
+		reg &= __vcpu_sys_reg(vcpu, PMCNTENSET_EL0);
+		reg &= __vcpu_sys_reg(vcpu, PMINTENSET_EL1);
 		reg &= kvm_pmu_valid_counter_mask(vcpu);
 	}
 
 	return reg;
-}
-
-/**
- * kvm_pmu_overflow_set - set PMU overflow interrupt
- * @vcpu: The vcpu pointer
- * @val: the value guest writes to PMOVSSET register
- */
-void kvm_pmu_overflow_set(struct kvm_vcpu *vcpu, u64 val)
-{
-	u64 reg;
-
-	if (val == 0)
-		return;
-
-	vcpu_sys_reg(vcpu, PMOVSSET_EL0) |= val;
-	reg = kvm_pmu_overflow_status(vcpu);
-	if (reg != 0)
-		kvm_vcpu_kick(vcpu);
 }
 
 static void kvm_pmu_update_state(struct kvm_vcpu *vcpu)
@@ -236,9 +218,8 @@ static void kvm_pmu_update_state(struct kvm_vcpu *vcpu)
 	pmu->irq_level = overflow;
 
 	if (likely(irqchip_in_kernel(vcpu->kvm))) {
-		int ret;
-		ret = kvm_vgic_inject_irq(vcpu->kvm, vcpu->vcpu_id,
-					  pmu->irq_num, overflow);
+		int ret = kvm_vgic_inject_irq(vcpu->kvm, vcpu->vcpu_id,
+					      pmu->irq_num, overflow, pmu);
 		WARN_ON(ret);
 	}
 }
@@ -304,7 +285,7 @@ static inline struct kvm_vcpu *kvm_pmc_to_vcpu(struct kvm_pmc *pmc)
 }
 
 /**
- * When perf event overflows, call kvm_pmu_overflow_set to set overflow status.
+ * When the perf event overflows, set the overflow status and inform the vcpu.
  */
 static void kvm_pmu_perf_overflow(struct perf_event *perf_event,
 				  struct perf_sample_data *data,
@@ -314,7 +295,12 @@ static void kvm_pmu_perf_overflow(struct perf_event *perf_event,
 	struct kvm_vcpu *vcpu = kvm_pmc_to_vcpu(pmc);
 	int idx = pmc->idx;
 
-	kvm_pmu_overflow_set(vcpu, BIT(idx));
+	__vcpu_sys_reg(vcpu, PMOVSSET_EL0) |= BIT(idx);
+
+	if (kvm_pmu_overflow_status(vcpu)) {
+		kvm_make_request(KVM_REQ_IRQ_PENDING, vcpu);
+		kvm_vcpu_kick(vcpu);
+	}
 }
 
 /**
@@ -330,19 +316,19 @@ void kvm_pmu_software_increment(struct kvm_vcpu *vcpu, u64 val)
 	if (val == 0)
 		return;
 
-	enable = vcpu_sys_reg(vcpu, PMCNTENSET_EL0);
+	enable = __vcpu_sys_reg(vcpu, PMCNTENSET_EL0);
 	for (i = 0; i < ARMV8_PMU_CYCLE_IDX; i++) {
 		if (!(val & BIT(i)))
 			continue;
-		type = vcpu_sys_reg(vcpu, PMEVTYPER0_EL0 + i)
+		type = __vcpu_sys_reg(vcpu, PMEVTYPER0_EL0 + i)
 		       & ARMV8_PMU_EVTYPE_EVENT;
 		if ((type == ARMV8_PMUV3_PERFCTR_SW_INCR)
 		    && (enable & BIT(i))) {
-			reg = vcpu_sys_reg(vcpu, PMEVCNTR0_EL0 + i) + 1;
+			reg = __vcpu_sys_reg(vcpu, PMEVCNTR0_EL0 + i) + 1;
 			reg = lower_32_bits(reg);
-			vcpu_sys_reg(vcpu, PMEVCNTR0_EL0 + i) = reg;
+			__vcpu_sys_reg(vcpu, PMEVCNTR0_EL0 + i) = reg;
 			if (!reg)
-				kvm_pmu_overflow_set(vcpu, BIT(i));
+				__vcpu_sys_reg(vcpu, PMOVSSET_EL0) |= BIT(i);
 		}
 	}
 }
@@ -362,7 +348,7 @@ void kvm_pmu_handle_pmcr(struct kvm_vcpu *vcpu, u64 val)
 	mask = kvm_pmu_valid_counter_mask(vcpu);
 	if (val & ARMV8_PMU_PMCR_E) {
 		kvm_pmu_enable_counter(vcpu,
-				vcpu_sys_reg(vcpu, PMCNTENSET_EL0) & mask);
+		       __vcpu_sys_reg(vcpu, PMCNTENSET_EL0) & mask);
 	} else {
 		kvm_pmu_disable_counter(vcpu, mask);
 	}
@@ -383,8 +369,8 @@ void kvm_pmu_handle_pmcr(struct kvm_vcpu *vcpu, u64 val)
 
 static bool kvm_pmu_counter_is_enabled(struct kvm_vcpu *vcpu, u64 select_idx)
 {
-	return (vcpu_sys_reg(vcpu, PMCR_EL0) & ARMV8_PMU_PMCR_E) &&
-	       (vcpu_sys_reg(vcpu, PMCNTENSET_EL0) & BIT(select_idx));
+	return (__vcpu_sys_reg(vcpu, PMCR_EL0) & ARMV8_PMU_PMCR_E) &&
+	       (__vcpu_sys_reg(vcpu, PMCNTENSET_EL0) & BIT(select_idx));
 }
 
 /**
@@ -451,25 +437,32 @@ bool kvm_arm_support_pmu_v3(void)
 	return (perf_num_counters() > 0);
 }
 
-static int kvm_arm_pmu_v3_init(struct kvm_vcpu *vcpu)
+int kvm_arm_pmu_v3_enable(struct kvm_vcpu *vcpu)
 {
-	if (!kvm_arm_support_pmu_v3())
-		return -ENODEV;
+	if (!vcpu->arch.pmu.created)
+		return 0;
 
 	/*
-	 * We currently require an in-kernel VGIC to use the PMU emulation,
-	 * because we do not support forwarding PMU overflow interrupts to
-	 * userspace yet.
+	 * A valid interrupt configuration for the PMU is either to have a
+	 * properly configured interrupt number and using an in-kernel
+	 * irqchip, or to not have an in-kernel GIC and not set an IRQ.
 	 */
-	if (!irqchip_in_kernel(vcpu->kvm) || !vgic_initialized(vcpu->kvm))
-		return -ENODEV;
+	if (irqchip_in_kernel(vcpu->kvm)) {
+		int irq = vcpu->arch.pmu.irq_num;
+		if (!kvm_arm_pmu_irq_initialized(vcpu))
+			return -EINVAL;
 
-	if (!test_bit(KVM_ARM_VCPU_PMU_V3, vcpu->arch.features) ||
-	    !kvm_arm_pmu_irq_initialized(vcpu))
-		return -ENXIO;
-
-	if (kvm_arm_pmu_v3_ready(vcpu))
-		return -EBUSY;
+		/*
+		 * If we are using an in-kernel vgic, at this point we know
+		 * the vgic will be initialized, so we can check the PMU irq
+		 * number against the dimensions of the vgic and make sure
+		 * it's valid.
+		 */
+		if (!irq_is_ppi(irq) && !vgic_valid_spi(vcpu->kvm, irq))
+			return -EINVAL;
+	} else if (kvm_arm_pmu_irq_initialized(vcpu)) {
+		   return -EINVAL;
+	}
 
 	kvm_pmu_vcpu_reset(vcpu);
 	vcpu->arch.pmu.ready = true;
@@ -477,7 +470,40 @@ static int kvm_arm_pmu_v3_init(struct kvm_vcpu *vcpu)
 	return 0;
 }
 
-#define irq_is_ppi(irq) ((irq) >= VGIC_NR_SGIS && (irq) < VGIC_NR_PRIVATE_IRQS)
+static int kvm_arm_pmu_v3_init(struct kvm_vcpu *vcpu)
+{
+	if (!kvm_arm_support_pmu_v3())
+		return -ENODEV;
+
+	if (!test_bit(KVM_ARM_VCPU_PMU_V3, vcpu->arch.features))
+		return -ENXIO;
+
+	if (vcpu->arch.pmu.created)
+		return -EBUSY;
+
+	if (irqchip_in_kernel(vcpu->kvm)) {
+		int ret;
+
+		/*
+		 * If using the PMU with an in-kernel virtual GIC
+		 * implementation, we require the GIC to be already
+		 * initialized when initializing the PMU.
+		 */
+		if (!vgic_initialized(vcpu->kvm))
+			return -ENODEV;
+
+		if (!kvm_arm_pmu_irq_initialized(vcpu))
+			return -ENXIO;
+
+		ret = kvm_vgic_set_owner(vcpu, vcpu->arch.pmu.irq_num,
+					 &vcpu->arch.pmu);
+		if (ret)
+			return ret;
+	}
+
+	vcpu->arch.pmu.created = true;
+	return 0;
+}
 
 /*
  * For one VM the interrupt type must be same for each vcpu.
@@ -512,6 +538,9 @@ int kvm_arm_pmu_v3_set_attr(struct kvm_vcpu *vcpu, struct kvm_device_attr *attr)
 		int __user *uaddr = (int __user *)(long)attr->addr;
 		int irq;
 
+		if (!irqchip_in_kernel(vcpu->kvm))
+			return -EINVAL;
+
 		if (!test_bit(KVM_ARM_VCPU_PMU_V3, vcpu->arch.features))
 			return -ENODEV;
 
@@ -519,7 +548,7 @@ int kvm_arm_pmu_v3_set_attr(struct kvm_vcpu *vcpu, struct kvm_device_attr *attr)
 			return -EFAULT;
 
 		/* The PMU overflow interrupt can be a PPI or a valid SPI. */
-		if (!(irq_is_ppi(irq) || vgic_valid_spi(vcpu->kvm, irq)))
+		if (!(irq_is_ppi(irq) || irq_is_spi(irq)))
 			return -EINVAL;
 
 		if (!pmu_irq_is_valid(vcpu->kvm, irq))
@@ -545,6 +574,9 @@ int kvm_arm_pmu_v3_get_attr(struct kvm_vcpu *vcpu, struct kvm_device_attr *attr)
 	case KVM_ARM_VCPU_PMU_V3_IRQ: {
 		int __user *uaddr = (int __user *)(long)attr->addr;
 		int irq;
+
+		if (!irqchip_in_kernel(vcpu->kvm))
+			return -EINVAL;
 
 		if (!test_bit(KVM_ARM_VCPU_PMU_V3, vcpu->arch.features))
 			return -ENODEV;

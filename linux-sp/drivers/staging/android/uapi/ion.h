@@ -1,17 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * drivers/staging/android/uapi/ion.h
  *
  * Copyright (C) 2011 Google, Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
  */
 
 #ifndef _UAPI_LINUX_ION_H
@@ -56,12 +47,6 @@ enum ion_heap_type {
  * when the buffer is mapped for dma
  */
 #define ION_FLAG_CACHED 1
-
-/*
- * mappings of this buffer will created at mmap time, if this is set
- * caches must be managed manually
- */
-#define ION_FLAG_CACHED_NEEDS_SYNC 2
 
 /**
  * DOC: Ion Userspace API

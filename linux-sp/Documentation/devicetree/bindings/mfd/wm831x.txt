@@ -22,7 +22,6 @@ Required properties:
 
   - interrupts : The interrupt line the IRQ signal for the device is
     connected to.
-  - interrupt-parent : The parent interrupt controller.
 
   - interrupt-controller : wm831x devices contain interrupt controllers and
     may provide interrupt services to other devices.
@@ -31,6 +30,7 @@ Required properties:
     ../interrupt-controller/interrupts.txt
 
 Optional sub-nodes:
+  - phys : Contains a phandle to the USB PHY.
   - regulators : Contains sub-nodes for each of the regulators supplied by
     the device. The regulators are bound using their names listed below:
 

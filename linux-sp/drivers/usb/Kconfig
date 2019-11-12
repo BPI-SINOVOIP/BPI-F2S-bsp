@@ -2,21 +2,6 @@
 # USB device configuration
 #
 
-config GEMINI_USB
-	bool "Support Gemini USB"
-	select SCSI
-	select USB
-	select USB_SUPPORT
-	select USB_ARCH_HAS_EHCI
-	select USB_ARCH_HAS_OHCI
-#	select USB_EHCI_HCD_PLATFORM
-#	select USB_OHCI_HCD_PLATFORM
-#	select USB_EHCI_HCD
-#	select USB_OHCI_HCD
-	select USB_STORAGE
-	help
-	  Sunplus Gemini platform USB support
-
 config USB_OHCI_BIG_ENDIAN_DESC
 	bool
 
@@ -34,6 +19,12 @@ config USB_EHCI_BIG_ENDIAN_MMIO
 config USB_EHCI_BIG_ENDIAN_DESC
 	bool
 
+config USB_UHCI_BIG_ENDIAN_MMIO
+	bool
+
+config USB_UHCI_BIG_ENDIAN_DESC
+	bool
+
 menuconfig USB_SUPPORT
 	bool "USB support"
 	depends on HAS_IOMEM
@@ -43,22 +34,6 @@ menuconfig USB_SUPPORT
 	  You will also need drivers from the following menu to make use of it.
 
 if USB_SUPPORT
-# usb ports freely determine enable/disable
-config USB_PORT0
-	boolean "Sunplus Gemini USB PORT 0"
-	default y
-
-config USB_PORT1
-	boolean "Sunplus Gemini USB PORT 1"
-	default y
-
-config USB_GADGET_ENABLED
-	bool
-	default y if (USB_PORT0 || USB_PORT1)
-
-config USB_GADGET_PORT0_ENABLED
-	boolean "Sunplus Gemini USB gadget port 0"
-	default n
 
 config USB_COMMON
 	tristate
@@ -108,25 +83,14 @@ config USB_PCI
 	depends on PCI
 	default y
 	---help---
-	  A lot of embeded system SOC (e.g. freescale T2080) have both
-	  PCI and USB modules. But USB module is controlled by registers
-	  directly, it have no relationship with PCI module.
+	  Many embedded system SOCs (e.g. freescale T2080) have both
+	  PCI and USB modules with the USB module directly controlled by
+	  registers and having no relationship to the PCI module.
 
-	  When say N here it will not build PCI related code in USB driver.
+	  If you have such a device you may say N here and PCI related code
+	  will not be built in the USB driver.
 
 if USB
-
-config USB_HOST_ENUM_RETRY
-	bool "Enable USB Host Enum Retry"
-	depends on USB
-
-config USB_MULTIPLE_RESET_PROBLEM_WORKAROUND
-	bool "Enable USB Multiple Reset Problem Workaround"
-	depends on USB
-
-config USB_HOST_NOT_FINISH_QTD_WHEN_DISC_WORKAROUND
-	bool "Enable Workaround USB Host Not Finish QTD When Disconnect"
-	depends on USB
 
 source "drivers/usb/core/Kconfig"
 
@@ -206,6 +170,8 @@ source "drivers/usb/phy/Kconfig"
 source "drivers/usb/gadget/Kconfig"
 
 source "drivers/usb/typec/Kconfig"
+
+source "drivers/usb/roles/Kconfig"
 
 config USB_LED_TRIG
 	bool "USB LED Triggers"

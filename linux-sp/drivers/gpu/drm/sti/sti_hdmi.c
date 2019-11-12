@@ -1,7 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (C) STMicroelectronics SA 2014
  * Author: Vincent Abriou <vincent.abriou@st.com> for STMicroelectronics.
- * License terms:  GNU General Public License (GPL), version 2
  */
 
 #include <linux/clk.h>
@@ -434,7 +434,7 @@ static int hdmi_avi_infoframe_config(struct sti_hdmi *hdmi)
 
 	DRM_DEBUG_DRIVER("\n");
 
-	ret = drm_hdmi_avi_infoframe_from_display_mode(&infoframe, mode);
+	ret = drm_hdmi_avi_infoframe_from_display_mode(&infoframe, mode, false);
 	if (ret < 0) {
 		DRM_ERROR("failed to setup AVI infoframe: %d\n", ret);
 		return ret;
@@ -515,7 +515,9 @@ static int hdmi_vendor_infoframe_config(struct sti_hdmi *hdmi)
 
 	DRM_DEBUG_DRIVER("\n");
 
-	ret = drm_hdmi_vendor_infoframe_from_display_mode(&infoframe, mode);
+	ret = drm_hdmi_vendor_infoframe_from_display_mode(&infoframe,
+							  hdmi->drm_connector,
+							  mode);
 	if (ret < 0) {
 		/*
 		 * Going into that statement does not means vendor infoframe
@@ -592,7 +594,7 @@ static void hdmi_dbg_cfg(struct seq_file *s, int val)
 {
 	int tmp;
 
-	seq_puts(s, "\t");
+	seq_putc(s, '\t');
 	tmp = val & HDMI_CFG_HDMI_NOT_DVI;
 	DBGFS_PRINT_STR("mode:", tmp ? "HDMI" : "DVI");
 	seq_puts(s, "\t\t\t\t\t");
@@ -616,7 +618,7 @@ static void hdmi_dbg_sta(struct seq_file *s, int val)
 {
 	int tmp;
 
-	seq_puts(s, "\t");
+	seq_putc(s, '\t');
 	tmp = (val & HDMI_STA_DLL_LCK);
 	DBGFS_PRINT_STR("pll:", tmp ? "locked" : "not locked");
 	seq_puts(s, "\t\t\t\t\t");
@@ -632,7 +634,7 @@ static void hdmi_dbg_sw_di_cfg(struct seq_file *s, int val)
 			       "once every field",
 			       "once every frame"};
 
-	seq_puts(s, "\t");
+	seq_putc(s, '\t');
 	tmp = (val & HDMI_IFRAME_CFG_DI_N(HDMI_IFRAME_MASK, 1));
 	DBGFS_PRINT_STR("Data island 1:", en_di[tmp]);
 	seq_puts(s, "\t\t\t\t\t");
@@ -664,16 +666,16 @@ static int hdmi_dbg_show(struct seq_file *s, void *data)
 	DBGFS_DUMP("\n", HDMI_STA);
 	hdmi_dbg_sta(s, hdmi_read(hdmi, HDMI_STA));
 	DBGFS_DUMP("", HDMI_ACTIVE_VID_XMIN);
-	seq_puts(s, "\t");
+	seq_putc(s, '\t');
 	DBGFS_PRINT_INT("Xmin:", hdmi_read(hdmi, HDMI_ACTIVE_VID_XMIN));
 	DBGFS_DUMP("", HDMI_ACTIVE_VID_XMAX);
-	seq_puts(s, "\t");
+	seq_putc(s, '\t');
 	DBGFS_PRINT_INT("Xmax:", hdmi_read(hdmi, HDMI_ACTIVE_VID_XMAX));
 	DBGFS_DUMP("", HDMI_ACTIVE_VID_YMIN);
-	seq_puts(s, "\t");
+	seq_putc(s, '\t');
 	DBGFS_PRINT_INT("Ymin:", hdmi_read(hdmi, HDMI_ACTIVE_VID_YMIN));
 	DBGFS_DUMP("", HDMI_ACTIVE_VID_YMAX);
-	seq_puts(s, "\t");
+	seq_putc(s, '\t');
 	DBGFS_PRINT_INT("Ymax:", hdmi_read(hdmi, HDMI_ACTIVE_VID_YMAX));
 	DBGFS_DUMP("", HDMI_SW_DI_CFG);
 	hdmi_dbg_sw_di_cfg(s, hdmi_read(hdmi, HDMI_SW_DI_CFG));
@@ -692,8 +694,7 @@ static int hdmi_dbg_show(struct seq_file *s, void *data)
 	DBGFS_DUMP_DI(HDMI_SW_DI_N_PKT_WORD4, HDMI_IFRAME_SLOT_AVI);
 	DBGFS_DUMP_DI(HDMI_SW_DI_N_PKT_WORD5, HDMI_IFRAME_SLOT_AVI);
 	DBGFS_DUMP_DI(HDMI_SW_DI_N_PKT_WORD6, HDMI_IFRAME_SLOT_AVI);
-	seq_puts(s, "\n");
-	seq_printf(s, "\n AUDIO Infoframe (Data Island slot N=%d):",
+	seq_printf(s, "\n\n AUDIO Infoframe (Data Island slot N=%d):",
 		   HDMI_IFRAME_SLOT_AUDIO);
 	DBGFS_DUMP_DI(HDMI_SW_DI_N_HEAD_WORD, HDMI_IFRAME_SLOT_AUDIO);
 	DBGFS_DUMP_DI(HDMI_SW_DI_N_PKT_WORD0, HDMI_IFRAME_SLOT_AUDIO);
@@ -703,8 +704,7 @@ static int hdmi_dbg_show(struct seq_file *s, void *data)
 	DBGFS_DUMP_DI(HDMI_SW_DI_N_PKT_WORD4, HDMI_IFRAME_SLOT_AUDIO);
 	DBGFS_DUMP_DI(HDMI_SW_DI_N_PKT_WORD5, HDMI_IFRAME_SLOT_AUDIO);
 	DBGFS_DUMP_DI(HDMI_SW_DI_N_PKT_WORD6, HDMI_IFRAME_SLOT_AUDIO);
-	seq_puts(s, "\n");
-	seq_printf(s, "\n VENDOR SPECIFIC Infoframe (Data Island slot N=%d):",
+	seq_printf(s, "\n\n VENDOR SPECIFIC Infoframe (Data Island slot N=%d):",
 		   HDMI_IFRAME_SLOT_VENDOR);
 	DBGFS_DUMP_DI(HDMI_SW_DI_N_HEAD_WORD, HDMI_IFRAME_SLOT_VENDOR);
 	DBGFS_DUMP_DI(HDMI_SW_DI_N_PKT_WORD0, HDMI_IFRAME_SLOT_VENDOR);
@@ -714,8 +714,7 @@ static int hdmi_dbg_show(struct seq_file *s, void *data)
 	DBGFS_DUMP_DI(HDMI_SW_DI_N_PKT_WORD4, HDMI_IFRAME_SLOT_VENDOR);
 	DBGFS_DUMP_DI(HDMI_SW_DI_N_PKT_WORD5, HDMI_IFRAME_SLOT_VENDOR);
 	DBGFS_DUMP_DI(HDMI_SW_DI_N_PKT_WORD6, HDMI_IFRAME_SLOT_VENDOR);
-	seq_puts(s, "\n");
-
+	seq_putc(s, '\n');
 	return 0;
 }
 
@@ -978,8 +977,7 @@ static int sti_hdmi_connector_get_modes(struct drm_connector *connector)
 	cec_notifier_set_phys_addr_from_edid(hdmi->notifier, edid);
 
 	count = drm_add_edid_modes(connector, edid);
-	drm_mode_connector_update_edid_property(connector, edid);
-	drm_edid_to_eld(connector, edid);
+	drm_connector_update_edid_property(connector, edid);
 
 	kfree(edid);
 	return count;
@@ -1116,12 +1114,10 @@ static int sti_hdmi_late_register(struct drm_connector *connector)
 }
 
 static const struct drm_connector_funcs sti_hdmi_connector_funcs = {
-	.dpms = drm_atomic_helper_connector_dpms,
 	.fill_modes = drm_helper_probe_single_connector_modes,
 	.detect = sti_hdmi_connector_detect,
 	.destroy = drm_connector_cleanup,
 	.reset = drm_atomic_helper_connector_reset,
-	.set_property = drm_atomic_helper_connector_set_property,
 	.atomic_set_property = sti_hdmi_connector_set_property,
 	.atomic_get_property = sti_hdmi_connector_get_property,
 	.atomic_duplicate_state = drm_atomic_helper_connector_duplicate_state,
@@ -1294,7 +1290,7 @@ static int sti_hdmi_bind(struct device *dev, struct device *master, void *data)
 
 	hdmi->drm_connector = drm_connector;
 
-	err = drm_mode_connector_attach_encoder(drm_connector, encoder);
+	err = drm_connector_attach_encoder(drm_connector, encoder);
 	if (err) {
 		DRM_ERROR("Failed to attach a connector to a encoder\n");
 		goto err_sysfs;
@@ -1419,6 +1415,11 @@ static int sti_hdmi_probe(struct platform_device *pdev)
 	init_waitqueue_head(&hdmi->wait_event);
 
 	hdmi->irq = platform_get_irq_byname(pdev, "irq");
+	if (hdmi->irq < 0) {
+		DRM_ERROR("Cannot get HDMI irq\n");
+		ret = hdmi->irq;
+		goto release_adapter;
+	}
 
 	ret = devm_request_threaded_irq(dev, hdmi->irq, hdmi_irq,
 			hdmi_irq_thread, IRQF_ONESHOT, dev_name(dev), hdmi);

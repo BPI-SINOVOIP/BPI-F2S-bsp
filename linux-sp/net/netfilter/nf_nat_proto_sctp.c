@@ -17,7 +17,7 @@ static u_int16_t nf_sctp_port_rover;
 static void
 sctp_unique_tuple(const struct nf_nat_l3proto *l3proto,
 		  struct nf_conntrack_tuple *tuple,
-		  const struct nf_nat_range *range,
+		  const struct nf_nat_range2 *range,
 		  enum nf_nat_manip_type maniptype,
 		  const struct nf_conn *ct)
 {
@@ -32,7 +32,7 @@ sctp_manip_pkt(struct sk_buff *skb,
 	       const struct nf_conntrack_tuple *tuple,
 	       enum nf_nat_manip_type maniptype)
 {
-	sctp_sctphdr_t *hdr;
+	struct sctphdr *hdr;
 	int hdrsize = 8;
 
 	/* This could be an inner header returned in imcp packet; in such

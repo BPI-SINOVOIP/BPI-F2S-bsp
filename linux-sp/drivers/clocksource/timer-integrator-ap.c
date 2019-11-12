@@ -36,8 +36,8 @@ static u64 notrace integrator_read_sched_clock(void)
 	return -readl(sched_clk_base + TIMER_VALUE);
 }
 
-static int integrator_clocksource_init(unsigned long inrate,
-				       void __iomem *base)
+static int __init integrator_clocksource_init(unsigned long inrate,
+					      void __iomem *base)
 {
 	u32 ctrl = TIMER_CTRL_ENABLE | TIMER_CTRL_PERIODIC;
 	unsigned long rate = inrate;
@@ -181,8 +181,7 @@ static int __init integrator_ap_timer_init_of(struct device_node *node)
 	int irq;
 	struct clk *clk;
 	unsigned long rate;
-	struct device_node *pri_node;
-	struct device_node *sec_node;
+	struct device_node *alias_node;
 
 	base = of_io_request_and_map(node, 0, "integrator-timer");
 	if (IS_ERR(base))
@@ -204,7 +203,18 @@ static int __init integrator_ap_timer_init_of(struct device_node *node)
 		return err;
 	}
 
-	pri_node = of_find_node_by_path(path);
+	alias_node = of_find_node_by_path(path);
+
+	/*
+	 * The pointer is used as an identifier not as a pointer, we
+	 * can drop the refcount on the of__node immediately after
+	 * getting it.
+	 */
+	of_node_put(alias_node);
+
+	if (node == alias_node)
+		/* The primary timer lacks IRQ, use as clocksource */
+		return integrator_clocksource_init(rate, base);
 
 	err = of_property_read_string(of_aliases,
 				"arm,timer-secondary", &path);
@@ -213,14 +223,11 @@ static int __init integrator_ap_timer_init_of(struct device_node *node)
 		return err;
 	}
 
+	alias_node = of_find_node_by_path(path);
 
-	sec_node = of_find_node_by_path(path);
+	of_node_put(alias_node);
 
-	if (node == pri_node)
-		/* The primary timer lacks IRQ, use as clocksource */
-		return integrator_clocksource_init(rate, base);
-
-	if (node == sec_node) {
+	if (node == alias_node) {
 		/* The secondary timer will drive the clock event */
 		irq = irq_of_parse_and_map(node, 0);
 		return integrator_clockevent_init(rate, base, irq);
@@ -232,5 +239,5 @@ static int __init integrator_ap_timer_init_of(struct device_node *node)
 	return 0;
 }
 
-CLOCKSOURCE_OF_DECLARE(integrator_ap_timer, "arm,integrator-timer",
+TIMER_OF_DECLARE(integrator_ap_timer, "arm,integrator-timer",
 		       integrator_ap_timer_init_of);

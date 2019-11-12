@@ -53,14 +53,12 @@ static u32 board_caps;
 
 static void board_check_revision(void)
 {
-	if (of_have_populated_dt()) {
-		if (of_machine_is_compatible("nokia,n800"))
-			board_caps = NOKIA_N800;
-		else if (of_machine_is_compatible("nokia,n810"))
-			board_caps = NOKIA_N810;
-		else if (of_machine_is_compatible("nokia,n810-wimax"))
-			board_caps = NOKIA_N810_WIMAX;
-	}
+	if (of_machine_is_compatible("nokia,n800"))
+		board_caps = NOKIA_N800;
+	else if (of_machine_is_compatible("nokia,n810"))
+		board_caps = NOKIA_N810;
+	else if (of_machine_is_compatible("nokia,n810-wimax"))
+		board_caps = NOKIA_N810_WIMAX;
 
 	if (!board_caps)
 		pr_err("Unknown board\n");
@@ -568,11 +566,11 @@ static int n8x0_menelaus_late_init(struct device *dev)
 }
 #endif
 
-struct menelaus_platform_data n8x0_menelaus_platform_data __initdata = {
+struct menelaus_platform_data n8x0_menelaus_platform_data = {
 	.late_init = n8x0_menelaus_late_init,
 };
 
-struct aic3x_pdata n810_aic33_data __initdata = {
+struct aic3x_pdata n810_aic33_data = {
 	.gpio_reset = 118,
 };
 

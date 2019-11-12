@@ -113,7 +113,7 @@ struct zip_device *zip_get_device(int node)
  */
 int zip_get_node_id(void)
 {
-	return cpu_to_node(smp_processor_id());
+	return cpu_to_node(raw_smp_processor_id());
 }
 
 /* Initializes the ZIP h/w sub-system */
@@ -351,6 +351,7 @@ static struct pci_driver zip_driver = {
 
 static struct crypto_alg zip_comp_deflate = {
 	.cra_name		= "deflate",
+	.cra_driver_name	= "deflate-cavium",
 	.cra_flags		= CRYPTO_ALG_TYPE_COMPRESS,
 	.cra_ctxsize		= sizeof(struct zip_kernel_ctx),
 	.cra_priority           = 300,
@@ -365,6 +366,7 @@ static struct crypto_alg zip_comp_deflate = {
 
 static struct crypto_alg zip_comp_lzs = {
 	.cra_name		= "lzs",
+	.cra_driver_name	= "lzs-cavium",
 	.cra_flags		= CRYPTO_ALG_TYPE_COMPRESS,
 	.cra_ctxsize		= sizeof(struct zip_kernel_ctx),
 	.cra_priority           = 300,
@@ -384,7 +386,7 @@ static struct scomp_alg zip_scomp_deflate = {
 	.decompress		= zip_scomp_decompress,
 	.base			= {
 		.cra_name		= "deflate",
-		.cra_driver_name	= "deflate-scomp",
+		.cra_driver_name	= "deflate-scomp-cavium",
 		.cra_module		= THIS_MODULE,
 		.cra_priority           = 300,
 	}
@@ -397,7 +399,7 @@ static struct scomp_alg zip_scomp_lzs = {
 	.decompress		= zip_scomp_decompress,
 	.base			= {
 		.cra_name		= "lzs",
-		.cra_driver_name	= "lzs-scomp",
+		.cra_driver_name	= "lzs-scomp-cavium",
 		.cra_module		= THIS_MODULE,
 		.cra_priority           = 300,
 	}
@@ -469,6 +471,8 @@ static int zip_show_stats(struct seq_file *s, void *unused)
 	struct zip_stats  *st;
 
 	for (index = 0; index < MAX_ZIP_DEVICES; index++) {
+		u64 pending = 0;
+
 		if (zip_dev[index]) {
 			zip = zip_dev[index];
 			st  = &zip->stats;
@@ -476,16 +480,15 @@ static int zip_show_stats(struct seq_file *s, void *unused)
 			/* Get all the pending requests */
 			for (q = 0; q < ZIP_NUM_QUEUES; q++) {
 				val = zip_reg_read((zip->reg_base +
-						    ZIP_DBG_COREX_STA(q)));
-				val = (val >> 32);
-				val = val & 0xffffff;
-				atomic64_add(val, &st->pending_req);
+						    ZIP_DBG_QUEX_STA(q)));
+				pending += val >> 32 & 0xffffff;
 			}
 
-			avg_chunk = (atomic64_read(&st->comp_in_bytes) /
-				     atomic64_read(&st->comp_req_complete));
-			avg_cr = (atomic64_read(&st->comp_in_bytes) /
-				  atomic64_read(&st->comp_out_bytes));
+			val = atomic64_read(&st->comp_req_complete);
+			avg_chunk = (val) ? atomic64_read(&st->comp_in_bytes) / val : 0;
+
+			val = atomic64_read(&st->comp_out_bytes);
+			avg_cr = (val) ? atomic64_read(&st->comp_in_bytes) / val : 0;
 			seq_printf(s, "        ZIP Device %d Stats\n"
 				      "-----------------------------------\n"
 				      "Comp Req Submitted        : \t%lld\n"
@@ -513,10 +516,7 @@ static int zip_show_stats(struct seq_file *s, void *unused)
 				       (u64)atomic64_read(&st->decomp_in_bytes),
 				       (u64)atomic64_read(&st->decomp_out_bytes),
 				       (u64)atomic64_read(&st->decomp_bad_reqs),
-				       (u64)atomic64_read(&st->pending_req));
-
-			/* Reset pending requests  count */
-			atomic64_set(&st->pending_req, 0);
+				       pending);
 		}
 	}
 	return 0;

@@ -192,11 +192,11 @@ static int mpic_msgr_probe(struct platform_device *dev)
 			return -ENOMEM;
 		}
 	}
-	dev_info(&dev->dev, "Of-device full name %s\n", np->full_name);
+	dev_info(&dev->dev, "Of-device full name %pOF\n", np);
 
 	/* IO map the message register block. */
 	of_address_to_resource(np, 0, &rsrc);
-	msgr_block_addr = ioremap(rsrc.start, rsrc.end - rsrc.start);
+	msgr_block_addr = ioremap(rsrc.start, resource_size(&rsrc));
 	if (!msgr_block_addr) {
 		dev_err(&dev->dev, "Failed to iomap MPIC message registers");
 		return -EFAULT;

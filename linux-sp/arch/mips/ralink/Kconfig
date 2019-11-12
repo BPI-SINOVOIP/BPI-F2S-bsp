@@ -1,10 +1,11 @@
+# SPDX-License-Identifier: GPL-2.0
 if RALINK
 
 config CLKEVT_RT3352
 	bool
 	depends on SOC_RT305X || SOC_MT7620
 	default y
-	select CLKSRC_OF
+	select TIMER_OF
 	select CLKSRC_MMIO
 
 config RALINK_ILL_ACC
@@ -30,7 +31,6 @@ choice
 
 	config SOC_RT305X
 		bool "RT305x"
-		select USB_ARCH_HAS_HCD
 
 	config SOC_RT3883
 		bool "RT3883"
@@ -38,6 +38,7 @@ choice
 
 	config SOC_MT7620
 		bool "MT7620/8"
+		select CPU_MIPSR2_IRQ_VI
 		select HW_HAS_PCI
 
 	config SOC_MT7621
@@ -79,6 +80,16 @@ choice
 
 	config DTB_MT7620A_EVAL
 		bool "MT7620A eval kit"
+		depends on SOC_MT7620
+		select BUILTIN_DTB
+
+	config DTB_OMEGA2P
+		bool "Onion Omega2+"
+		depends on SOC_MT7620
+		select BUILTIN_DTB
+
+	config DTB_VOCORE2
+		bool "VoCore2"
 		depends on SOC_MT7620
 		select BUILTIN_DTB
 

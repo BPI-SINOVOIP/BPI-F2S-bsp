@@ -67,15 +67,6 @@ static void clk_gate_endisable(struct clk_hw *hw, int enable)
 	}
 
 	clk_writel(reg, gate->reg);
-	//printk(KERN_INFO "reg : 0x%x \n",reg);
-	//printk(KERN_INFO "gate->reg : 0x%x \n",gate->reg);
-	//force disable gate clock function when clken
-  if (enable == 1) {  
-			reg &= ~BIT(gate->bit_idx);
-	   clk_writel(reg, (gate->reg)+0x28);
-	//   printk(KERN_INFO "reg : 0x%x \n",reg);
-	//   printk(KERN_INFO "gate->reg : 0x%x \n",(gate->reg)+0x28);
-  }
 
 	if (gate->lock)
 		spin_unlock_irqrestore(gate->lock, flags);
@@ -95,7 +86,7 @@ static void clk_gate_disable(struct clk_hw *hw)
 	clk_gate_endisable(hw, 0);
 }
 
-static int clk_gate_is_enabled(struct clk_hw *hw)
+int clk_gate_is_enabled(struct clk_hw *hw)
 {
 	u32 reg;
 	struct clk_gate *gate = to_clk_gate(hw);
@@ -110,6 +101,7 @@ static int clk_gate_is_enabled(struct clk_hw *hw)
 
 	return reg ? 1 : 0;
 }
+EXPORT_SYMBOL_GPL(clk_gate_is_enabled);
 
 const struct clk_ops clk_gate_ops = {
 	.enable = clk_gate_enable,

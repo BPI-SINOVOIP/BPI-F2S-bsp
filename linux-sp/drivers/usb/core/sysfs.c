@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * drivers/usb/core/sysfs.c
  *
@@ -8,7 +9,6 @@
  * All of the sysfs file attributes for usb devices and interfaces.
  *
  * Released under the GPLv2 only.
- * SPDX-License-Identifier: GPL-2.0
  */
 
 
@@ -44,15 +44,9 @@ static ssize_t field##_show(struct device *dev,				\
 	usb_actconfig_show(field, format_string)		\
 	static DEVICE_ATTR_RO(field)
 
-#ifndef CONFIG_USB_LOGO_TEST
 usb_actconfig_attr(bNumInterfaces, "%2d\n");
-#else
-usb_actconfig_attr(bNumInterfaces, "%d\n");
-#endif
-
 usb_actconfig_attr(bmAttributes, "%2x\n");
 
-#ifndef CONFIG_USB_LOGO_TEST
 static ssize_t bMaxPower_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
@@ -71,31 +65,6 @@ static ssize_t bMaxPower_show(struct device *dev,
 	return rc;
 }
 static DEVICE_ATTR_RO(bMaxPower);
-#else
-static ssize_t show_bMaxPower(struct device *dev, struct device_attribute *attr, char *buf)
-{
-	struct usb_device *udev;
-	struct usb_host_config *actconfig;
-
-	udev = to_usb_device(dev);
-	actconfig = udev->actconfig;
-	if (actconfig)
-		return sprintf(buf, "%3dmA\n", actconfig->desc.bMaxPower * 2);
-	else {
-		__u8 maxp = 0;
-		int i;
-
-		for (i = 0; i < udev->descriptor.bNumConfigurations; i++)
-			maxp = maxp > udev->config[i].desc.bMaxPower
-			       ? maxp
-			       : udev->config[i].desc.bMaxPower;
-
-		return sprintf(buf, "%3dmA\n", maxp * 2);
-	}
-}
-
-static DEVICE_ATTR(bMaxPower, S_IRUGO, show_bMaxPower, NULL);
-#endif
 
 static ssize_t configuration_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
@@ -144,7 +113,7 @@ static ssize_t devspec_show(struct device *dev, struct device_attribute *attr,
 {
 	struct device_node *of_node = dev->of_node;
 
-	return sprintf(buf, "%s\n", of_node_full_name(of_node));
+	return sprintf(buf, "%pOF\n", of_node);
 }
 static DEVICE_ATTR_RO(devspec);
 #endif
@@ -205,6 +174,26 @@ static ssize_t speed_show(struct device *dev, struct device_attribute *attr,
 	return sprintf(buf, "%s\n", speed);
 }
 static DEVICE_ATTR_RO(speed);
+
+static ssize_t rx_lanes_show(struct device *dev, struct device_attribute *attr,
+			  char *buf)
+{
+	struct usb_device *udev;
+
+	udev = to_usb_device(dev);
+	return sprintf(buf, "%d\n", udev->rx_lanes);
+}
+static DEVICE_ATTR_RO(rx_lanes);
+
+static ssize_t tx_lanes_show(struct device *dev, struct device_attribute *attr,
+			  char *buf)
+{
+	struct usb_device *udev;
+
+	udev = to_usb_device(dev);
+	return sprintf(buf, "%d\n", udev->tx_lanes);
+}
+static DEVICE_ATTR_RO(tx_lanes);
 
 static ssize_t busnum_show(struct device *dev, struct device_attribute *attr,
 			   char *buf)
@@ -685,7 +674,8 @@ static int add_power_attributes(struct device *dev)
 		if (udev->usb2_hw_lpm_capable == 1)
 			rc = sysfs_merge_group(&dev->kobj,
 					&usb2_hardware_lpm_attr_group);
-		if (udev->speed == USB_SPEED_SUPER &&
+		if ((udev->speed == USB_SPEED_SUPER ||
+		     udev->speed == USB_SPEED_SUPER_PLUS) &&
 				udev->lpm_capable == 1)
 			rc = sysfs_merge_group(&dev->kobj,
 					&usb3_hardware_lpm_attr_group);
@@ -801,25 +791,6 @@ static ssize_t remove_store(struct device *dev, struct device_attribute *attr,
 }
 static DEVICE_ATTR_IGNORE_LOCKDEP(remove, S_IWUSR, NULL, remove_store);
 
-#ifdef CONFIG_USB_BAD_DEVICE_INFO
-/* Get a device status */
-static ssize_t show_usb_device_status(struct device *dev,
-				      struct device_attribute *attr, char *buf)
-{
-	struct usb_device *udev;
-	u16 devstat;
-	int status;
-
-	udev = to_usb_device(dev);
-
-	status = usb_get_status(udev, USB_RECIP_DEVICE, 0, &devstat);
-	if (status < 0)
-		return 0;
-
-	return sprintf(buf, "%d\n", devstat);
-}
-static DEVICE_ATTR(device_status, S_IRUGO, show_usb_device_status, NULL);
-#endif
 
 static struct attribute *dev_attrs[] = {
 	/* current configuration's attributes */
@@ -839,6 +810,8 @@ static struct attribute *dev_attrs[] = {
 	&dev_attr_bNumConfigurations.attr,
 	&dev_attr_bMaxPacketSize0.attr,
 	&dev_attr_speed.attr,
+	&dev_attr_rx_lanes.attr,
+	&dev_attr_tx_lanes.attr,
 	&dev_attr_busnum.attr,
 	&dev_attr_devnum.attr,
 	&dev_attr_devpath.attr,
@@ -852,9 +825,6 @@ static struct attribute *dev_attrs[] = {
 	&dev_attr_ltm_capable.attr,
 #ifdef CONFIG_OF
 	&dev_attr_devspec.attr,
-#endif
-#ifdef CONFIG_USB_BAD_DEVICE_INFO
-	&dev_attr_device_status.attr,
 #endif
 	NULL,
 };
@@ -1026,7 +996,7 @@ static ssize_t interface_show(struct device *dev, struct device_attribute *attr,
 	char *string;
 
 	intf = to_usb_interface(dev);
-	string = ACCESS_ONCE(intf->cur_altsetting->string);
+	string = READ_ONCE(intf->cur_altsetting->string);
 	if (!string)
 		return 0;
 	return sprintf(buf, "%s\n", string);
@@ -1042,7 +1012,7 @@ static ssize_t modalias_show(struct device *dev, struct device_attribute *attr,
 
 	intf = to_usb_interface(dev);
 	udev = interface_to_usbdev(intf);
-	alt = ACCESS_ONCE(intf->cur_altsetting);
+	alt = READ_ONCE(intf->cur_altsetting);
 
 	return sprintf(buf, "usb:v%04Xp%04Xd%04Xdc%02Xdsc%02Xdp%02X"
 			"ic%02Xisc%02Xip%02Xin%02X\n",

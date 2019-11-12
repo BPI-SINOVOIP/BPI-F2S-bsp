@@ -1,24 +1,13 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2013 Red Hat
- * Author: Rob Clark <robdclark@gmail.com>
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published by
- * the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
- * more details.
- *
- * You should have received a copy of the GNU General Public License along with
- * this program.  If not, see <http://www.gnu.org/licenses/>.
+ * Copyright (C) 2014-2018 Etnaviv Project
  */
 
 #include <linux/dma-buf.h>
 #include "etnaviv_drv.h"
 #include "etnaviv_gem.h"
 
+static struct lock_class_key etnaviv_prime_lock_class;
 
 struct sg_table *etnaviv_gem_prime_get_sg_table(struct drm_gem_object *obj)
 {
@@ -87,7 +76,7 @@ static void etnaviv_gem_prime_release(struct etnaviv_gem_object *etnaviv_obj)
 	 * ours, just free the array we allocated:
 	 */
 	if (etnaviv_obj->pages)
-		drm_free_large(etnaviv_obj->pages);
+		kvfree(etnaviv_obj->pages);
 
 	drm_prime_gem_destroy(&etnaviv_obj->base, etnaviv_obj->sgt);
 }
@@ -125,10 +114,12 @@ struct drm_gem_object *etnaviv_gem_prime_import_sg_table(struct drm_device *dev,
 	if (ret < 0)
 		return ERR_PTR(ret);
 
+	lockdep_set_class(&etnaviv_obj->lock, &etnaviv_prime_lock_class);
+
 	npages = size / PAGE_SIZE;
 
 	etnaviv_obj->sgt = sgt;
-	etnaviv_obj->pages = drm_malloc_ab(npages, sizeof(struct page *));
+	etnaviv_obj->pages = kvmalloc_array(npages, sizeof(struct page *), GFP_KERNEL);
 	if (!etnaviv_obj->pages) {
 		ret = -ENOMEM;
 		goto fail;
@@ -139,14 +130,12 @@ struct drm_gem_object *etnaviv_gem_prime_import_sg_table(struct drm_device *dev,
 	if (ret)
 		goto fail;
 
-	ret = etnaviv_gem_obj_add(dev, &etnaviv_obj->base);
-	if (ret)
-		goto fail;
+	etnaviv_gem_obj_add(dev, &etnaviv_obj->base);
 
 	return &etnaviv_obj->base;
 
 fail:
-	drm_gem_object_unreference_unlocked(&etnaviv_obj->base);
+	drm_gem_object_put_unlocked(&etnaviv_obj->base);
 
 	return ERR_PTR(ret);
 }

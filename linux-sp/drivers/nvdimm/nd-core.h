@@ -29,10 +29,9 @@ struct nvdimm_bus {
 	struct list_head list;
 	struct device dev;
 	int id, probe_active;
-	struct list_head poison_list;
 	struct list_head mapping_list;
 	struct mutex reconfig_mutex;
-	spinlock_t poison_lock;
+	struct badrange badrange;
 };
 
 struct nvdimm {
@@ -64,7 +63,16 @@ struct blk_alloc_info {
 
 bool is_nvdimm(struct device *dev);
 bool is_nd_pmem(struct device *dev);
+bool is_nd_volatile(struct device *dev);
 bool is_nd_blk(struct device *dev);
+static inline bool is_nd_region(struct device *dev)
+{
+	return is_nd_pmem(dev) || is_nd_blk(dev) || is_nd_volatile(dev);
+}
+static inline bool is_memory(struct device *dev)
+{
+	return is_nd_pmem(dev) || is_nd_volatile(dev);
+}
 struct nvdimm_bus *walk_to_nvdimm_bus(struct device *nd_dev);
 int __init nvdimm_bus_init(void);
 void nvdimm_bus_exit(void);
@@ -92,10 +100,20 @@ struct nd_region;
 struct nvdimm_drvdata;
 struct nd_mapping;
 void nd_mapping_free_labels(struct nd_mapping *nd_mapping);
+
+int __reserve_free_pmem(struct device *dev, void *data);
+void release_free_pmem(struct nvdimm_bus *nvdimm_bus,
+		       struct nd_mapping *nd_mapping);
+
+resource_size_t nd_pmem_max_contiguous_dpa(struct nd_region *nd_region,
+					   struct nd_mapping *nd_mapping);
+resource_size_t nd_region_allocatable_dpa(struct nd_region *nd_region);
 resource_size_t nd_pmem_available_dpa(struct nd_region *nd_region,
 		struct nd_mapping *nd_mapping, resource_size_t *overlap);
 resource_size_t nd_blk_available_dpa(struct nd_region *nd_region);
 resource_size_t nd_region_available_dpa(struct nd_region *nd_region);
+int nd_region_conflict(struct nd_region *nd_region, resource_size_t start,
+		resource_size_t size);
 resource_size_t nvdimm_allocated_dpa(struct nvdimm_drvdata *ndd,
 		struct nd_label_id *label_id);
 int alias_dpa_busy(struct device *dev, void *data);

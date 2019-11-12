@@ -38,6 +38,7 @@
 #include <linux/phy.h>
 #include <linux/io.h>
 #include <linux/uaccess.h>
+#include <linux/gpio/consumer.h>
 
 #include <asm/irq.h>
 
@@ -46,10 +47,41 @@
 
 #include "mdio-boardinfo.h"
 
+static int mdiobus_register_gpiod(struct mdio_device *mdiodev)
+{
+	struct gpio_desc *gpiod = NULL;
+
+	/* Deassert the optional reset signal */
+	if (mdiodev->dev.of_node)
+		gpiod = fwnode_get_named_gpiod(&mdiodev->dev.of_node->fwnode,
+					       "reset-gpios", 0, GPIOD_OUT_LOW,
+					       "PHY reset");
+	if (PTR_ERR(gpiod) == -ENOENT ||
+	    PTR_ERR(gpiod) == -ENOSYS)
+		gpiod = NULL;
+	else if (IS_ERR(gpiod))
+		return PTR_ERR(gpiod);
+
+	mdiodev->reset = gpiod;
+
+	/* Assert the reset signal again */
+	mdio_device_reset(mdiodev, 1);
+
+	return 0;
+}
+
 int mdiobus_register_device(struct mdio_device *mdiodev)
 {
+	int err;
+
 	if (mdiodev->bus->mdio_map[mdiodev->addr])
 		return -EBUSY;
+
+	if (mdiodev->flags & MDIO_DEVICE_FLAG_PHY) {
+		err = mdiobus_register_gpiod(mdiodev);
+		if (err)
+			return err;
+	}
 
 	mdiodev->bus->mdio_map[mdiodev->addr] = mdiodev;
 
@@ -263,24 +295,14 @@ static void of_mdiobus_link_mdiodev(struct mii_bus *bus,
 
 	for_each_available_child_of_node(bus->dev.of_node, child) {
 		int addr;
-		int ret;
 
-		ret = of_property_read_u32(child, "reg", &addr);
-		if (ret < 0) {
-			dev_err(dev, "%s has invalid MDIO address\n",
-				child->full_name);
+		addr = of_mdio_parse_addr(dev, child);
+		if (addr < 0)
 			continue;
-		}
-
-		/* A MDIO device must have a reg property in the range [0-31] */
-		if (addr >= PHY_MAX_ADDR) {
-			dev_err(dev, "%s MDIO address %i is too large\n",
-				child->full_name, addr);
-			continue;
-		}
 
 		if (addr == mdiodev->addr) {
 			dev->of_node = child;
+			dev->fwnode = of_fwnode_handle(child);
 			return;
 		}
 	}
@@ -358,39 +380,24 @@ int __mdiobus_register(struct mii_bus *bus, struct module *owner)
 	err = device_register(&bus->dev);
 	if (err) {
 		pr_err("mii_bus %s failed to register\n", bus->id);
-		put_device(&bus->dev);
 		return -EINVAL;
 	}
 
 	mutex_init(&bus->mdio_lock);
 
-	/* de-assert bus level PHY GPIO resets */
-	if (bus->num_reset_gpios > 0) {
-		bus->reset_gpiod = devm_kcalloc(&bus->dev,
-						 bus->num_reset_gpios,
-						 sizeof(struct gpio_desc *),
-						 GFP_KERNEL);
-		if (!bus->reset_gpiod)
-			return -ENOMEM;
-	}
+	/* de-assert bus level PHY GPIO reset */
+	gpiod = devm_gpiod_get_optional(&bus->dev, "reset", GPIOD_OUT_LOW);
+	if (IS_ERR(gpiod)) {
+		dev_err(&bus->dev, "mii_bus %s couldn't get reset GPIO\n",
+			bus->id);
+		device_del(&bus->dev);
+		return PTR_ERR(gpiod);
+	} else	if (gpiod) {
+		bus->reset_gpiod = gpiod;
 
-	for (i = 0; i < bus->num_reset_gpios; i++) {
-		gpiod = devm_gpiod_get_index(&bus->dev, "reset", i,
-					     GPIOD_OUT_LOW);
-		if (IS_ERR(gpiod)) {
-			err = PTR_ERR(gpiod);
-			if (err != -ENOENT) {
-				dev_err(&bus->dev,
-					"mii_bus %s couldn't get reset GPIO\n",
-					bus->id);
-				return err;
-			}
-		} else {
-			bus->reset_gpiod[i] = gpiod;
-			gpiod_set_value_cansleep(gpiod, 1);
-			udelay(bus->reset_delay_us);
-			gpiod_set_value_cansleep(gpiod, 0);
-		}
+		gpiod_set_value_cansleep(gpiod, 1);
+		udelay(bus->reset_delay_us);
+		gpiod_set_value_cansleep(gpiod, 0);
 	}
 
 	if (bus->reset)
@@ -425,10 +432,8 @@ error:
 	}
 
 	/* Put PHYs in RESET to save power */
-	for (i = 0; i < bus->num_reset_gpios; i++) {
-		if (bus->reset_gpiod[i])
-			gpiod_set_value_cansleep(bus->reset_gpiod[i], 1);
-	}
+	if (bus->reset_gpiod)
+		gpiod_set_value_cansleep(bus->reset_gpiod, 1);
 
 	device_del(&bus->dev);
 	return err;
@@ -448,15 +453,16 @@ void mdiobus_unregister(struct mii_bus *bus)
 		if (!mdiodev)
 			continue;
 
+		if (mdiodev->reset)
+			gpiod_put(mdiodev->reset);
+
 		mdiodev->device_remove(mdiodev);
 		mdiodev->device_free(mdiodev);
 	}
 
 	/* Put PHYs in RESET to save power */
-	for (i = 0; i < bus->num_reset_gpios; i++) {
-		if (bus->reset_gpiod[i])
-			gpiod_set_value_cansleep(bus->reset_gpiod[i], 1);
-	}
+	if (bus->reset_gpiod)
+		gpiod_set_value_cansleep(bus->reset_gpiod, 1);
 
 	device_del(&bus->dev);
 }
@@ -523,6 +529,55 @@ struct phy_device *mdiobus_scan(struct mii_bus *bus, int addr)
 EXPORT_SYMBOL(mdiobus_scan);
 
 /**
+ * __mdiobus_read - Unlocked version of the mdiobus_read function
+ * @bus: the mii_bus struct
+ * @addr: the phy address
+ * @regnum: register number to read
+ *
+ * Read a MDIO bus register. Caller must hold the mdio bus lock.
+ *
+ * NOTE: MUST NOT be called from interrupt context.
+ */
+int __mdiobus_read(struct mii_bus *bus, int addr, u32 regnum)
+{
+	int retval;
+
+	WARN_ON_ONCE(!mutex_is_locked(&bus->mdio_lock));
+
+	retval = bus->read(bus, addr, regnum);
+
+	trace_mdio_access(bus, 1, addr, regnum, retval, retval);
+
+	return retval;
+}
+EXPORT_SYMBOL(__mdiobus_read);
+
+/**
+ * __mdiobus_write - Unlocked version of the mdiobus_write function
+ * @bus: the mii_bus struct
+ * @addr: the phy address
+ * @regnum: register number to write
+ * @val: value to write to @regnum
+ *
+ * Write a MDIO bus register. Caller must hold the mdio bus lock.
+ *
+ * NOTE: MUST NOT be called from interrupt context.
+ */
+int __mdiobus_write(struct mii_bus *bus, int addr, u32 regnum, u16 val)
+{
+	int err;
+
+	WARN_ON_ONCE(!mutex_is_locked(&bus->mdio_lock));
+
+	err = bus->write(bus, addr, regnum, val);
+
+	trace_mdio_access(bus, 0, addr, regnum, val, err);
+
+	return err;
+}
+EXPORT_SYMBOL(__mdiobus_write);
+
+/**
  * mdiobus_read_nested - Nested version of the mdiobus_read function
  * @bus: the mii_bus struct
  * @addr: the phy address
@@ -542,10 +597,8 @@ int mdiobus_read_nested(struct mii_bus *bus, int addr, u32 regnum)
 	BUG_ON(in_interrupt());
 
 	mutex_lock_nested(&bus->mdio_lock, MDIO_MUTEX_NESTED);
-	retval = bus->read(bus, addr, regnum);
+	retval = __mdiobus_read(bus, addr, regnum);
 	mutex_unlock(&bus->mdio_lock);
-
-	trace_mdio_access(bus, 1, addr, regnum, retval, retval);
 
 	return retval;
 }
@@ -568,10 +621,8 @@ int mdiobus_read(struct mii_bus *bus, int addr, u32 regnum)
 	BUG_ON(in_interrupt());
 
 	mutex_lock(&bus->mdio_lock);
-	retval = bus->read(bus, addr, regnum);
+	retval = __mdiobus_read(bus, addr, regnum);
 	mutex_unlock(&bus->mdio_lock);
-
-	trace_mdio_access(bus, 1, addr, regnum, retval, retval);
 
 	return retval;
 }
@@ -598,10 +649,8 @@ int mdiobus_write_nested(struct mii_bus *bus, int addr, u32 regnum, u16 val)
 	BUG_ON(in_interrupt());
 
 	mutex_lock_nested(&bus->mdio_lock, MDIO_MUTEX_NESTED);
-	err = bus->write(bus, addr, regnum, val);
+	err = __mdiobus_write(bus, addr, regnum, val);
 	mutex_unlock(&bus->mdio_lock);
-
-	trace_mdio_access(bus, 0, addr, regnum, val, err);
 
 	return err;
 }
@@ -625,10 +674,8 @@ int mdiobus_write(struct mii_bus *bus, int addr, u32 regnum, u16 val)
 	BUG_ON(in_interrupt());
 
 	mutex_lock(&bus->mdio_lock);
-	err = bus->write(bus, addr, regnum, val);
+	err = __mdiobus_write(bus, addr, regnum, val);
 	mutex_unlock(&bus->mdio_lock);
-
-	trace_mdio_access(bus, 0, addr, regnum, val, err);
 
 	return err;
 }
@@ -670,58 +717,10 @@ static int mdio_uevent(struct device *dev, struct kobj_uevent_env *env)
 	return 0;
 }
 
-#ifdef CONFIG_PM
-static int mdio_bus_suspend(struct device *dev)
-{
-	struct mdio_device *mdio = to_mdio_device(dev);
-
-	if (mdio->pm_ops && mdio->pm_ops->suspend)
-		return mdio->pm_ops->suspend(dev);
-
-	return 0;
-}
-
-static int mdio_bus_resume(struct device *dev)
-{
-	struct mdio_device *mdio = to_mdio_device(dev);
-
-	if (mdio->pm_ops && mdio->pm_ops->resume)
-		return mdio->pm_ops->resume(dev);
-
-	return 0;
-}
-
-static int mdio_bus_restore(struct device *dev)
-{
-	struct mdio_device *mdio = to_mdio_device(dev);
-
-	if (mdio->pm_ops && mdio->pm_ops->restore)
-		return mdio->pm_ops->restore(dev);
-
-	return 0;
-}
-
-static const struct dev_pm_ops mdio_bus_pm_ops = {
-	.suspend = mdio_bus_suspend,
-	.resume = mdio_bus_resume,
-	.freeze = mdio_bus_suspend,
-	.thaw = mdio_bus_resume,
-	.restore = mdio_bus_restore,
-};
-
-#define MDIO_BUS_PM_OPS (&mdio_bus_pm_ops)
-
-#else
-
-#define MDIO_BUS_PM_OPS NULL
-
-#endif /* CONFIG_PM */
-
 struct bus_type mdio_bus_type = {
 	.name		= "mdio_bus",
 	.match		= mdio_bus_match,
 	.uevent		= mdio_uevent,
-	.pm		= MDIO_BUS_PM_OPS,
 };
 EXPORT_SYMBOL(mdio_bus_type);
 

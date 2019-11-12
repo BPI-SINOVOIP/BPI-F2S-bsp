@@ -27,6 +27,10 @@
 
 #include <linux/bitops.h>
 #include <linux/list.h>
+#include <linux/radix-tree.h>
+
+#include "i915_gem.h"
+#include "i915_scheduler.h"
 
 struct pid;
 
@@ -36,10 +40,18 @@ struct drm_file;
 struct drm_i915_private;
 struct drm_i915_file_private;
 struct i915_hw_ppgtt;
+struct i915_request;
 struct i915_vma;
 struct intel_ring;
 
 #define DEFAULT_CONTEXT_HANDLE 0
+
+struct intel_context;
+
+struct intel_context_ops {
+	void (*unpin)(struct intel_context *ce);
+	void (*destroy)(struct intel_context *ce);
+};
 
 /**
  * struct i915_gem_context - client state
@@ -86,6 +98,7 @@ struct i915_gem_context {
 
 	/** link: place with &drm_i915_private.context_list */
 	struct list_head link;
+	struct llist_node free_link;
 
 	/**
 	 * @ref: reference count
@@ -97,6 +110,11 @@ struct i915_gem_context {
 	 * i915_gem_context_put() for access.
 	 */
 	struct kref ref;
+
+	/**
+	 * @rcu: rcu_head for deferred freeing.
+	 */
+	struct rcu_head rcu;
 
 	/**
 	 * @flags: small set of booleans
@@ -127,31 +145,22 @@ struct i915_gem_context {
 	 */
 	u32 user_handle;
 
-	/**
-	 * @priority: execution and service priority
-	 *
-	 * All clients are equal, but some are more equal than others!
-	 *
-	 * Requests from a context with a greater (more positive) value of
-	 * @priority will be executed before those with a lower @priority
-	 * value, forming a simple QoS.
-	 *
-	 * The &drm_i915_private.kernel_context is assigned the lowest priority.
-	 */
-	int priority;
+	struct i915_sched_attr sched;
 
 	/** ggtt_offset_bias: placement restriction for context objects */
 	u32 ggtt_offset_bias;
 
 	/** engine: per-engine logical HW state */
 	struct intel_context {
+		struct i915_gem_context *gem_context;
 		struct i915_vma *state;
 		struct intel_ring *ring;
 		u32 *lrc_reg_state;
 		u64 lrc_desc;
 		int pin_count;
-		bool initialised;
-	} engine[I915_NUM_ENGINES];
+
+		const struct intel_context_ops *ops;
+	} __engine[I915_NUM_ENGINES];
 
 	/** ring_size: size for allocating the per-engine ring buffer */
 	u32 ring_size;
@@ -159,20 +168,32 @@ struct i915_gem_context {
 	u32 desc_template;
 
 	/** guilty_count: How many times this context has caused a GPU hang. */
-	unsigned int guilty_count;
+	atomic_t guilty_count;
 	/**
 	 * @active_count: How many times this context was active during a GPU
 	 * hang, but did not cause it.
 	 */
-	unsigned int active_count;
+	atomic_t active_count;
 
 #define CONTEXT_SCORE_GUILTY		10
 #define CONTEXT_SCORE_BAN_THRESHOLD	40
 	/** ban_score: Accumulated score of all hangs caused by this context. */
-	int ban_score;
+	atomic_t ban_score;
 
 	/** remap_slice: Bitmask of cache lines that need remapping */
 	u8 remap_slice;
+
+	/** handles_vma: rbtree to look up our context specific obj/vma for
+	 * the user handle. (user handles are per fd, but the binding is
+	 * per vm, which may be one per context or shared with the global GTT)
+	 */
+	struct radix_tree_root handles_vma;
+
+	/** handles_list: reverse list of all the rbtree entries in use for
+	 * this context, which allows us to free all the allocations on
+	 * context close.
+	 */
+	struct list_head handles_list;
 };
 
 static inline bool i915_gem_context_is_closed(const struct i915_gem_context *ctx)
@@ -246,15 +267,48 @@ static inline bool i915_gem_context_is_kernel(struct i915_gem_context *ctx)
 	return !ctx->file_priv;
 }
 
+static inline struct intel_context *
+to_intel_context(struct i915_gem_context *ctx,
+		 const struct intel_engine_cs *engine)
+{
+	return &ctx->__engine[engine->id];
+}
+
+static inline struct intel_context *
+intel_context_pin(struct i915_gem_context *ctx, struct intel_engine_cs *engine)
+{
+	return engine->context_pin(engine, ctx);
+}
+
+static inline void __intel_context_pin(struct intel_context *ce)
+{
+	GEM_BUG_ON(!ce->pin_count);
+	ce->pin_count++;
+}
+
+static inline void intel_context_unpin(struct intel_context *ce)
+{
+	GEM_BUG_ON(!ce->pin_count);
+	if (--ce->pin_count)
+		return;
+
+	GEM_BUG_ON(!ce->ops);
+	ce->ops->unpin(ce);
+}
+
 /* i915_gem_context.c */
-int __must_check i915_gem_context_init(struct drm_i915_private *dev_priv);
-void i915_gem_context_lost(struct drm_i915_private *dev_priv);
-void i915_gem_context_fini(struct drm_i915_private *dev_priv);
-int i915_gem_context_open(struct drm_device *dev, struct drm_file *file);
-void i915_gem_context_close(struct drm_device *dev, struct drm_file *file);
-int i915_switch_context(struct drm_i915_gem_request *req);
+int __must_check i915_gem_contexts_init(struct drm_i915_private *dev_priv);
+void i915_gem_contexts_lost(struct drm_i915_private *dev_priv);
+void i915_gem_contexts_fini(struct drm_i915_private *dev_priv);
+
+int i915_gem_context_open(struct drm_i915_private *i915,
+			  struct drm_file *file);
+void i915_gem_context_close(struct drm_file *file);
+
+int i915_switch_context(struct i915_request *rq);
 int i915_gem_switch_to_kernel_context(struct drm_i915_private *dev_priv);
-void i915_gem_context_free(struct kref *ctx_ref);
+
+void i915_gem_context_release(struct kref *ctx_ref);
 struct i915_gem_context *
 i915_gem_context_create_gvt(struct drm_device *dev);
 
@@ -268,5 +322,20 @@ int i915_gem_context_setparam_ioctl(struct drm_device *dev, void *data,
 				    struct drm_file *file_priv);
 int i915_gem_context_reset_stats_ioctl(struct drm_device *dev, void *data,
 				       struct drm_file *file);
+
+struct i915_gem_context *
+i915_gem_context_create_kernel(struct drm_i915_private *i915, int prio);
+
+static inline struct i915_gem_context *
+i915_gem_context_get(struct i915_gem_context *ctx)
+{
+	kref_get(&ctx->ref);
+	return ctx;
+}
+
+static inline void i915_gem_context_put(struct i915_gem_context *ctx)
+{
+	kref_put(&ctx->ref, i915_gem_context_release);
+}
 
 #endif /* !__I915_GEM_CONTEXT_H__ */

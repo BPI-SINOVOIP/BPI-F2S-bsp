@@ -1,36 +1,5 @@
-/*
- * drivers/net/ethernet/mellanox/mlxsw/spectrum_buffers.c
- * Copyright (c) 2015 Mellanox Technologies. All rights reserved.
- * Copyright (c) 2015 Jiri Pirko <jiri@mellanox.com>
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the distribution.
- * 3. Neither the names of the copyright holders nor the names of its
- *    contributors may be used to endorse or promote products derived from
- *    this software without specific prior written permission.
- *
- * Alternatively, this software may be distributed under the terms of the
- * GNU General Public License ("GPL") version 2 as published by the Free
- * Software Foundation.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- */
+// SPDX-License-Identifier: BSD-3-Clause OR GPL-2.0
+/* Copyright (c) 2015-2018 Mellanox Technologies. All rights reserved */
 
 #include <linux/kernel.h>
 #include <linux/types.h>
@@ -43,25 +12,72 @@
 #include "port.h"
 #include "reg.h"
 
+struct mlxsw_sp_sb_pr {
+	enum mlxsw_reg_sbpr_mode mode;
+	u32 size;
+};
+
+struct mlxsw_cp_sb_occ {
+	u32 cur;
+	u32 max;
+};
+
+struct mlxsw_sp_sb_cm {
+	u32 min_buff;
+	u32 max_buff;
+	u8 pool;
+	struct mlxsw_cp_sb_occ occ;
+};
+
+struct mlxsw_sp_sb_pm {
+	u32 min_buff;
+	u32 max_buff;
+	struct mlxsw_cp_sb_occ occ;
+};
+
+#define MLXSW_SP_SB_POOL_COUNT	4
+#define MLXSW_SP_SB_TC_COUNT	8
+
+struct mlxsw_sp_sb_port {
+	struct mlxsw_sp_sb_cm cms[2][MLXSW_SP_SB_TC_COUNT];
+	struct mlxsw_sp_sb_pm pms[2][MLXSW_SP_SB_POOL_COUNT];
+};
+
+struct mlxsw_sp_sb {
+	struct mlxsw_sp_sb_pr prs[2][MLXSW_SP_SB_POOL_COUNT];
+	struct mlxsw_sp_sb_port *ports;
+	u32 cell_size;
+};
+
+u32 mlxsw_sp_cells_bytes(const struct mlxsw_sp *mlxsw_sp, u32 cells)
+{
+	return mlxsw_sp->sb->cell_size * cells;
+}
+
+u32 mlxsw_sp_bytes_cells(const struct mlxsw_sp *mlxsw_sp, u32 bytes)
+{
+	return DIV_ROUND_UP(bytes, mlxsw_sp->sb->cell_size);
+}
+
 static struct mlxsw_sp_sb_pr *mlxsw_sp_sb_pr_get(struct mlxsw_sp *mlxsw_sp,
 						 u8 pool,
 						 enum mlxsw_reg_sbxx_dir dir)
 {
-	return &mlxsw_sp->sb.prs[dir][pool];
+	return &mlxsw_sp->sb->prs[dir][pool];
 }
 
 static struct mlxsw_sp_sb_cm *mlxsw_sp_sb_cm_get(struct mlxsw_sp *mlxsw_sp,
 						 u8 local_port, u8 pg_buff,
 						 enum mlxsw_reg_sbxx_dir dir)
 {
-	return &mlxsw_sp->sb.ports[local_port].cms[dir][pg_buff];
+	return &mlxsw_sp->sb->ports[local_port].cms[dir][pg_buff];
 }
 
 static struct mlxsw_sp_sb_pm *mlxsw_sp_sb_pm_get(struct mlxsw_sp *mlxsw_sp,
 						 u8 local_port, u8 pool,
 						 enum mlxsw_reg_sbxx_dir dir)
 {
-	return &mlxsw_sp->sb.ports[local_port].pms[dir][pool];
+	return &mlxsw_sp->sb->ports[local_port].pms[dir][pool];
 }
 
 static int mlxsw_sp_sb_pr_write(struct mlxsw_sp *mlxsw_sp, u8 pool,
@@ -215,16 +231,17 @@ static int mlxsw_sp_sb_ports_init(struct mlxsw_sp *mlxsw_sp)
 {
 	unsigned int max_ports = mlxsw_core_max_ports(mlxsw_sp->core);
 
-	mlxsw_sp->sb.ports = kcalloc(max_ports, sizeof(struct mlxsw_sp_sb_port),
-				     GFP_KERNEL);
-	if (!mlxsw_sp->sb.ports)
+	mlxsw_sp->sb->ports = kcalloc(max_ports,
+				      sizeof(struct mlxsw_sp_sb_port),
+				      GFP_KERNEL);
+	if (!mlxsw_sp->sb->ports)
 		return -ENOMEM;
 	return 0;
 }
 
 static void mlxsw_sp_sb_ports_fini(struct mlxsw_sp *mlxsw_sp)
 {
-	kfree(mlxsw_sp->sb.ports);
+	kfree(mlxsw_sp->sb->ports);
 }
 
 #define MLXSW_SP_SB_PR_INGRESS_SIZE	12440000
@@ -320,14 +337,14 @@ static const struct mlxsw_sp_sb_cm mlxsw_sp_sb_cms_egress[] = {
 	MLXSW_SP_SB_CM(1500, 9, 0),
 	MLXSW_SP_SB_CM(1500, 9, 0),
 	MLXSW_SP_SB_CM(1500, 9, 0),
-	MLXSW_SP_SB_CM(0, 0, 0),
-	MLXSW_SP_SB_CM(0, 0, 0),
-	MLXSW_SP_SB_CM(0, 0, 0),
-	MLXSW_SP_SB_CM(0, 0, 0),
-	MLXSW_SP_SB_CM(0, 0, 0),
-	MLXSW_SP_SB_CM(0, 0, 0),
-	MLXSW_SP_SB_CM(0, 0, 0),
-	MLXSW_SP_SB_CM(0, 0, 0),
+	MLXSW_SP_SB_CM(0, 140000, 15),
+	MLXSW_SP_SB_CM(0, 140000, 15),
+	MLXSW_SP_SB_CM(0, 140000, 15),
+	MLXSW_SP_SB_CM(0, 140000, 15),
+	MLXSW_SP_SB_CM(0, 140000, 15),
+	MLXSW_SP_SB_CM(0, 140000, 15),
+	MLXSW_SP_SB_CM(0, 140000, 15),
+	MLXSW_SP_SB_CM(0, 140000, 15),
 	MLXSW_SP_SB_CM(1, 0xff, 0),
 };
 
@@ -337,13 +354,13 @@ static const struct mlxsw_sp_sb_cm mlxsw_sp_sb_cms_egress[] = {
 
 static const struct mlxsw_sp_sb_cm mlxsw_sp_cpu_port_sb_cms[] = {
 	MLXSW_SP_CPU_PORT_SB_CM,
+	MLXSW_SP_SB_CM(MLXSW_PORT_MAX_MTU, 0, 0),
+	MLXSW_SP_SB_CM(MLXSW_PORT_MAX_MTU, 0, 0),
+	MLXSW_SP_SB_CM(MLXSW_PORT_MAX_MTU, 0, 0),
+	MLXSW_SP_SB_CM(MLXSW_PORT_MAX_MTU, 0, 0),
+	MLXSW_SP_SB_CM(MLXSW_PORT_MAX_MTU, 0, 0),
 	MLXSW_SP_CPU_PORT_SB_CM,
-	MLXSW_SP_CPU_PORT_SB_CM,
-	MLXSW_SP_CPU_PORT_SB_CM,
-	MLXSW_SP_CPU_PORT_SB_CM,
-	MLXSW_SP_CPU_PORT_SB_CM,
-	MLXSW_SP_CPU_PORT_SB_CM,
-	MLXSW_SP_SB_CM(10000, 0, 0),
+	MLXSW_SP_SB_CM(MLXSW_PORT_MAX_MTU, 0, 0),
 	MLXSW_SP_CPU_PORT_SB_CM,
 	MLXSW_SP_CPU_PORT_SB_CM,
 	MLXSW_SP_CPU_PORT_SB_CM,
@@ -551,15 +568,19 @@ int mlxsw_sp_buffers_init(struct mlxsw_sp *mlxsw_sp)
 
 	if (!MLXSW_CORE_RES_VALID(mlxsw_sp->core, CELL_SIZE))
 		return -EIO;
-	mlxsw_sp->sb.cell_size = MLXSW_CORE_RES_GET(mlxsw_sp->core, CELL_SIZE);
 
 	if (!MLXSW_CORE_RES_VALID(mlxsw_sp->core, MAX_BUFFER_SIZE))
 		return -EIO;
 	sb_size = MLXSW_CORE_RES_GET(mlxsw_sp->core, MAX_BUFFER_SIZE);
 
+	mlxsw_sp->sb = kzalloc(sizeof(*mlxsw_sp->sb), GFP_KERNEL);
+	if (!mlxsw_sp->sb)
+		return -ENOMEM;
+	mlxsw_sp->sb->cell_size = MLXSW_CORE_RES_GET(mlxsw_sp->core, CELL_SIZE);
+
 	err = mlxsw_sp_sb_ports_init(mlxsw_sp);
 	if (err)
-		return err;
+		goto err_sb_ports_init;
 	err = mlxsw_sp_sb_prs_init(mlxsw_sp);
 	if (err)
 		goto err_sb_prs_init;
@@ -584,6 +605,8 @@ err_sb_mms_init:
 err_sb_cpu_port_sb_cms_init:
 err_sb_prs_init:
 	mlxsw_sp_sb_ports_fini(mlxsw_sp);
+err_sb_ports_init:
+	kfree(mlxsw_sp->sb);
 	return err;
 }
 
@@ -591,6 +614,7 @@ void mlxsw_sp_buffers_fini(struct mlxsw_sp *mlxsw_sp)
 {
 	devlink_sb_unregister(priv_to_devlink(mlxsw_sp->core), 0);
 	mlxsw_sp_sb_ports_fini(mlxsw_sp);
+	kfree(mlxsw_sp->sb);
 }
 
 int mlxsw_sp_port_buffers_init(struct mlxsw_sp_port *mlxsw_sp_port)

@@ -1,7 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (C) Maxime Coquelin 2015
+ * Copyright (C) STMicroelectronics 2017
  * Author:  Maxime Coquelin <mcoquelin.stm32@gmail.com>
- * License terms:  GNU General Public License (GPL), version 2
  */
 #ifndef __PINCTRL_STM32_H
 #define __PINCTRL_STM32_H
@@ -45,7 +46,10 @@ struct stm32_pinctrl_match_data {
 	const unsigned int npins;
 };
 
-int stm32_pctl_probe(struct platform_device *pdev);
+struct stm32_gpio_bank;
 
+int stm32_pctl_probe(struct platform_device *pdev);
+void stm32_pmx_get_mode(struct stm32_gpio_bank *bank,
+			int pin, u32 *mode, u32 *alt);
 #endif /* __PINCTRL_STM32_H */
 

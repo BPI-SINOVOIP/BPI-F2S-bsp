@@ -120,8 +120,7 @@
 	pinctrl-0 = <&mmc0_pins_a>, <&mmc0_cd_pin_h702>;
 	vmmc-supply = <&reg_vcc3v3>;
 	bus-width = <4>;
-	cd-gpios = <&pio 6 0 GPIO_ACTIVE_HIGH>; /* PG0 */
-	cd-inverted;
+	cd-gpios = <&pio 6 0 GPIO_ACTIVE_LOW>; /* PG0 */
 	status = "okay";
 };
 
@@ -186,7 +185,6 @@
 };
 
 &reg_usb0_vbus {
-	pinctrl-0 = <&usb0_vbus_pin_a>;
 	gpio = <&pio 6 12 GPIO_ACTIVE_HIGH>; /* PG12 */
 	status = "okay";
 };
@@ -200,10 +198,6 @@
 &usb_otg {
 	dr_mode = "otg";
 	status = "okay";
-};
-
-&usb0_vbus_pin_a {
-	pins = "PG12";
 };
 
 &usbphy {

@@ -134,7 +134,7 @@ _transport_convert_phy_link_rate(u8 link_rate)
  *
  * Populates sas identify info.
  *
- * Returns 0 for success, non-zero for failure.
+ * Return: 0 for success, non-zero for failure.
  */
 static int
 _transport_set_identify(struct MPT3SAS_ADAPTER *ioc, u16 handle,
@@ -226,8 +226,8 @@ _transport_set_identify(struct MPT3SAS_ADAPTER *ioc, u16 handle,
  * Callback handler when sending internal generated transport cmds.
  * The callback index passed is `ioc->transport_cb_idx`
  *
- * Return 1 meaning mf should be freed from _base_interrupt
- *        0 means the mf is freed from this function.
+ * Return: 1 meaning mf should be freed from _base_interrupt
+ *         0 means the mf is freed from this function.
  */
 u8
 mpt3sas_transport_done(struct MPT3SAS_ADAPTER *ioc, u16 smid, u8 msix_index,
@@ -287,7 +287,7 @@ struct rep_manu_reply {
  *
  * Fills in the sas_expander_device object when SMP port is created.
  *
- * Returns 0 for success, non-zero for failure.
+ * Return: 0 for success, non-zero for failure.
  */
 static int
 _transport_expander_report_manufacture(struct MPT3SAS_ADAPTER *ioc,
@@ -392,7 +392,7 @@ _transport_expander_report_manufacture(struct MPT3SAS_ADAPTER *ioc,
 		"report_manufacture - send to sas_addr(0x%016llx)\n",
 		ioc->name, (unsigned long long)sas_address));
 	init_completion(&ioc->transport_cmds.done);
-	ioc->put_smid_default(ioc, smid);
+	mpt3sas_base_put_smid_default(ioc, smid);
 	wait_for_completion_timeout(&ioc->transport_cmds.done, 10*HZ);
 
 	if (!(ioc->transport_cmds.status & MPT3_CMD_COMPLETE)) {
@@ -460,8 +460,6 @@ _transport_expander_report_manufacture(struct MPT3SAS_ADAPTER *ioc,
  * _transport_delete_port - helper function to removing a port
  * @ioc: per adapter object
  * @mpt3sas_port: mpt3sas per port object
- *
- * Returns nothing.
  */
 static void
 _transport_delete_port(struct MPT3SAS_ADAPTER *ioc,
@@ -489,8 +487,6 @@ _transport_delete_port(struct MPT3SAS_ADAPTER *ioc,
  * @ioc: per adapter object
  * @mpt3sas_port: mpt3sas per port object
  * @mpt3sas_phy: mpt3sas per phy object
- *
- * Returns nothing.
  */
 static void
 _transport_delete_phy(struct MPT3SAS_ADAPTER *ioc,
@@ -513,8 +509,6 @@ _transport_delete_phy(struct MPT3SAS_ADAPTER *ioc,
  * @ioc: per adapter object
  * @mpt3sas_port: mpt3sas per port object
  * @mpt3sas_phy: mpt3sas per phy object
- *
- * Returns nothing.
  */
 static void
 _transport_add_phy(struct MPT3SAS_ADAPTER *ioc, struct _sas_port *mpt3sas_port,
@@ -538,8 +532,6 @@ _transport_add_phy(struct MPT3SAS_ADAPTER *ioc, struct _sas_port *mpt3sas_port,
  * @sas_node: sas node object (either expander or sas host)
  * @mpt3sas_phy: mpt3sas per phy object
  * @sas_address: sas address of device/expander were phy needs to be added to
- *
- * Returns nothing.
  */
 static void
 _transport_add_phy_to_an_existing_port(struct MPT3SAS_ADAPTER *ioc,
@@ -563,7 +555,7 @@ _transport_add_phy_to_an_existing_port(struct MPT3SAS_ADAPTER *ioc,
 				return;
 		}
 		_transport_add_phy(ioc, mpt3sas_port, mpt3sas_phy);
-			return;
+		return;
 	}
 
 }
@@ -573,8 +565,6 @@ _transport_add_phy_to_an_existing_port(struct MPT3SAS_ADAPTER *ioc,
  * @ioc: per adapter object
  * @sas_node: sas node object (either expander or sas host)
  * @mpt3sas_phy: mpt3sas per phy object
- *
- * Returns nothing.
  */
 static void
 _transport_del_phy_from_an_existing_port(struct MPT3SAS_ADAPTER *ioc,
@@ -635,7 +625,7 @@ _transport_sanity_check(struct MPT3SAS_ADAPTER *ioc, struct _sas_node *sas_node,
  *
  * Adding new port object to the sas_node->sas_port_list.
  *
- * Returns mpt3sas_port.
+ * Return: mpt3sas_port.
  */
 struct _sas_port *
 mpt3sas_transport_port_add(struct MPT3SAS_ADAPTER *ioc, u16 handle,
@@ -794,8 +784,6 @@ mpt3sas_transport_port_add(struct MPT3SAS_ADAPTER *ioc, u16 handle,
  *
  * Removing object and freeing associated memory from the
  * ioc->sas_port_list.
- *
- * Return nothing.
  */
 void
 mpt3sas_transport_port_remove(struct MPT3SAS_ADAPTER *ioc, u64 sas_address,
@@ -846,10 +834,13 @@ mpt3sas_transport_port_remove(struct MPT3SAS_ADAPTER *ioc, u64 sas_address,
 			    mpt3sas_port->remote_identify.sas_address,
 			    mpt3sas_phy->phy_id);
 		mpt3sas_phy->phy_belongs_to_port = 0;
-		sas_port_delete_phy(mpt3sas_port->port, mpt3sas_phy->phy);
+		if (!ioc->remove_host)
+			sas_port_delete_phy(mpt3sas_port->port,
+						mpt3sas_phy->phy);
 		list_del(&mpt3sas_phy->port_siblings);
 	}
-	sas_port_delete(mpt3sas_port->port);
+	if (!ioc->remove_host)
+		sas_port_delete(mpt3sas_port->port);
 	kfree(mpt3sas_port);
 }
 
@@ -860,7 +851,7 @@ mpt3sas_transport_port_remove(struct MPT3SAS_ADAPTER *ioc, u64 sas_address,
  * @phy_pg0: sas phy page 0
  * @parent_dev: parent device class object
  *
- * Returns 0 for success, non-zero for failure.
+ * Return: 0 for success, non-zero for failure.
  */
 int
 mpt3sas_transport_add_host_phy(struct MPT3SAS_ADAPTER *ioc, struct _sas_phy
@@ -928,7 +919,7 @@ mpt3sas_transport_add_host_phy(struct MPT3SAS_ADAPTER *ioc, struct _sas_phy
  * @expander_pg1: expander page 1
  * @parent_dev: parent device class object
  *
- * Returns 0 for success, non-zero for failure.
+ * Return: 0 for success, non-zero for failure.
  */
 int
 mpt3sas_transport_add_expander_phy(struct MPT3SAS_ADAPTER *ioc, struct _sas_phy
@@ -995,10 +986,8 @@ mpt3sas_transport_add_expander_phy(struct MPT3SAS_ADAPTER *ioc, struct _sas_phy
  * @ioc: per adapter object
  * @sas_address: sas address of parent expander or sas host
  * @handle: attached device handle
- * @phy_numberv: phy number
+ * @phy_number: phy number
  * @link_rate: new link rate
- *
- * Returns nothing.
  */
 void
 mpt3sas_transport_update_links(struct MPT3SAS_ADAPTER *ioc,
@@ -1090,7 +1079,7 @@ struct phy_error_log_reply {
  * @ioc: per adapter object
  * @phy: The sas phy object
  *
- * Returns 0 for success, non-zero for failure.
+ * Return: 0 for success, non-zero for failure.
  *
  */
 static int
@@ -1198,7 +1187,7 @@ _transport_get_expander_phy_error_log(struct MPT3SAS_ADAPTER *ioc,
 		ioc->name, (unsigned long long)phy->identify.sas_address,
 		phy->number));
 	init_completion(&ioc->transport_cmds.done);
-	ioc->put_smid_default(ioc, smid);
+	mpt3sas_base_put_smid_default(ioc, smid);
 	wait_for_completion_timeout(&ioc->transport_cmds.done, 10*HZ);
 
 	if (!(ioc->transport_cmds.status & MPT3_CMD_COMPLETE)) {
@@ -1262,7 +1251,7 @@ _transport_get_expander_phy_error_log(struct MPT3SAS_ADAPTER *ioc,
  * _transport_get_linkerrors - return phy counters for both hba and expanders
  * @phy: The sas phy object
  *
- * Returns 0 for success, non-zero for failure.
+ * Return: 0 for success, non-zero for failure.
  *
  */
 static int
@@ -1311,10 +1300,11 @@ _transport_get_linkerrors(struct sas_phy *phy)
 
 /**
  * _transport_get_enclosure_identifier -
- * @phy: The sas phy object
+ * @rphy: The sas phy object
+ * @identifier: ?
  *
  * Obtain the enclosure logical id for an expander.
- * Returns 0 for success, non-zero for failure.
+ * Return: 0 for success, non-zero for failure.
  */
 static int
 _transport_get_enclosure_identifier(struct sas_rphy *rphy, u64 *identifier)
@@ -1342,9 +1332,9 @@ _transport_get_enclosure_identifier(struct sas_rphy *rphy, u64 *identifier)
 
 /**
  * _transport_get_bay_identifier -
- * @phy: The sas phy object
+ * @rphy: The sas phy object
  *
- * Returns the slot id for a device that resides inside an enclosure.
+ * Return: the slot id for a device that resides inside an enclosure.
  */
 static int
 _transport_get_bay_identifier(struct sas_rphy *rphy)
@@ -1400,8 +1390,9 @@ struct phy_control_reply {
  * _transport_expander_phy_control - expander phy control
  * @ioc: per adapter object
  * @phy: The sas phy object
+ * @phy_operation: ?
  *
- * Returns 0 for success, non-zero for failure.
+ * Return: 0 for success, non-zero for failure.
  *
  */
 static int
@@ -1514,7 +1505,7 @@ _transport_expander_phy_control(struct MPT3SAS_ADAPTER *ioc,
 		ioc->name, (unsigned long long)phy->identify.sas_address,
 		phy->number, phy_operation));
 	init_completion(&ioc->transport_cmds.done);
-	ioc->put_smid_default(ioc, smid);
+	mpt3sas_base_put_smid_default(ioc, smid);
 	wait_for_completion_timeout(&ioc->transport_cmds.done, 10*HZ);
 
 	if (!(ioc->transport_cmds.status & MPT3_CMD_COMPLETE)) {
@@ -1571,7 +1562,7 @@ _transport_expander_phy_control(struct MPT3SAS_ADAPTER *ioc,
  * @phy: The sas phy object
  * @hard_reset:
  *
- * Returns 0 for success, non-zero for failure.
+ * Return: 0 for success, non-zero for failure.
  */
 static int
 _transport_phy_reset(struct sas_phy *phy, int hard_reset)
@@ -1623,7 +1614,7 @@ _transport_phy_reset(struct sas_phy *phy, int hard_reset)
  * @enable: enable phy when true
  *
  * Only support sas_host direct attached phys.
- * Returns 0 for success, non-zero for failure.
+ * Return: 0 for success, non-zero for failure.
  */
 static int
 _transport_phy_enable(struct sas_phy *phy, int enable)
@@ -1761,7 +1752,8 @@ _transport_phy_enable(struct sas_phy *phy, int enable)
  * @rates: rates defined in sas_phy_linkrates
  *
  * Only support sas_host direct attached phys.
- * Returns 0 for success, non-zero for failure.
+ *
+ * Return: 0 for success, non-zero for failure.
  */
 static int
 _transport_phy_speed(struct sas_phy *phy, struct sas_phy_linkrates *rates)
@@ -1870,19 +1862,51 @@ _transport_phy_speed(struct sas_phy *phy, struct sas_phy_linkrates *rates)
 	return rc;
 }
 
+static int
+_transport_map_smp_buffer(struct device *dev, struct bsg_buffer *buf,
+		dma_addr_t *dma_addr, size_t *dma_len, void **p)
+{
+	/* Check if the request is split across multiple segments */
+	if (buf->sg_cnt > 1) {
+		*p = dma_alloc_coherent(dev, buf->payload_len, dma_addr,
+				GFP_KERNEL);
+		if (!*p)
+			return -ENOMEM;
+		*dma_len = buf->payload_len;
+	} else {
+		if (!dma_map_sg(dev, buf->sg_list, 1, DMA_BIDIRECTIONAL))
+			return -ENOMEM;
+		*dma_addr = sg_dma_address(buf->sg_list);
+		*dma_len = sg_dma_len(buf->sg_list);
+		*p = NULL;
+	}
+
+	return 0;
+}
+
+static void
+_transport_unmap_smp_buffer(struct device *dev, struct bsg_buffer *buf,
+		dma_addr_t dma_addr, void *p)
+{
+	if (p)
+		dma_free_coherent(dev, buf->payload_len, p, dma_addr);
+	else
+		dma_unmap_sg(dev, buf->sg_list, 1, DMA_BIDIRECTIONAL);
+}
+
 /**
  * _transport_smp_handler - transport portal for smp passthru
+ * @job: ?
  * @shost: shost object
  * @rphy: sas transport rphy object
- * @req:
  *
  * This used primarily for smp_utils.
  * Example:
  *           smp_rep_general /sys/class/bsg/expander-5:0
  */
-static int
-_transport_smp_handler(struct Scsi_Host *shost, struct sas_rphy *rphy,
-	struct request *req)
+static void
+_transport_smp_handler(struct bsg_job *job, struct Scsi_Host *shost,
+		struct sas_rphy *rphy)
 {
 	struct MPT3SAS_ADAPTER *ioc = shost_priv(shost);
 	Mpi2SmpPassthroughRequest_t *mpi_request;
@@ -1891,33 +1915,25 @@ _transport_smp_handler(struct Scsi_Host *shost, struct sas_rphy *rphy,
 	u16 smid;
 	u32 ioc_state;
 	void *psge;
-	u8 issue_reset = 0;
-	dma_addr_t dma_addr_in = 0;
-	dma_addr_t dma_addr_out = 0;
-	dma_addr_t pci_dma_in = 0;
-	dma_addr_t pci_dma_out = 0;
-	void *pci_addr_in = NULL;
-	void *pci_addr_out = NULL;
+	dma_addr_t dma_addr_in;
+	dma_addr_t dma_addr_out;
+	void *addr_in = NULL;
+	void *addr_out = NULL;
+	size_t dma_len_in;
+	size_t dma_len_out;
 	u16 wait_state_count;
-	struct request *rsp = req->next_rq;
-	struct bio_vec bvec;
-	struct bvec_iter iter;
-
-	if (!rsp) {
-		pr_err(MPT3SAS_FMT "%s: the smp response space is missing\n",
-			ioc->name, __func__);
-		return -EINVAL;
-	}
+	unsigned int reslen = 0;
 
 	if (ioc->shost_recovery || ioc->pci_error_recovery) {
 		pr_info(MPT3SAS_FMT "%s: host reset in progress!\n",
 		    __func__, ioc->name);
-		return -EFAULT;
+		rc = -EFAULT;
+		goto job_done;
 	}
 
 	rc = mutex_lock_interruptible(&ioc->transport_cmds.mutex);
 	if (rc)
-		return rc;
+		goto job_done;
 
 	if (ioc->transport_cmds.status != MPT3_CMD_NOT_USED) {
 		pr_err(MPT3SAS_FMT "%s: transport_cmds in use\n", ioc->name,
@@ -1927,58 +1943,20 @@ _transport_smp_handler(struct Scsi_Host *shost, struct sas_rphy *rphy,
 	}
 	ioc->transport_cmds.status = MPT3_CMD_PENDING;
 
-	/* Check if the request is split across multiple segments */
-	if (bio_multiple_segments(req->bio)) {
-		u32 offset = 0;
-
-		/* Allocate memory and copy the request */
-		pci_addr_out = pci_alloc_consistent(ioc->pdev,
-		    blk_rq_bytes(req), &pci_dma_out);
-		if (!pci_addr_out) {
-			pr_info(MPT3SAS_FMT "%s(): PCI Addr out = NULL\n",
-			    ioc->name, __func__);
-			rc = -ENOMEM;
-			goto out;
-		}
-
-		bio_for_each_segment(bvec, req->bio, iter) {
-			memcpy(pci_addr_out + offset,
-			    page_address(bvec.bv_page) + bvec.bv_offset,
-			    bvec.bv_len);
-			offset += bvec.bv_len;
-		}
-	} else {
-		dma_addr_out = pci_map_single(ioc->pdev, bio_data(req->bio),
-		    blk_rq_bytes(req), PCI_DMA_BIDIRECTIONAL);
-		if (pci_dma_mapping_error(ioc->pdev, dma_addr_out)) {
-			pr_info(MPT3SAS_FMT "%s(): DMA Addr out = NULL\n",
-			    ioc->name, __func__);
-			rc = -ENOMEM;
-			goto free_pci;
-		}
+	rc = _transport_map_smp_buffer(&ioc->pdev->dev, &job->request_payload,
+			&dma_addr_out, &dma_len_out, &addr_out);
+	if (rc)
+		goto out;
+	if (addr_out) {
+		sg_copy_to_buffer(job->request_payload.sg_list,
+				job->request_payload.sg_cnt, addr_out,
+				job->request_payload.payload_len);
 	}
 
-	/* Check if the response needs to be populated across
-	 * multiple segments */
-	if (bio_multiple_segments(rsp->bio)) {
-		pci_addr_in = pci_alloc_consistent(ioc->pdev, blk_rq_bytes(rsp),
-		    &pci_dma_in);
-		if (!pci_addr_in) {
-			pr_info(MPT3SAS_FMT "%s(): PCI Addr in = NULL\n",
-			    ioc->name, __func__);
-			rc = -ENOMEM;
-			goto unmap;
-		}
-	} else {
-		dma_addr_in =  pci_map_single(ioc->pdev, bio_data(rsp->bio),
-		    blk_rq_bytes(rsp), PCI_DMA_BIDIRECTIONAL);
-		if (pci_dma_mapping_error(ioc->pdev, dma_addr_in)) {
-			pr_info(MPT3SAS_FMT "%s(): DMA Addr in = NULL\n",
-			    ioc->name, __func__);
-			rc = -ENOMEM;
-			goto unmap;
-		}
-	}
+	rc = _transport_map_smp_buffer(&ioc->pdev->dev, &job->reply_payload,
+			&dma_addr_in, &dma_len_in, &addr_in);
+	if (rc)
+		goto unmap_out;
 
 	wait_state_count = 0;
 	ioc_state = mpt3sas_base_get_iocstate(ioc, 1);
@@ -1988,7 +1966,7 @@ _transport_smp_handler(struct Scsi_Host *shost, struct sas_rphy *rphy,
 			    "%s: failed due to ioc not operational\n",
 			    ioc->name, __func__);
 			rc = -EFAULT;
-			goto unmap;
+			goto unmap_in;
 		}
 		ssleep(1);
 		ioc_state = mpt3sas_base_get_iocstate(ioc, 1);
@@ -2005,7 +1983,7 @@ _transport_smp_handler(struct Scsi_Host *shost, struct sas_rphy *rphy,
 		pr_err(MPT3SAS_FMT "%s: failed obtaining a smid\n",
 		    ioc->name, __func__);
 		rc = -EAGAIN;
-		goto unmap;
+		goto unmap_in;
 	}
 
 	rc = 0;
@@ -2018,21 +1996,17 @@ _transport_smp_handler(struct Scsi_Host *shost, struct sas_rphy *rphy,
 	mpi_request->SASAddress = (rphy) ?
 	    cpu_to_le64(rphy->identify.sas_address) :
 	    cpu_to_le64(ioc->sas_hba.sas_address);
-	mpi_request->RequestDataLength = cpu_to_le16(blk_rq_bytes(req) - 4);
+	mpi_request->RequestDataLength = cpu_to_le16(dma_len_out - 4);
 	psge = &mpi_request->SGL;
 
-	if (bio_multiple_segments(req->bio))
-		ioc->build_sg(ioc, psge, pci_dma_out, (blk_rq_bytes(req) - 4),
-		    pci_dma_in, (blk_rq_bytes(rsp) + 4));
-	else
-		ioc->build_sg(ioc, psge, dma_addr_out, (blk_rq_bytes(req) - 4),
-		    dma_addr_in, (blk_rq_bytes(rsp) + 4));
+	ioc->build_sg(ioc, psge, dma_addr_out, dma_len_out - 4, dma_addr_in,
+			dma_len_in - 4);
 
 	dtransportprintk(ioc, pr_info(MPT3SAS_FMT
 		"%s - sending smp request\n", ioc->name, __func__));
 
 	init_completion(&ioc->transport_cmds.done);
-	ioc->put_smid_default(ioc, smid);
+	mpt3sas_base_put_smid_default(ioc, smid);
 	wait_for_completion_timeout(&ioc->transport_cmds.done, 10*HZ);
 
 	if (!(ioc->transport_cmds.status & MPT3_CMD_COMPLETE)) {
@@ -2040,83 +2014,52 @@ _transport_smp_handler(struct Scsi_Host *shost, struct sas_rphy *rphy,
 		    __func__, ioc->name);
 		_debug_dump_mf(mpi_request,
 		    sizeof(Mpi2SmpPassthroughRequest_t)/4);
-		if (!(ioc->transport_cmds.status & MPT3_CMD_RESET))
-			issue_reset = 1;
-		goto issue_host_reset;
+		if (!(ioc->transport_cmds.status & MPT3_CMD_RESET)) {
+			mpt3sas_base_hard_reset_handler(ioc, FORCE_BIG_HAMMER);
+			rc = -ETIMEDOUT;
+			goto unmap_in;
+		}
 	}
 
 	dtransportprintk(ioc, pr_info(MPT3SAS_FMT
 		"%s - complete\n", ioc->name, __func__));
 
-	if (ioc->transport_cmds.status & MPT3_CMD_REPLY_VALID) {
-
-		mpi_reply = ioc->transport_cmds.reply;
-
-		dtransportprintk(ioc, pr_info(MPT3SAS_FMT
-		    "%s - reply data transfer size(%d)\n",
-		    ioc->name, __func__,
-		    le16_to_cpu(mpi_reply->ResponseDataLength)));
-
-		memcpy(scsi_req(req)->sense, mpi_reply, sizeof(*mpi_reply));
-		scsi_req(req)->sense_len = sizeof(*mpi_reply);
-		scsi_req(req)->resid_len = 0;
-		scsi_req(rsp)->resid_len -=
-		    le16_to_cpu(mpi_reply->ResponseDataLength);
-
-		/* check if the resp needs to be copied from the allocated
-		 * pci mem */
-		if (bio_multiple_segments(rsp->bio)) {
-			u32 offset = 0;
-			u32 bytes_to_copy =
-			    le16_to_cpu(mpi_reply->ResponseDataLength);
-			bio_for_each_segment(bvec, rsp->bio, iter) {
-				if (bytes_to_copy <= bvec.bv_len) {
-					memcpy(page_address(bvec.bv_page) +
-					    bvec.bv_offset, pci_addr_in +
-					    offset, bytes_to_copy);
-					break;
-				} else {
-					memcpy(page_address(bvec.bv_page) +
-					    bvec.bv_offset, pci_addr_in +
-					    offset, bvec.bv_len);
-					bytes_to_copy -= bvec.bv_len;
-				}
-				offset += bvec.bv_len;
-			}
-		}
-	} else {
+	if (!(ioc->transport_cmds.status & MPT3_CMD_REPLY_VALID)) {
 		dtransportprintk(ioc, pr_info(MPT3SAS_FMT
 		    "%s - no reply\n", ioc->name, __func__));
 		rc = -ENXIO;
+		goto unmap_in;
 	}
 
- issue_host_reset:
-	if (issue_reset) {
-		mpt3sas_base_hard_reset_handler(ioc, FORCE_BIG_HAMMER);
-		rc = -ETIMEDOUT;
+	mpi_reply = ioc->transport_cmds.reply;
+
+	dtransportprintk(ioc,
+		pr_info(MPT3SAS_FMT "%s - reply data transfer size(%d)\n",
+			ioc->name, __func__,
+			le16_to_cpu(mpi_reply->ResponseDataLength)));
+
+	memcpy(job->reply, mpi_reply, sizeof(*mpi_reply));
+	job->reply_len = sizeof(*mpi_reply);
+	reslen = le16_to_cpu(mpi_reply->ResponseDataLength);
+
+	if (addr_in) {
+		sg_copy_to_buffer(job->reply_payload.sg_list,
+				job->reply_payload.sg_cnt, addr_in,
+				job->reply_payload.payload_len);
 	}
 
- unmap:
-	if (dma_addr_out)
-		pci_unmap_single(ioc->pdev, dma_addr_out, blk_rq_bytes(req),
-		    PCI_DMA_BIDIRECTIONAL);
-	if (dma_addr_in)
-		pci_unmap_single(ioc->pdev, dma_addr_in, blk_rq_bytes(rsp),
-		    PCI_DMA_BIDIRECTIONAL);
-
- free_pci:
-	if (pci_addr_out)
-		pci_free_consistent(ioc->pdev, blk_rq_bytes(req), pci_addr_out,
-		    pci_dma_out);
-
-	if (pci_addr_in)
-		pci_free_consistent(ioc->pdev, blk_rq_bytes(rsp), pci_addr_in,
-		    pci_dma_in);
-
+	rc = 0;
+ unmap_in:
+	_transport_unmap_smp_buffer(&ioc->pdev->dev, &job->reply_payload,
+			dma_addr_in, addr_in);
+ unmap_out:
+	_transport_unmap_smp_buffer(&ioc->pdev->dev, &job->request_payload,
+			dma_addr_out, addr_out);
  out:
 	ioc->transport_cmds.status = MPT3_CMD_NOT_USED;
 	mutex_unlock(&ioc->transport_cmds.mutex);
-	return rc;
+job_done:
+	bsg_job_done(job, rc, reslen);
 }
 
 struct sas_function_template mpt3sas_transport_functions = {

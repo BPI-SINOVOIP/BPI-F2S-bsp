@@ -59,7 +59,6 @@ struct bnxt_re_pd {
 	struct bnxt_re_dev	*rdev;
 	struct ib_pd		ib_pd;
 	struct bnxt_qplib_pd	qplib_pd;
-	struct bnxt_qplib_dpi	dpi;
 	struct bnxt_re_fence_data fence;
 };
 
@@ -67,6 +66,15 @@ struct bnxt_re_ah {
 	struct bnxt_re_dev	*rdev;
 	struct ib_ah		ib_ah;
 	struct bnxt_qplib_ah	qplib_ah;
+};
+
+struct bnxt_re_srq {
+	struct bnxt_re_dev	*rdev;
+	u32			srq_limit;
+	struct ib_srq		ib_srq;
+	struct bnxt_qplib_srq	qplib_srq;
+	struct ib_umem		*umem;
+	spinlock_t		lock;		/* protect srq */
 };
 
 struct bnxt_re_qp {
@@ -81,6 +89,8 @@ struct bnxt_re_qp {
 	/* QP1 */
 	u32			send_psn;
 	struct ib_ud_header	qp1_hdr;
+	struct bnxt_re_cq	*scq;
+	struct bnxt_re_cq	*rcq;
 };
 
 struct bnxt_re_cq {
@@ -127,7 +137,7 @@ struct bnxt_re_mw {
 struct bnxt_re_ucontext {
 	struct bnxt_re_dev	*rdev;
 	struct ib_ucontext	ib_uctx;
-	struct bnxt_qplib_dpi	*dpi;
+	struct bnxt_qplib_dpi	dpi;
 	void			*shpg;
 	spinlock_t		sh_lock;	/* protect shpg */
 };
@@ -142,18 +152,13 @@ int bnxt_re_modify_device(struct ib_device *ibdev,
 			  struct ib_device_modify *device_modify);
 int bnxt_re_query_port(struct ib_device *ibdev, u8 port_num,
 		       struct ib_port_attr *port_attr);
-int bnxt_re_modify_port(struct ib_device *ibdev, u8 port_num,
-			int port_modify_mask,
-			struct ib_port_modify *port_modify);
 int bnxt_re_get_port_immutable(struct ib_device *ibdev, u8 port_num,
 			       struct ib_port_immutable *immutable);
+void bnxt_re_query_fw_str(struct ib_device *ibdev, char *str);
 int bnxt_re_query_pkey(struct ib_device *ibdev, u8 port_num,
 		       u16 index, u16 *pkey);
-int bnxt_re_del_gid(struct ib_device *ibdev, u8 port_num,
-		    unsigned int index, void **context);
-int bnxt_re_add_gid(struct ib_device *ibdev, u8 port_num,
-		    unsigned int index, const union ib_gid *gid,
-		    const struct ib_gid_attr *attr, void **context);
+int bnxt_re_del_gid(const struct ib_gid_attr *attr, void **context);
+int bnxt_re_add_gid(const struct ib_gid_attr *attr, void **context);
 int bnxt_re_query_gid(struct ib_device *ibdev, u8 port_num,
 		      int index, union ib_gid *gid);
 enum rdma_link_layer bnxt_re_get_link_layer(struct ib_device *ibdev,
@@ -168,6 +173,16 @@ struct ib_ah *bnxt_re_create_ah(struct ib_pd *pd,
 int bnxt_re_modify_ah(struct ib_ah *ah, struct rdma_ah_attr *ah_attr);
 int bnxt_re_query_ah(struct ib_ah *ah, struct rdma_ah_attr *ah_attr);
 int bnxt_re_destroy_ah(struct ib_ah *ah);
+struct ib_srq *bnxt_re_create_srq(struct ib_pd *pd,
+				  struct ib_srq_init_attr *srq_init_attr,
+				  struct ib_udata *udata);
+int bnxt_re_modify_srq(struct ib_srq *srq, struct ib_srq_attr *srq_attr,
+		       enum ib_srq_attr_mask srq_attr_mask,
+		       struct ib_udata *udata);
+int bnxt_re_query_srq(struct ib_srq *srq, struct ib_srq_attr *srq_attr);
+int bnxt_re_destroy_srq(struct ib_srq *srq);
+int bnxt_re_post_srq_recv(struct ib_srq *srq, const struct ib_recv_wr *recv_wr,
+			  const struct ib_recv_wr **bad_recv_wr);
 struct ib_qp *bnxt_re_create_qp(struct ib_pd *pd,
 				struct ib_qp_init_attr *qp_init_attr,
 				struct ib_udata *udata);
@@ -176,10 +191,10 @@ int bnxt_re_modify_qp(struct ib_qp *qp, struct ib_qp_attr *qp_attr,
 int bnxt_re_query_qp(struct ib_qp *qp, struct ib_qp_attr *qp_attr,
 		     int qp_attr_mask, struct ib_qp_init_attr *qp_init_attr);
 int bnxt_re_destroy_qp(struct ib_qp *qp);
-int bnxt_re_post_send(struct ib_qp *qp, struct ib_send_wr *send_wr,
-		      struct ib_send_wr **bad_send_wr);
-int bnxt_re_post_recv(struct ib_qp *qp, struct ib_recv_wr *recv_wr,
-		      struct ib_recv_wr **bad_recv_wr);
+int bnxt_re_post_send(struct ib_qp *qp, const struct ib_send_wr *send_wr,
+		      const struct ib_send_wr **bad_send_wr);
+int bnxt_re_post_recv(struct ib_qp *qp, const struct ib_recv_wr *recv_wr,
+		      const struct ib_recv_wr **bad_recv_wr);
 struct ib_cq *bnxt_re_create_cq(struct ib_device *ibdev,
 				const struct ib_cq_init_attr *attr,
 				struct ib_ucontext *context,
@@ -204,4 +219,7 @@ struct ib_ucontext *bnxt_re_alloc_ucontext(struct ib_device *ibdev,
 					   struct ib_udata *udata);
 int bnxt_re_dealloc_ucontext(struct ib_ucontext *context);
 int bnxt_re_mmap(struct ib_ucontext *context, struct vm_area_struct *vma);
+
+unsigned long bnxt_re_lock_cqs(struct bnxt_re_qp *qp);
+void bnxt_re_unlock_cqs(struct bnxt_re_qp *qp, unsigned long flags);
 #endif /* __BNXT_RE_IB_VERBS_H__ */

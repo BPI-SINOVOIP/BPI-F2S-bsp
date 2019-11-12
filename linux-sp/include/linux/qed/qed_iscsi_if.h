@@ -102,7 +102,6 @@ struct qed_iscsi_params_offload {
 	u32 ss_thresh;
 	u16 srtt;
 	u16 rtt_var;
-	u32 ts_time;
 	u32 ts_recent;
 	u32 ts_recent_age;
 	u32 total_rt;
@@ -124,7 +123,6 @@ struct qed_iscsi_params_offload {
 	u16 mss;
 	u8 snd_wnd_scale;
 	u8 rcv_wnd_scale;
-	u32 ts_ticks_per_second;
 	u16 da_timeout_value;
 	u8 ack_frequency;
 };
@@ -210,6 +208,11 @@ struct qed_iscsi_cb_ops {
  *			@param stats - pointer to struck that would be filled
  *				we stats
  *			@return 0 on success, error otherwise.
+ * @change_mac		Change MAC of interface
+ *			@param cdev
+ *			@param handle - the connection handle.
+ *			@param mac - new MAC to configure.
+ *			@return 0 on success, otherwise error value.
  */
 struct qed_iscsi_ops {
 	const struct qed_common_ops *common;
@@ -248,6 +251,8 @@ struct qed_iscsi_ops {
 
 	int (*get_stats)(struct qed_dev *cdev,
 			 struct qed_iscsi_stats *stats);
+
+	int (*change_mac)(struct qed_dev *cdev, u32 handle, const u8 *mac);
 };
 
 const struct qed_iscsi_ops *qed_get_iscsi_ops(void);

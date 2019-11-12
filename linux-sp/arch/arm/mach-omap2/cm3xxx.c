@@ -662,14 +662,15 @@ void omap3_cm_save_scratchpad_contents(u32 *ptr)
  *
  */
 
-static struct cm_ll_data omap3xxx_cm_ll_data = {
+static const struct cm_ll_data omap3xxx_cm_ll_data = {
 	.split_idlest_reg	= &omap3xxx_cm_split_idlest_reg,
 	.wait_module_ready	= &omap3xxx_cm_wait_module_ready,
 };
 
 int __init omap3xxx_cm_init(const struct omap_prcm_init_data *data)
 {
-	omap2_clk_legacy_provider_init(TI_CLKM_CM, cm_base + OMAP3430_IVA2_MOD);
+	omap2_clk_legacy_provider_init(TI_CLKM_CM, cm_base.va +
+				       OMAP3430_IVA2_MOD);
 	return cm_register(&omap3xxx_cm_ll_data);
 }
 

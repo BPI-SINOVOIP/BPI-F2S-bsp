@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *  IBM System z Huge TLB Page Support for Kernel.
  *
@@ -122,6 +123,29 @@ static inline pte_t __rste_to_pte(unsigned long rste)
 	return pte;
 }
 
+static void clear_huge_pte_skeys(struct mm_struct *mm, unsigned long rste)
+{
+	struct page *page;
+	unsigned long size, paddr;
+
+	if (!mm_uses_skeys(mm) ||
+	    rste & _SEGMENT_ENTRY_INVALID)
+		return;
+
+	if ((rste & _REGION_ENTRY_TYPE_MASK) == _REGION_ENTRY_TYPE_R3) {
+		page = pud_page(__pud(rste));
+		size = PUD_SIZE;
+		paddr = rste & PUD_MASK;
+	} else {
+		page = pmd_page(__pmd(rste));
+		size = PMD_SIZE;
+		paddr = rste & PMD_MASK;
+	}
+
+	if (!test_and_set_bit(PG_arch_1, &page->flags))
+		__storage_key_init_range(paddr, paddr + size - 1);
+}
+
 void set_huge_pte_at(struct mm_struct *mm, unsigned long addr,
 		     pte_t *ptep, pte_t pte)
 {
@@ -136,6 +160,7 @@ void set_huge_pte_at(struct mm_struct *mm, unsigned long addr,
 		rste |= _REGION_ENTRY_TYPE_R3 | _REGION3_ENTRY_LARGE;
 	else
 		rste |= _SEGMENT_ENTRY_LARGE;
+	clear_huge_pte_skeys(mm, rste);
 	pte_val(*ptep) = rste;
 }
 
@@ -162,33 +187,42 @@ pte_t *huge_pte_alloc(struct mm_struct *mm,
 			unsigned long addr, unsigned long sz)
 {
 	pgd_t *pgdp;
+	p4d_t *p4dp;
 	pud_t *pudp;
 	pmd_t *pmdp = NULL;
 
 	pgdp = pgd_offset(mm, addr);
-	pudp = pud_alloc(mm, pgdp, addr);
-	if (pudp) {
-		if (sz == PUD_SIZE)
-			return (pte_t *) pudp;
-		else if (sz == PMD_SIZE)
-			pmdp = pmd_alloc(mm, pudp, addr);
+	p4dp = p4d_alloc(mm, pgdp, addr);
+	if (p4dp) {
+		pudp = pud_alloc(mm, p4dp, addr);
+		if (pudp) {
+			if (sz == PUD_SIZE)
+				return (pte_t *) pudp;
+			else if (sz == PMD_SIZE)
+				pmdp = pmd_alloc(mm, pudp, addr);
+		}
 	}
 	return (pte_t *) pmdp;
 }
 
-pte_t *huge_pte_offset(struct mm_struct *mm, unsigned long addr)
+pte_t *huge_pte_offset(struct mm_struct *mm,
+		       unsigned long addr, unsigned long sz)
 {
 	pgd_t *pgdp;
+	p4d_t *p4dp;
 	pud_t *pudp;
 	pmd_t *pmdp = NULL;
 
 	pgdp = pgd_offset(mm, addr);
 	if (pgd_present(*pgdp)) {
-		pudp = pud_offset(pgdp, addr);
-		if (pud_present(*pudp)) {
-			if (pud_large(*pudp))
-				return (pte_t *) pudp;
-			pmdp = pmd_offset(pudp, addr);
+		p4dp = p4d_offset(pgdp, addr);
+		if (p4d_present(*p4dp)) {
+			pudp = pud_offset(p4dp, addr);
+			if (pud_present(*pudp)) {
+				if (pud_large(*pudp))
+					return (pte_t *) pudp;
+				pmdp = pmd_offset(pudp, addr);
+			}
 		}
 	}
 	return (pte_t *) pmdp;

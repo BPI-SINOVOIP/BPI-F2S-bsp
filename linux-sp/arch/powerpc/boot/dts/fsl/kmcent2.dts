@@ -130,7 +130,7 @@
 					#size-cells = <0>;
 
 					eeprom@54 {
-						compatible = "24c02";
+						compatible = "atmel,24c02";
 						reg = <0x54>;
 						pagesize = <2>;
 						read-only;
@@ -293,9 +293,7 @@
 			compatible = "fsl,ucc-hdlc";
 			rx-clock-name = "clk9";
 			tx-clock-name = "clk9";
-			fsl,tx-timeslot-mask = <0xfffffffe>;
-			fsl,rx-timeslot-mask = <0xfffffffe>;
-			fsl,siram-entry-id = <0>;
+			fsl,hdlc-bus;
 		};
 	};
 };

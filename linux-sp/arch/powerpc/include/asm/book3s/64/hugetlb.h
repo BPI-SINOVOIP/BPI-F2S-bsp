@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 #ifndef _ASM_POWERPC_BOOK3S_64_HUGETLB_H
 #define _ASM_POWERPC_BOOK3S_64_HUGETLB_H
 /*
@@ -31,23 +32,19 @@ static inline int hstate_get_psize(struct hstate *hstate)
 	}
 }
 
-#define arch_make_huge_pte arch_make_huge_pte
-static inline pte_t arch_make_huge_pte(pte_t entry, struct vm_area_struct *vma,
-				       struct page *page, int writable)
+#ifdef CONFIG_ARCH_HAS_GIGANTIC_PAGE
+static inline bool gigantic_page_supported(void)
 {
-	unsigned long page_shift;
-
-	if (!cpu_has_feature(CPU_FTR_POWER9_DD1))
-		return entry;
-
-	page_shift = huge_page_shift(hstate_vma(vma));
 	/*
-	 * We don't support 1G hugetlb pages yet.
+	 * We used gigantic page reservation with hypervisor assist in some case.
+	 * We cannot use runtime allocation of gigantic pages in those platforms
+	 * This is hash translation mode LPARs.
 	 */
-	VM_WARN_ON(page_shift == mmu_psize_defs[MMU_PAGE_1G].shift);
-	if (page_shift == mmu_psize_defs[MMU_PAGE_2M].shift)
-		return __pte(pte_val(entry) | R_PAGE_LARGE);
-	else
-		return entry;
+	if (firmware_has_feature(FW_FEATURE_LPAR) && !radix_enabled())
+		return false;
+
+	return true;
 }
+#endif
+
 #endif

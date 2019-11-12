@@ -1,19 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (c) 2001-2002 by David Brownell
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation; either version 2 of the License, or (at your
- * option) any later version.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
- * for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
 #ifndef __LINUX_EHCI_HCD_H
@@ -270,20 +257,6 @@ struct ehci_hcd {			/* one per controller */
 	/* platform-specific data -- must come last */
 	unsigned long		priv[0] __aligned(sizeof(s64));
 };
-
-#ifdef CONFIG_USB_HOST_RESET_SP
-struct ehci_hcd_sp {
-	/* must be 1st member here for hcd_to_ehci() to work */
-	struct ehci_hcd ehci;
-
-	struct task_struct	  	*reset_thread;
-	struct notifier_block 	 ehci_notifier;
-
-	u32 dum[3];
-
-	u32 flag;
-};
-#endif
 
 /* convert between an HCD pointer and the corresponding EHCI_HCD */
 static inline struct ehci_hcd *hcd_to_ehci(struct usb_hcd *hcd)

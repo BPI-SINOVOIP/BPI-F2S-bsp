@@ -22,7 +22,7 @@
  * each CRTC.
  */
 
-#include "linux/component.h"
+#include <linux/component.h>
 #include "vc4_drv.h"
 #include "vc4_regs.h"
 
@@ -58,6 +58,10 @@ static const struct {
 	HVS_REG(SCALER_DISPSTAT2),
 	HVS_REG(SCALER_DISPBASE2),
 	HVS_REG(SCALER_DISPALPHA2),
+	HVS_REG(SCALER_OLEDOFFS),
+	HVS_REG(SCALER_OLEDCOEF0),
+	HVS_REG(SCALER_OLEDCOEF1),
+	HVS_REG(SCALER_OLEDCOEF2),
 };
 
 void vc4_hvs_dump_state(struct drm_device *dev)

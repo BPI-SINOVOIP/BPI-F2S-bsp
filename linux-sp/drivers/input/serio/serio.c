@@ -20,10 +20,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
- *
- * Should you need to contact me, the author, you can do so either by
- * e-mail - mail your message to <vojtech@ucw.cz>, or by paper mail:
- * Vojtech Pavlik, Simunkova 1594, Prague 8, 182 00 Czech Republic
  */
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
@@ -469,7 +465,7 @@ static struct attribute *serio_device_id_attrs[] = {
 	NULL
 };
 
-static struct attribute_group serio_id_attr_group = {
+static const struct attribute_group serio_id_attr_group = {
 	.name	= "id",
 	.attrs	= serio_device_id_attrs,
 };
@@ -489,7 +485,7 @@ static struct attribute *serio_device_attrs[] = {
 	NULL
 };
 
-static struct attribute_group serio_device_attr_group = {
+static const struct attribute_group serio_device_attr_group = {
 	.attrs	= serio_device_attrs,
 };
 

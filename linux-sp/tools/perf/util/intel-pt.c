@@ -81,7 +81,6 @@ struct intel_pt {
 
 	bool sample_instructions;
 	u64 instructions_sample_type;
-	u64 instructions_sample_period;
 	u64 instructions_id;
 
 	bool sample_branches;
@@ -93,7 +92,17 @@ struct intel_pt {
 	u64 transactions_sample_type;
 	u64 transactions_id;
 
-	bool synth_needs_swap;
+	bool sample_ptwrites;
+	u64 ptwrites_sample_type;
+	u64 ptwrites_id;
+
+	bool sample_pwr_events;
+	u64 pwr_events_sample_type;
+	u64 mwait_id;
+	u64 pwre_id;
+	u64 exstop_id;
+	u64 pwrx_id;
+	u64 cbr_id;
 
 	u64 tsc_bit;
 	u64 mtc_bit;
@@ -103,6 +112,7 @@ struct intel_pt {
 	u64 cyc_bit;
 	u64 noretcomp_bit;
 	unsigned max_non_turbo_ratio;
+	unsigned cbr2khz;
 
 	unsigned long num_events;
 
@@ -122,6 +132,7 @@ struct intel_pt_queue {
 	struct intel_pt *pt;
 	unsigned int queue_nr;
 	struct auxtrace_buffer *buffer;
+	struct auxtrace_buffer *old_buffer;
 	void *decoder;
 	const struct intel_pt_state *state;
 	struct ip_callchain *chain;
@@ -133,6 +144,7 @@ struct intel_pt_queue {
 	bool stop;
 	bool step_through_buffers;
 	bool use_buffer_pid_tid;
+	bool sync_switch;
 	pid_t pid, tid;
 	int cpu;
 	int switch_state;
@@ -197,49 +209,28 @@ static void intel_pt_dump_event(struct intel_pt *pt, unsigned char *buf,
 static int intel_pt_do_fix_overlap(struct intel_pt *pt, struct auxtrace_buffer *a,
 				   struct auxtrace_buffer *b)
 {
+	bool consecutive = false;
 	void *start;
 
 	start = intel_pt_find_overlap(a->data, a->size, b->data, b->size,
-				      pt->have_tsc);
+				      pt->have_tsc, &consecutive);
 	if (!start)
 		return -EINVAL;
 	b->use_size = b->data + b->size - start;
 	b->use_data = start;
+	if (b->use_size && consecutive)
+		b->consecutive = true;
 	return 0;
-}
-
-static void intel_pt_use_buffer_pid_tid(struct intel_pt_queue *ptq,
-					struct auxtrace_queue *queue,
-					struct auxtrace_buffer *buffer)
-{
-	if (queue->cpu == -1 && buffer->cpu != -1)
-		ptq->cpu = buffer->cpu;
-
-	ptq->pid = buffer->pid;
-	ptq->tid = buffer->tid;
-
-	intel_pt_log("queue %u cpu %d pid %d tid %d\n",
-		     ptq->queue_nr, ptq->cpu, ptq->pid, ptq->tid);
-
-	thread__zput(ptq->thread);
-
-	if (ptq->tid != -1) {
-		if (ptq->pid != -1)
-			ptq->thread = machine__findnew_thread(ptq->pt->machine,
-							      ptq->pid,
-							      ptq->tid);
-		else
-			ptq->thread = machine__find_thread(ptq->pt->machine, -1,
-							   ptq->tid);
-	}
 }
 
 /* This function assumes data is processed sequentially only */
 static int intel_pt_get_trace(struct intel_pt_buffer *b, void *data)
 {
 	struct intel_pt_queue *ptq = data;
-	struct auxtrace_buffer *buffer = ptq->buffer, *old_buffer = buffer;
+	struct auxtrace_buffer *buffer = ptq->buffer;
+	struct auxtrace_buffer *old_buffer = ptq->old_buffer;
 	struct auxtrace_queue *queue;
+	bool might_overlap;
 
 	if (ptq->stop) {
 		b->len = 0;
@@ -247,7 +238,7 @@ static int intel_pt_get_trace(struct intel_pt_buffer *b, void *data)
 	}
 
 	queue = &ptq->pt->queues.queue_array[ptq->queue_nr];
-next:
+
 	buffer = auxtrace_buffer__next(queue, buffer);
 	if (!buffer) {
 		if (old_buffer)
@@ -259,14 +250,15 @@ next:
 	ptq->buffer = buffer;
 
 	if (!buffer->data) {
-		int fd = perf_data_file__fd(ptq->pt->session->file);
+		int fd = perf_data__fd(ptq->pt->session->data);
 
 		buffer->data = auxtrace_buffer__get_data(buffer, fd);
 		if (!buffer->data)
 			return -ENOMEM;
 	}
 
-	if (ptq->pt->snapshot_mode && !buffer->consecutive && old_buffer &&
+	might_overlap = ptq->pt->snapshot_mode || ptq->pt->sampling_mode;
+	if (might_overlap && !buffer->consecutive && old_buffer &&
 	    intel_pt_do_fix_overlap(ptq->pt, old_buffer, buffer))
 		return -ENOMEM;
 
@@ -279,33 +271,24 @@ next:
 	}
 	b->ref_timestamp = buffer->reference;
 
-	/*
-	 * If in snapshot mode and the buffer has no usable data, get next
-	 * buffer and again check overlap against old_buffer.
-	 */
-	if (ptq->pt->snapshot_mode && !b->len)
-		goto next;
-
-	if (old_buffer)
-		auxtrace_buffer__drop_data(old_buffer);
-
-	if (!old_buffer || ptq->pt->sampling_mode || (ptq->pt->snapshot_mode &&
-						      !buffer->consecutive)) {
+	if (!old_buffer || (might_overlap && !buffer->consecutive)) {
 		b->consecutive = false;
 		b->trace_nr = buffer->buffer_nr + 1;
 	} else {
 		b->consecutive = true;
 	}
 
-	if (ptq->use_buffer_pid_tid && (ptq->pid != buffer->pid ||
-					ptq->tid != buffer->tid))
-		intel_pt_use_buffer_pid_tid(ptq, queue, buffer);
-
 	if (ptq->step_through_buffers)
 		ptq->stop = true;
 
-	if (!b->len)
+	if (b->len) {
+		if (old_buffer)
+			auxtrace_buffer__drop_data(old_buffer);
+		ptq->old_buffer = buffer;
+	} else {
+		auxtrace_buffer__drop_data(buffer);
 		return intel_pt_get_trace(b, data);
+	}
 
 	return 0;
 }
@@ -424,6 +407,13 @@ intel_pt_cache_lookup(struct dso *dso, struct machine *machine, u64 offset)
 	return auxtrace_cache__lookup(dso->auxtrace_cache, offset);
 }
 
+static inline u8 intel_pt_cpumode(struct intel_pt *pt, uint64_t ip)
+{
+	return ip >= pt->kernel_start ?
+	       PERF_RECORD_MISC_KERNEL :
+	       PERF_RECORD_MISC_USER;
+}
+
 static int intel_pt_walk_next_insn(struct intel_pt_insn *intel_pt_insn,
 				   uint64_t *insn_cnt_ptr, uint64_t *ip,
 				   uint64_t to_ip, uint64_t max_insn_cnt,
@@ -446,10 +436,7 @@ static int intel_pt_walk_next_insn(struct intel_pt_insn *intel_pt_insn,
 	if (to_ip && *ip == to_ip)
 		goto out_no_cache;
 
-	if (*ip >= ptq->pt->kernel_start)
-		cpumode = PERF_RECORD_MISC_KERNEL;
-	else
-		cpumode = PERF_RECORD_MISC_USER;
+	cpumode = intel_pt_cpumode(ptq->pt, *ip);
 
 	thread = ptq->thread;
 	if (!thread) {
@@ -459,8 +446,7 @@ static int intel_pt_walk_next_insn(struct intel_pt_insn *intel_pt_insn,
 	}
 
 	while (1) {
-		thread__find_addr_map(thread, cpumode, MAP__FUNCTION, *ip, &al);
-		if (!al.map || !al.map->dso)
+		if (!thread__find_map(thread, cpumode, *ip, &al) || !al.map->dso)
 			return -EINVAL;
 
 		if (al.map->dso->data.status == DSO_DATA_STATUS_ERROR &&
@@ -613,8 +599,7 @@ static int __intel_pt_pgd_ip(uint64_t ip, void *data)
 	if (!thread)
 		return -EINVAL;
 
-	thread__find_addr_map(thread, cpumode, MAP__FUNCTION, ip, &al);
-	if (!al.map || !al.map->dso)
+	if (!thread__find_map(thread, cpumode, ip, &al) || !al.map->dso)
 		return -EINVAL;
 
 	offset = al.map->map_ip(al.map, ip);
@@ -663,6 +648,19 @@ static bool intel_pt_return_compression(struct intel_pt *pt)
 	evlist__for_each_entry(pt->session->evlist, evsel) {
 		if (intel_pt_get_config(pt, &evsel->attr, &config) &&
 		    (config & pt->noretcomp_bit))
+			return false;
+	}
+	return true;
+}
+
+static bool intel_pt_branch_enable(struct intel_pt *pt)
+{
+	struct perf_evsel *evsel;
+	u64 config;
+
+	evlist__for_each_entry(pt->session->evlist, evsel) {
+		if (intel_pt_get_config(pt, &evsel->attr, &config) &&
+		    (config & 1) && !(config & 0x2000))
 			return false;
 	}
 	return true;
@@ -755,6 +753,7 @@ static struct intel_pt_queue *intel_pt_alloc_queue(struct intel_pt *pt,
 						   unsigned int queue_nr)
 {
 	struct intel_pt_params params = { .get_trace = 0, };
+	struct perf_env *env = pt->machine->env;
 	struct intel_pt_queue *ptq;
 
 	ptq = zalloc(sizeof(struct intel_pt_queue));
@@ -764,7 +763,8 @@ static struct intel_pt_queue *intel_pt_alloc_queue(struct intel_pt *pt,
 	if (pt->synth_opts.callchain) {
 		size_t sz = sizeof(struct ip_callchain);
 
-		sz += pt->synth_opts.callchain_sz * sizeof(u64);
+		/* Add 1 to callchain_sz for callchain context */
+		sz += (pt->synth_opts.callchain_sz + 1) * sizeof(u64);
 		ptq->chain = zalloc(sz);
 		if (!ptq->chain)
 			goto out_free;
@@ -799,6 +799,7 @@ static struct intel_pt_queue *intel_pt_alloc_queue(struct intel_pt *pt,
 	params.walk_insn = intel_pt_walk_next_insn;
 	params.data = ptq;
 	params.return_compression = intel_pt_return_compression(pt);
+	params.branch_enable = intel_pt_branch_enable(pt);
 	params.max_non_turbo_ratio = pt->max_non_turbo_ratio;
 	params.mtc_period = intel_pt_mtc_period(pt);
 	params.tsc_ctc_ratio_n = pt->tsc_ctc_ratio_n;
@@ -834,6 +835,9 @@ static struct intel_pt_queue *intel_pt_alloc_queue(struct intel_pt *pt,
 			params.period = 1;
 		}
 	}
+
+	if (env->cpuid && !strncmp(env->cpuid, "GenuineIntel,6,92,", 18))
+		params.flags |= INTEL_PT_FUP_WITH_NLIP;
 
 	ptq->decoder = intel_pt_decoder_new(&params);
 	if (!ptq->decoder)
@@ -930,16 +934,15 @@ static int intel_pt_setup_queue(struct intel_pt *pt,
 			ptq->cpu = queue->cpu;
 		ptq->tid = queue->tid;
 
-		if (pt->sampling_mode) {
-			if (pt->timeless_decoding)
-				ptq->step_through_buffers = true;
-			if (pt->timeless_decoding || !pt->have_sched_switch)
-				ptq->use_buffer_pid_tid = true;
-		}
+		if (pt->sampling_mode && !pt->snapshot_mode &&
+		    pt->timeless_decoding)
+			ptq->step_through_buffers = true;
+
+		ptq->sync_switch = pt->sync_switch;
 	}
 
 	if (!ptq->on_heap &&
-	    (!pt->sync_switch ||
+	    (!ptq->sync_switch ||
 	     ptq->switch_state != INTEL_PT_SS_EXPECTING_SWITCH_EVENT)) {
 		const struct intel_pt_state *state;
 		int ret;
@@ -1044,17 +1047,72 @@ static void intel_pt_update_last_branch_rb(struct intel_pt_queue *ptq)
 		bs->nr += 1;
 }
 
+static inline bool intel_pt_skip_event(struct intel_pt *pt)
+{
+	return pt->synth_opts.initial_skip &&
+	       pt->num_events++ < pt->synth_opts.initial_skip;
+}
+
+static void intel_pt_prep_b_sample(struct intel_pt *pt,
+				   struct intel_pt_queue *ptq,
+				   union perf_event *event,
+				   struct perf_sample *sample)
+{
+	if (!pt->timeless_decoding)
+		sample->time = tsc_to_perf_time(ptq->timestamp, &pt->tc);
+
+	sample->ip = ptq->state->from_ip;
+	sample->cpumode = intel_pt_cpumode(pt, sample->ip);
+	sample->pid = ptq->pid;
+	sample->tid = ptq->tid;
+	sample->addr = ptq->state->to_ip;
+	sample->period = 1;
+	sample->cpu = ptq->cpu;
+	sample->flags = ptq->flags;
+	sample->insn_len = ptq->insn_len;
+	memcpy(sample->insn, ptq->insn, INTEL_PT_INSN_BUF_SZ);
+
+	event->sample.header.type = PERF_RECORD_SAMPLE;
+	event->sample.header.misc = sample->cpumode;
+	event->sample.header.size = sizeof(struct perf_event_header);
+}
+
 static int intel_pt_inject_event(union perf_event *event,
-				 struct perf_sample *sample, u64 type,
-				 bool swapped)
+				 struct perf_sample *sample, u64 type)
 {
 	event->header.size = perf_event__sample_event_size(sample, type, 0);
-	return perf_event__synthesize_sample(event, type, 0, sample, swapped);
+	return perf_event__synthesize_sample(event, type, 0, sample);
+}
+
+static inline int intel_pt_opt_inject(struct intel_pt *pt,
+				      union perf_event *event,
+				      struct perf_sample *sample, u64 type)
+{
+	if (!pt->synth_opts.inject)
+		return 0;
+
+	return intel_pt_inject_event(event, sample, type);
+}
+
+static int intel_pt_deliver_synth_b_event(struct intel_pt *pt,
+					  union perf_event *event,
+					  struct perf_sample *sample, u64 type)
+{
+	int ret;
+
+	ret = intel_pt_opt_inject(pt, event, sample, type);
+	if (ret)
+		return ret;
+
+	ret = perf_session__deliver_synth_event(pt->session, event, sample);
+	if (ret)
+		pr_err("Intel PT: failed to deliver event, error %d\n", ret);
+
+	return ret;
 }
 
 static int intel_pt_synth_branch_sample(struct intel_pt_queue *ptq)
 {
-	int ret;
 	struct intel_pt *pt = ptq->pt;
 	union perf_event *event = ptq->event_buf;
 	struct perf_sample sample = { .ip = 0, };
@@ -1066,29 +1124,13 @@ static int intel_pt_synth_branch_sample(struct intel_pt_queue *ptq)
 	if (pt->branches_filter && !(pt->branches_filter & ptq->flags))
 		return 0;
 
-	if (pt->synth_opts.initial_skip &&
-	    pt->num_events++ < pt->synth_opts.initial_skip)
+	if (intel_pt_skip_event(pt))
 		return 0;
 
-	event->sample.header.type = PERF_RECORD_SAMPLE;
-	event->sample.header.misc = PERF_RECORD_MISC_USER;
-	event->sample.header.size = sizeof(struct perf_event_header);
+	intel_pt_prep_b_sample(pt, ptq, event, &sample);
 
-	if (!pt->timeless_decoding)
-		sample.time = tsc_to_perf_time(ptq->timestamp, &pt->tc);
-
-	sample.cpumode = PERF_RECORD_MISC_USER;
-	sample.ip = ptq->state->from_ip;
-	sample.pid = ptq->pid;
-	sample.tid = ptq->tid;
-	sample.addr = ptq->state->to_ip;
 	sample.id = ptq->pt->branches_id;
 	sample.stream_id = ptq->pt->branches_id;
-	sample.period = 1;
-	sample.cpu = ptq->cpu;
-	sample.flags = ptq->flags;
-	sample.insn_len = ptq->insn_len;
-	memcpy(sample.insn, ptq->insn, INTEL_PT_INSN_BUF_SZ);
 
 	/*
 	 * perf report cannot handle events without a branch stack when using
@@ -1105,144 +1147,252 @@ static int intel_pt_synth_branch_sample(struct intel_pt_queue *ptq)
 		sample.branch_stack = (struct branch_stack *)&dummy_bs;
 	}
 
-	if (pt->synth_opts.inject) {
-		ret = intel_pt_inject_event(event, &sample,
-					    pt->branches_sample_type,
-					    pt->synth_needs_swap);
-		if (ret)
-			return ret;
+	return intel_pt_deliver_synth_b_event(pt, event, &sample,
+					      pt->branches_sample_type);
+}
+
+static void intel_pt_prep_sample(struct intel_pt *pt,
+				 struct intel_pt_queue *ptq,
+				 union perf_event *event,
+				 struct perf_sample *sample)
+{
+	intel_pt_prep_b_sample(pt, ptq, event, sample);
+
+	if (pt->synth_opts.callchain) {
+		thread_stack__sample(ptq->thread, ptq->chain,
+				     pt->synth_opts.callchain_sz + 1,
+				     sample->ip, pt->kernel_start);
+		sample->callchain = ptq->chain;
 	}
 
-	ret = perf_session__deliver_synth_event(pt->session, event, &sample);
-	if (ret)
-		pr_err("Intel Processor Trace: failed to deliver branch event, error %d\n",
-		       ret);
+	if (pt->synth_opts.last_branch) {
+		intel_pt_copy_last_branch_rb(ptq);
+		sample->branch_stack = ptq->last_branch;
+	}
+}
+
+static inline int intel_pt_deliver_synth_event(struct intel_pt *pt,
+					       struct intel_pt_queue *ptq,
+					       union perf_event *event,
+					       struct perf_sample *sample,
+					       u64 type)
+{
+	int ret;
+
+	ret = intel_pt_deliver_synth_b_event(pt, event, sample, type);
+
+	if (pt->synth_opts.last_branch)
+		intel_pt_reset_last_branch_rb(ptq);
 
 	return ret;
 }
 
 static int intel_pt_synth_instruction_sample(struct intel_pt_queue *ptq)
 {
-	int ret;
 	struct intel_pt *pt = ptq->pt;
 	union perf_event *event = ptq->event_buf;
 	struct perf_sample sample = { .ip = 0, };
 
-	if (pt->synth_opts.initial_skip &&
-	    pt->num_events++ < pt->synth_opts.initial_skip)
+	if (intel_pt_skip_event(pt))
 		return 0;
 
-	event->sample.header.type = PERF_RECORD_SAMPLE;
-	event->sample.header.misc = PERF_RECORD_MISC_USER;
-	event->sample.header.size = sizeof(struct perf_event_header);
+	intel_pt_prep_sample(pt, ptq, event, &sample);
 
-	if (!pt->timeless_decoding)
-		sample.time = tsc_to_perf_time(ptq->timestamp, &pt->tc);
-
-	sample.cpumode = PERF_RECORD_MISC_USER;
-	sample.ip = ptq->state->from_ip;
-	sample.pid = ptq->pid;
-	sample.tid = ptq->tid;
-	sample.addr = ptq->state->to_ip;
 	sample.id = ptq->pt->instructions_id;
 	sample.stream_id = ptq->pt->instructions_id;
 	sample.period = ptq->state->tot_insn_cnt - ptq->last_insn_cnt;
-	sample.cpu = ptq->cpu;
-	sample.flags = ptq->flags;
-	sample.insn_len = ptq->insn_len;
-	memcpy(sample.insn, ptq->insn, INTEL_PT_INSN_BUF_SZ);
 
 	ptq->last_insn_cnt = ptq->state->tot_insn_cnt;
 
-	if (pt->synth_opts.callchain) {
-		thread_stack__sample(ptq->thread, ptq->chain,
-				     pt->synth_opts.callchain_sz, sample.ip);
-		sample.callchain = ptq->chain;
-	}
-
-	if (pt->synth_opts.last_branch) {
-		intel_pt_copy_last_branch_rb(ptq);
-		sample.branch_stack = ptq->last_branch;
-	}
-
-	if (pt->synth_opts.inject) {
-		ret = intel_pt_inject_event(event, &sample,
-					    pt->instructions_sample_type,
-					    pt->synth_needs_swap);
-		if (ret)
-			return ret;
-	}
-
-	ret = perf_session__deliver_synth_event(pt->session, event, &sample);
-	if (ret)
-		pr_err("Intel Processor Trace: failed to deliver instruction event, error %d\n",
-		       ret);
-
-	if (pt->synth_opts.last_branch)
-		intel_pt_reset_last_branch_rb(ptq);
-
-	return ret;
+	return intel_pt_deliver_synth_event(pt, ptq, event, &sample,
+					    pt->instructions_sample_type);
 }
 
 static int intel_pt_synth_transaction_sample(struct intel_pt_queue *ptq)
 {
-	int ret;
 	struct intel_pt *pt = ptq->pt;
 	union perf_event *event = ptq->event_buf;
 	struct perf_sample sample = { .ip = 0, };
 
-	if (pt->synth_opts.initial_skip &&
-	    pt->num_events++ < pt->synth_opts.initial_skip)
+	if (intel_pt_skip_event(pt))
 		return 0;
 
-	event->sample.header.type = PERF_RECORD_SAMPLE;
-	event->sample.header.misc = PERF_RECORD_MISC_USER;
-	event->sample.header.size = sizeof(struct perf_event_header);
+	intel_pt_prep_sample(pt, ptq, event, &sample);
 
-	if (!pt->timeless_decoding)
-		sample.time = tsc_to_perf_time(ptq->timestamp, &pt->tc);
-
-	sample.cpumode = PERF_RECORD_MISC_USER;
-	sample.ip = ptq->state->from_ip;
-	sample.pid = ptq->pid;
-	sample.tid = ptq->tid;
-	sample.addr = ptq->state->to_ip;
 	sample.id = ptq->pt->transactions_id;
 	sample.stream_id = ptq->pt->transactions_id;
-	sample.period = 1;
-	sample.cpu = ptq->cpu;
-	sample.flags = ptq->flags;
-	sample.insn_len = ptq->insn_len;
-	memcpy(sample.insn, ptq->insn, INTEL_PT_INSN_BUF_SZ);
 
-	if (pt->synth_opts.callchain) {
-		thread_stack__sample(ptq->thread, ptq->chain,
-				     pt->synth_opts.callchain_sz, sample.ip);
-		sample.callchain = ptq->chain;
-	}
+	return intel_pt_deliver_synth_event(pt, ptq, event, &sample,
+					    pt->transactions_sample_type);
+}
 
-	if (pt->synth_opts.last_branch) {
-		intel_pt_copy_last_branch_rb(ptq);
-		sample.branch_stack = ptq->last_branch;
-	}
+static void intel_pt_prep_p_sample(struct intel_pt *pt,
+				   struct intel_pt_queue *ptq,
+				   union perf_event *event,
+				   struct perf_sample *sample)
+{
+	intel_pt_prep_sample(pt, ptq, event, sample);
 
-	if (pt->synth_opts.inject) {
-		ret = intel_pt_inject_event(event, &sample,
-					    pt->transactions_sample_type,
-					    pt->synth_needs_swap);
-		if (ret)
-			return ret;
-	}
+	/*
+	 * Zero IP is used to mean "trace start" but that is not the case for
+	 * power or PTWRITE events with no IP, so clear the flags.
+	 */
+	if (!sample->ip)
+		sample->flags = 0;
+}
 
-	ret = perf_session__deliver_synth_event(pt->session, event, &sample);
-	if (ret)
-		pr_err("Intel Processor Trace: failed to deliver transaction event, error %d\n",
-		       ret);
+static int intel_pt_synth_ptwrite_sample(struct intel_pt_queue *ptq)
+{
+	struct intel_pt *pt = ptq->pt;
+	union perf_event *event = ptq->event_buf;
+	struct perf_sample sample = { .ip = 0, };
+	struct perf_synth_intel_ptwrite raw;
 
-	if (pt->synth_opts.last_branch)
-		intel_pt_reset_last_branch_rb(ptq);
+	if (intel_pt_skip_event(pt))
+		return 0;
 
-	return ret;
+	intel_pt_prep_p_sample(pt, ptq, event, &sample);
+
+	sample.id = ptq->pt->ptwrites_id;
+	sample.stream_id = ptq->pt->ptwrites_id;
+
+	raw.flags = 0;
+	raw.ip = !!(ptq->state->flags & INTEL_PT_FUP_IP);
+	raw.payload = cpu_to_le64(ptq->state->ptw_payload);
+
+	sample.raw_size = perf_synth__raw_size(raw);
+	sample.raw_data = perf_synth__raw_data(&raw);
+
+	return intel_pt_deliver_synth_event(pt, ptq, event, &sample,
+					    pt->ptwrites_sample_type);
+}
+
+static int intel_pt_synth_cbr_sample(struct intel_pt_queue *ptq)
+{
+	struct intel_pt *pt = ptq->pt;
+	union perf_event *event = ptq->event_buf;
+	struct perf_sample sample = { .ip = 0, };
+	struct perf_synth_intel_cbr raw;
+	u32 flags;
+
+	if (intel_pt_skip_event(pt))
+		return 0;
+
+	intel_pt_prep_p_sample(pt, ptq, event, &sample);
+
+	sample.id = ptq->pt->cbr_id;
+	sample.stream_id = ptq->pt->cbr_id;
+
+	flags = (u16)ptq->state->cbr_payload | (pt->max_non_turbo_ratio << 16);
+	raw.flags = cpu_to_le32(flags);
+	raw.freq = cpu_to_le32(raw.cbr * pt->cbr2khz);
+	raw.reserved3 = 0;
+
+	sample.raw_size = perf_synth__raw_size(raw);
+	sample.raw_data = perf_synth__raw_data(&raw);
+
+	return intel_pt_deliver_synth_event(pt, ptq, event, &sample,
+					    pt->pwr_events_sample_type);
+}
+
+static int intel_pt_synth_mwait_sample(struct intel_pt_queue *ptq)
+{
+	struct intel_pt *pt = ptq->pt;
+	union perf_event *event = ptq->event_buf;
+	struct perf_sample sample = { .ip = 0, };
+	struct perf_synth_intel_mwait raw;
+
+	if (intel_pt_skip_event(pt))
+		return 0;
+
+	intel_pt_prep_p_sample(pt, ptq, event, &sample);
+
+	sample.id = ptq->pt->mwait_id;
+	sample.stream_id = ptq->pt->mwait_id;
+
+	raw.reserved = 0;
+	raw.payload = cpu_to_le64(ptq->state->mwait_payload);
+
+	sample.raw_size = perf_synth__raw_size(raw);
+	sample.raw_data = perf_synth__raw_data(&raw);
+
+	return intel_pt_deliver_synth_event(pt, ptq, event, &sample,
+					    pt->pwr_events_sample_type);
+}
+
+static int intel_pt_synth_pwre_sample(struct intel_pt_queue *ptq)
+{
+	struct intel_pt *pt = ptq->pt;
+	union perf_event *event = ptq->event_buf;
+	struct perf_sample sample = { .ip = 0, };
+	struct perf_synth_intel_pwre raw;
+
+	if (intel_pt_skip_event(pt))
+		return 0;
+
+	intel_pt_prep_p_sample(pt, ptq, event, &sample);
+
+	sample.id = ptq->pt->pwre_id;
+	sample.stream_id = ptq->pt->pwre_id;
+
+	raw.reserved = 0;
+	raw.payload = cpu_to_le64(ptq->state->pwre_payload);
+
+	sample.raw_size = perf_synth__raw_size(raw);
+	sample.raw_data = perf_synth__raw_data(&raw);
+
+	return intel_pt_deliver_synth_event(pt, ptq, event, &sample,
+					    pt->pwr_events_sample_type);
+}
+
+static int intel_pt_synth_exstop_sample(struct intel_pt_queue *ptq)
+{
+	struct intel_pt *pt = ptq->pt;
+	union perf_event *event = ptq->event_buf;
+	struct perf_sample sample = { .ip = 0, };
+	struct perf_synth_intel_exstop raw;
+
+	if (intel_pt_skip_event(pt))
+		return 0;
+
+	intel_pt_prep_p_sample(pt, ptq, event, &sample);
+
+	sample.id = ptq->pt->exstop_id;
+	sample.stream_id = ptq->pt->exstop_id;
+
+	raw.flags = 0;
+	raw.ip = !!(ptq->state->flags & INTEL_PT_FUP_IP);
+
+	sample.raw_size = perf_synth__raw_size(raw);
+	sample.raw_data = perf_synth__raw_data(&raw);
+
+	return intel_pt_deliver_synth_event(pt, ptq, event, &sample,
+					    pt->pwr_events_sample_type);
+}
+
+static int intel_pt_synth_pwrx_sample(struct intel_pt_queue *ptq)
+{
+	struct intel_pt *pt = ptq->pt;
+	union perf_event *event = ptq->event_buf;
+	struct perf_sample sample = { .ip = 0, };
+	struct perf_synth_intel_pwrx raw;
+
+	if (intel_pt_skip_event(pt))
+		return 0;
+
+	intel_pt_prep_p_sample(pt, ptq, event, &sample);
+
+	sample.id = ptq->pt->pwrx_id;
+	sample.stream_id = ptq->pt->pwrx_id;
+
+	raw.reserved = 0;
+	raw.payload = cpu_to_le64(ptq->state->pwrx_payload);
+
+	sample.raw_size = perf_synth__raw_size(raw);
+	sample.raw_data = perf_synth__raw_data(&raw);
+
+	return intel_pt_deliver_synth_event(pt, ptq, event, &sample,
+					    pt->pwr_events_sample_type);
 }
 
 static int intel_pt_synth_error(struct intel_pt *pt, int code, int cpu,
@@ -1296,6 +1446,10 @@ static inline bool intel_pt_is_switch_ip(struct intel_pt_queue *ptq, u64 ip)
 			       PERF_IP_FLAG_INTERRUPT | PERF_IP_FLAG_TX_ABORT));
 }
 
+#define INTEL_PT_PWR_EVT (INTEL_PT_MWAIT_OP | INTEL_PT_PWR_ENTRY | \
+			  INTEL_PT_EX_STOP | INTEL_PT_PWR_EXIT | \
+			  INTEL_PT_CBR_CHG)
+
 static int intel_pt_sample(struct intel_pt_queue *ptq)
 {
 	const struct intel_pt_state *state = ptq->state;
@@ -1307,20 +1461,48 @@ static int intel_pt_sample(struct intel_pt_queue *ptq)
 
 	ptq->have_sample = false;
 
-	if (pt->sample_instructions &&
-	    (state->type & INTEL_PT_INSTRUCTION) &&
-	    (!pt->synth_opts.initial_skip ||
-	     pt->num_events++ >= pt->synth_opts.initial_skip)) {
+	if (pt->sample_pwr_events && (state->type & INTEL_PT_PWR_EVT)) {
+		if (state->type & INTEL_PT_CBR_CHG) {
+			err = intel_pt_synth_cbr_sample(ptq);
+			if (err)
+				return err;
+		}
+		if (state->type & INTEL_PT_MWAIT_OP) {
+			err = intel_pt_synth_mwait_sample(ptq);
+			if (err)
+				return err;
+		}
+		if (state->type & INTEL_PT_PWR_ENTRY) {
+			err = intel_pt_synth_pwre_sample(ptq);
+			if (err)
+				return err;
+		}
+		if (state->type & INTEL_PT_EX_STOP) {
+			err = intel_pt_synth_exstop_sample(ptq);
+			if (err)
+				return err;
+		}
+		if (state->type & INTEL_PT_PWR_EXIT) {
+			err = intel_pt_synth_pwrx_sample(ptq);
+			if (err)
+				return err;
+		}
+	}
+
+	if (pt->sample_instructions && (state->type & INTEL_PT_INSTRUCTION)) {
 		err = intel_pt_synth_instruction_sample(ptq);
 		if (err)
 			return err;
 	}
 
-	if (pt->sample_transactions &&
-	    (state->type & INTEL_PT_TRANSACTION) &&
-	    (!pt->synth_opts.initial_skip ||
-	     pt->num_events++ >= pt->synth_opts.initial_skip)) {
+	if (pt->sample_transactions && (state->type & INTEL_PT_TRANSACTION)) {
 		err = intel_pt_synth_transaction_sample(ptq);
+		if (err)
+			return err;
+	}
+
+	if (pt->sample_ptwrites && (state->type & INTEL_PT_PTW)) {
+		err = intel_pt_synth_ptwrite_sample(ptq);
 		if (err)
 			return err;
 	}
@@ -1344,11 +1526,12 @@ static int intel_pt_sample(struct intel_pt_queue *ptq)
 	if (pt->synth_opts.last_branch)
 		intel_pt_update_last_branch_rb(ptq);
 
-	if (!pt->sync_switch)
+	if (!ptq->sync_switch)
 		return 0;
 
 	if (intel_pt_is_switch_ip(ptq, state->to_ip)) {
 		switch (ptq->switch_state) {
+		case INTEL_PT_SS_NOT_TRACING:
 		case INTEL_PT_SS_UNKNOWN:
 		case INTEL_PT_SS_EXPECTING_SWITCH_IP:
 			err = intel_pt_next_tid(pt, ptq);
@@ -1391,7 +1574,7 @@ static u64 intel_pt_switch_ip(struct intel_pt *pt, u64 *ptss_ip)
 	if (map__load(map))
 		return 0;
 
-	start = dso__first_symbol(map->dso, MAP__FUNCTION);
+	start = dso__first_symbol(map->dso);
 
 	for (sym = start; sym; sym = dso__next_symbol(sym)) {
 		if (sym->binding == STB_GLOBAL &&
@@ -1425,6 +1608,21 @@ static u64 intel_pt_switch_ip(struct intel_pt *pt, u64 *ptss_ip)
 	return switch_ip;
 }
 
+static void intel_pt_enable_sync_switch(struct intel_pt *pt)
+{
+	unsigned int i;
+
+	pt->sync_switch = true;
+
+	for (i = 0; i < pt->queues.nr_queues; i++) {
+		struct auxtrace_queue *queue = &pt->queues.queue_array[i];
+		struct intel_pt_queue *ptq = queue->priv;
+
+		if (ptq)
+			ptq->sync_switch = true;
+	}
+}
+
 static int intel_pt_run_decoder(struct intel_pt_queue *ptq, u64 *timestamp)
 {
 	const struct intel_pt_state *state = ptq->state;
@@ -1441,7 +1639,7 @@ static int intel_pt_run_decoder(struct intel_pt_queue *ptq, u64 *timestamp)
 			if (pt->switch_ip) {
 				intel_pt_log("switch_ip: %"PRIx64" ptss_ip: %"PRIx64"\n",
 					     pt->switch_ip, pt->ptss_ip);
-				pt->sync_switch = true;
+				intel_pt_enable_sync_switch(pt);
 			}
 		}
 	}
@@ -1457,9 +1655,9 @@ static int intel_pt_run_decoder(struct intel_pt_queue *ptq, u64 *timestamp)
 		if (state->err) {
 			if (state->err == INTEL_PT_ERR_NODATA)
 				return 1;
-			if (pt->sync_switch &&
+			if (ptq->sync_switch &&
 			    state->from_ip >= pt->kernel_start) {
-				pt->sync_switch = false;
+				ptq->sync_switch = false;
 				intel_pt_next_tid(pt, ptq);
 			}
 			if (pt->synth_opts.errors) {
@@ -1485,7 +1683,7 @@ static int intel_pt_run_decoder(struct intel_pt_queue *ptq, u64 *timestamp)
 				     state->timestamp, state->est_timestamp);
 			ptq->timestamp = state->est_timestamp;
 		/* Use estimated TSC in unknown switch state */
-		} else if (pt->sync_switch &&
+		} else if (ptq->sync_switch &&
 			   ptq->switch_state == INTEL_PT_SS_UNKNOWN &&
 			   intel_pt_is_switch_ip(ptq, state->to_ip) &&
 			   ptq->next_tid == -1) {
@@ -1632,7 +1830,7 @@ static int intel_pt_sync_switch(struct intel_pt *pt, int cpu, pid_t tid,
 		return 1;
 
 	ptq = intel_pt_cpu_to_ptq(pt, cpu);
-	if (!ptq)
+	if (!ptq || !ptq->sync_switch)
 		return 1;
 
 	switch (ptq->switch_state) {
@@ -1873,16 +2071,13 @@ static int intel_pt_process_auxtrace_event(struct perf_session *session,
 	struct intel_pt *pt = container_of(session->auxtrace, struct intel_pt,
 					   auxtrace);
 
-	if (pt->sampling_mode)
-		return 0;
-
 	if (!pt->data_queued) {
 		struct auxtrace_buffer *buffer;
 		off_t data_offset;
-		int fd = perf_data_file__fd(session->file);
+		int fd = perf_data__fd(session->data);
 		int err;
 
-		if (perf_data_file__is_pipe(session->file)) {
+		if (perf_data__is_pipe(session->data)) {
 			data_offset = 0;
 		} else {
 			data_offset = lseek(fd, 0, SEEK_CUR);
@@ -1925,36 +2120,65 @@ static int intel_pt_event_synth(struct perf_tool *tool,
 						 NULL);
 }
 
-static int intel_pt_synth_event(struct perf_session *session,
+static int intel_pt_synth_event(struct perf_session *session, const char *name,
 				struct perf_event_attr *attr, u64 id)
 {
 	struct intel_pt_synth intel_pt_synth;
+	int err;
+
+	pr_debug("Synthesizing '%s' event with id %" PRIu64 " sample type %#" PRIx64 "\n",
+		 name, id, (u64)attr->sample_type);
 
 	memset(&intel_pt_synth, 0, sizeof(struct intel_pt_synth));
 	intel_pt_synth.session = session;
 
-	return perf_event__synthesize_attr(&intel_pt_synth.dummy_tool, attr, 1,
-					   &id, intel_pt_event_synth);
+	err = perf_event__synthesize_attr(&intel_pt_synth.dummy_tool, attr, 1,
+					  &id, intel_pt_event_synth);
+	if (err)
+		pr_err("%s: failed to synthesize '%s' event type\n",
+		       __func__, name);
+
+	return err;
+}
+
+static void intel_pt_set_event_name(struct perf_evlist *evlist, u64 id,
+				    const char *name)
+{
+	struct perf_evsel *evsel;
+
+	evlist__for_each_entry(evlist, evsel) {
+		if (evsel->id && evsel->id[0] == id) {
+			if (evsel->name)
+				zfree(&evsel->name);
+			evsel->name = strdup(name);
+			break;
+		}
+	}
+}
+
+static struct perf_evsel *intel_pt_evsel(struct intel_pt *pt,
+					 struct perf_evlist *evlist)
+{
+	struct perf_evsel *evsel;
+
+	evlist__for_each_entry(evlist, evsel) {
+		if (evsel->attr.type == pt->pmu_type && evsel->ids)
+			return evsel;
+	}
+
+	return NULL;
 }
 
 static int intel_pt_synth_events(struct intel_pt *pt,
 				 struct perf_session *session)
 {
 	struct perf_evlist *evlist = session->evlist;
-	struct perf_evsel *evsel;
+	struct perf_evsel *evsel = intel_pt_evsel(pt, evlist);
 	struct perf_event_attr attr;
-	bool found = false;
 	u64 id;
 	int err;
 
-	evlist__for_each_entry(evlist, evsel) {
-		if (evsel->attr.type == pt->pmu_type && evsel->ids) {
-			found = true;
-			break;
-		}
-	}
-
-	if (!found) {
+	if (!evsel) {
 		pr_debug("There are no selected events with Intel Processor Trace data\n");
 		return 0;
 	}
@@ -1983,6 +2207,25 @@ static int intel_pt_synth_events(struct intel_pt *pt,
 	if (!id)
 		id = 1;
 
+	if (pt->synth_opts.branches) {
+		attr.config = PERF_COUNT_HW_BRANCH_INSTRUCTIONS;
+		attr.sample_period = 1;
+		attr.sample_type |= PERF_SAMPLE_ADDR;
+		err = intel_pt_synth_event(session, "branches", &attr, id);
+		if (err)
+			return err;
+		pt->sample_branches = true;
+		pt->branches_sample_type = attr.sample_type;
+		pt->branches_id = id;
+		id += 1;
+		attr.sample_type &= ~(u64)PERF_SAMPLE_ADDR;
+	}
+
+	if (pt->synth_opts.callchain)
+		attr.sample_type |= PERF_SAMPLE_CALLCHAIN;
+	if (pt->synth_opts.last_branch)
+		attr.sample_type |= PERF_SAMPLE_BRANCH_STACK;
+
 	if (pt->synth_opts.instructions) {
 		attr.config = PERF_COUNT_HW_INSTRUCTIONS;
 		if (pt->synth_opts.period_type == PERF_ITRACE_PERIOD_NANOSECS)
@@ -1990,73 +2233,91 @@ static int intel_pt_synth_events(struct intel_pt *pt,
 				intel_pt_ns_to_ticks(pt, pt->synth_opts.period);
 		else
 			attr.sample_period = pt->synth_opts.period;
-		pt->instructions_sample_period = attr.sample_period;
-		if (pt->synth_opts.callchain)
-			attr.sample_type |= PERF_SAMPLE_CALLCHAIN;
-		if (pt->synth_opts.last_branch)
-			attr.sample_type |= PERF_SAMPLE_BRANCH_STACK;
-		pr_debug("Synthesizing 'instructions' event with id %" PRIu64 " sample type %#" PRIx64 "\n",
-			 id, (u64)attr.sample_type);
-		err = intel_pt_synth_event(session, &attr, id);
-		if (err) {
-			pr_err("%s: failed to synthesize 'instructions' event type\n",
-			       __func__);
+		err = intel_pt_synth_event(session, "instructions", &attr, id);
+		if (err)
 			return err;
-		}
 		pt->sample_instructions = true;
 		pt->instructions_sample_type = attr.sample_type;
 		pt->instructions_id = id;
 		id += 1;
 	}
 
+	attr.sample_type &= ~(u64)PERF_SAMPLE_PERIOD;
+	attr.sample_period = 1;
+
 	if (pt->synth_opts.transactions) {
 		attr.config = PERF_COUNT_HW_INSTRUCTIONS;
-		attr.sample_period = 1;
-		if (pt->synth_opts.callchain)
-			attr.sample_type |= PERF_SAMPLE_CALLCHAIN;
-		if (pt->synth_opts.last_branch)
-			attr.sample_type |= PERF_SAMPLE_BRANCH_STACK;
-		pr_debug("Synthesizing 'transactions' event with id %" PRIu64 " sample type %#" PRIx64 "\n",
-			 id, (u64)attr.sample_type);
-		err = intel_pt_synth_event(session, &attr, id);
-		if (err) {
-			pr_err("%s: failed to synthesize 'transactions' event type\n",
-			       __func__);
+		err = intel_pt_synth_event(session, "transactions", &attr, id);
+		if (err)
 			return err;
-		}
 		pt->sample_transactions = true;
+		pt->transactions_sample_type = attr.sample_type;
 		pt->transactions_id = id;
+		intel_pt_set_event_name(evlist, id, "transactions");
 		id += 1;
-		evlist__for_each_entry(evlist, evsel) {
-			if (evsel->id && evsel->id[0] == pt->transactions_id) {
-				if (evsel->name)
-					zfree(&evsel->name);
-				evsel->name = strdup("transactions");
-				break;
-			}
-		}
 	}
 
-	if (pt->synth_opts.branches) {
-		attr.config = PERF_COUNT_HW_BRANCH_INSTRUCTIONS;
-		attr.sample_period = 1;
-		attr.sample_type |= PERF_SAMPLE_ADDR;
-		attr.sample_type &= ~(u64)PERF_SAMPLE_CALLCHAIN;
-		attr.sample_type &= ~(u64)PERF_SAMPLE_BRANCH_STACK;
-		pr_debug("Synthesizing 'branches' event with id %" PRIu64 " sample type %#" PRIx64 "\n",
-			 id, (u64)attr.sample_type);
-		err = intel_pt_synth_event(session, &attr, id);
-		if (err) {
-			pr_err("%s: failed to synthesize 'branches' event type\n",
-			       __func__);
+	attr.type = PERF_TYPE_SYNTH;
+	attr.sample_type |= PERF_SAMPLE_RAW;
+
+	if (pt->synth_opts.ptwrites) {
+		attr.config = PERF_SYNTH_INTEL_PTWRITE;
+		err = intel_pt_synth_event(session, "ptwrite", &attr, id);
+		if (err)
 			return err;
-		}
-		pt->sample_branches = true;
-		pt->branches_sample_type = attr.sample_type;
-		pt->branches_id = id;
+		pt->sample_ptwrites = true;
+		pt->ptwrites_sample_type = attr.sample_type;
+		pt->ptwrites_id = id;
+		intel_pt_set_event_name(evlist, id, "ptwrite");
+		id += 1;
 	}
 
-	pt->synth_needs_swap = evsel->needs_swap;
+	if (pt->synth_opts.pwr_events) {
+		pt->sample_pwr_events = true;
+		pt->pwr_events_sample_type = attr.sample_type;
+
+		attr.config = PERF_SYNTH_INTEL_CBR;
+		err = intel_pt_synth_event(session, "cbr", &attr, id);
+		if (err)
+			return err;
+		pt->cbr_id = id;
+		intel_pt_set_event_name(evlist, id, "cbr");
+		id += 1;
+	}
+
+	if (pt->synth_opts.pwr_events && (evsel->attr.config & 0x10)) {
+		attr.config = PERF_SYNTH_INTEL_MWAIT;
+		err = intel_pt_synth_event(session, "mwait", &attr, id);
+		if (err)
+			return err;
+		pt->mwait_id = id;
+		intel_pt_set_event_name(evlist, id, "mwait");
+		id += 1;
+
+		attr.config = PERF_SYNTH_INTEL_PWRE;
+		err = intel_pt_synth_event(session, "pwre", &attr, id);
+		if (err)
+			return err;
+		pt->pwre_id = id;
+		intel_pt_set_event_name(evlist, id, "pwre");
+		id += 1;
+
+		attr.config = PERF_SYNTH_INTEL_EXSTOP;
+		err = intel_pt_synth_event(session, "exstop", &attr, id);
+		if (err)
+			return err;
+		pt->exstop_id = id;
+		intel_pt_set_event_name(evlist, id, "exstop");
+		id += 1;
+
+		attr.config = PERF_SYNTH_INTEL_PWRX;
+		err = intel_pt_synth_event(session, "pwrx", &attr, id);
+		if (err)
+			return err;
+		pt->pwrx_id = id;
+		intel_pt_set_event_name(evlist, id, "pwrx");
+		id += 1;
+	}
 
 	return 0;
 }
@@ -2246,6 +2507,8 @@ int intel_pt_process_auxtrace_info(union perf_event *event,
 	}
 
 	pt->timeless_decoding = intel_pt_timeless_decoding(pt);
+	if (pt->timeless_decoding && !pt->tc.time_mult)
+		pt->tc.time_mult = 1;
 	pt->have_tsc = intel_pt_have_tsc(pt);
 	pt->sampling_mode = false;
 	pt->est_tsc = !pt->timeless_decoding;
@@ -2322,6 +2585,7 @@ int intel_pt_process_auxtrace_info(union perf_event *event,
 		intel_pt_log("TSC frequency %"PRIu64"\n", tsc_freq);
 		intel_pt_log("Maximum non-turbo ratio %u\n",
 			     pt->max_non_turbo_ratio);
+		pt->cbr2khz = tsc_freq / pt->max_non_turbo_ratio / 1000;
 	}
 
 	if (pt->synth_opts.calls)

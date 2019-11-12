@@ -19,6 +19,7 @@
 #include <linux/log2.h>
 #include <linux/mutex.h>
 #include <linux/of.h>
+#include <linux/of_graph.h>
 #include <linux/regmap.h>
 #include <linux/slab.h>
 #include <linux/videodev2.h>
@@ -28,7 +29,7 @@
 #include <media/i2c/mt9v032.h>
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-device.h>
-#include <media/v4l2-of.h>
+#include <media/v4l2-fwnode.h>
 #include <media/v4l2-subdev.h>
 
 /* The first four rows are black rows. The active area spans 753x481 pixels. */
@@ -293,14 +294,22 @@ static int mt9v032_power_on(struct mt9v032 *mt9v032)
 	/* Reset the chip and stop data read out */
 	ret = regmap_write(map, MT9V032_RESET, 1);
 	if (ret < 0)
-		return ret;
+		goto err;
 
 	ret = regmap_write(map, MT9V032_RESET, 0);
 	if (ret < 0)
-		return ret;
+		goto err;
 
-	return regmap_write(map, MT9V032_CHIP_CONTROL,
-			    MT9V032_CHIP_CONTROL_MASTER_MODE);
+	ret = regmap_write(map, MT9V032_CHIP_CONTROL,
+			   MT9V032_CHIP_CONTROL_MASTER_MODE);
+	if (ret < 0)
+		goto err;
+
+	return 0;
+
+err:
+	clk_disable_unprepare(mt9v032->clk);
+	return ret;
 }
 
 static void mt9v032_power_off(struct mt9v032 *mt9v032)
@@ -875,6 +884,9 @@ static int mt9v032_registered(struct v4l2_subdev *subdev)
 
 	/* Read and check the sensor version */
 	ret = regmap_read(mt9v032->regmap, MT9V032_CHIP_VERSION, &version);
+
+	mt9v032_power_off(mt9v032);
+
 	if (ret < 0) {
 		dev_err(&client->dev, "Failed reading chip version\n");
 		return ret;
@@ -892,8 +904,6 @@ static int mt9v032_registered(struct v4l2_subdev *subdev)
 			version);
 		return -ENODEV;
 	}
-
-	mt9v032_power_off(mt9v032);
 
 	dev_info(&client->dev, "%s detected at address 0x%02x\n",
 		 mt9v032->version->name, client->addr);
@@ -979,7 +989,7 @@ static struct mt9v032_platform_data *
 mt9v032_get_pdata(struct i2c_client *client)
 {
 	struct mt9v032_platform_data *pdata = NULL;
-	struct v4l2_of_endpoint endpoint;
+	struct v4l2_fwnode_endpoint endpoint;
 	struct device_node *np;
 	struct property *prop;
 
@@ -990,7 +1000,7 @@ mt9v032_get_pdata(struct i2c_client *client)
 	if (!np)
 		return NULL;
 
-	if (v4l2_of_parse_endpoint(np, &endpoint) < 0)
+	if (v4l2_fwnode_endpoint_parse(of_fwnode_handle(np), &endpoint) < 0)
 		goto done;
 
 	pdata = devm_kzalloc(&client->dev, sizeof(*pdata), GFP_KERNEL);
@@ -1152,6 +1162,7 @@ static int mt9v032_probe(struct i2c_client *client,
 	mt9v032->subdev.internal_ops = &mt9v032_subdev_internal_ops;
 	mt9v032->subdev.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
 
+	mt9v032->subdev.entity.function = MEDIA_ENT_F_CAM_SENSOR;
 	mt9v032->pad.flags = MEDIA_PAD_FL_SOURCE;
 	ret = media_entity_pads_init(&mt9v032->subdev.entity, 1, &mt9v032->pad);
 	if (ret < 0)

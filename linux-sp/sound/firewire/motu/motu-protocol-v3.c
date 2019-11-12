@@ -188,11 +188,20 @@ static void calculate_fixed_part(struct snd_motu_packet_format *formats,
 			pcm_chunks[1] += 2;
 		}
 	} else {
-		/*
-		 * Packets to v2 units transfer main-out-1/2 and phone-out-1/2.
-		 */
-		pcm_chunks[0] += 4;
-		pcm_chunks[1] += 4;
+		if (flags & SND_MOTU_SPEC_RX_SEPARETED_MAIN) {
+			pcm_chunks[0] += 2;
+			pcm_chunks[1] += 2;
+		}
+
+		// Packets to v3 units include 2 chunks for phone 1/2, except
+		// for 176.4/192.0 kHz.
+		pcm_chunks[0] += 2;
+		pcm_chunks[1] += 2;
+	}
+
+	if (flags & SND_MOTU_SPEC_HAS_AESEBU_IFACE) {
+		pcm_chunks[0] += 2;
+		pcm_chunks[1] += 2;
 	}
 
 	/*
@@ -291,12 +300,7 @@ static int v3_cache_packet_formats(struct snd_motu *motu)
 			V3_ENABLE_OPT_OUT_IFACE_A, V3_NO_ADAT_OPT_OUT_IFACE_A,
 			V3_ENABLE_OPT_OUT_IFACE_B, V3_NO_ADAT_OPT_OUT_IFACE_B);
 
-	motu->tx_packet_formats.midi_flag_offset = 8;
-	motu->tx_packet_formats.midi_byte_offset = 7;
 	motu->tx_packet_formats.pcm_byte_offset = 10;
-
-	motu->rx_packet_formats.midi_flag_offset = 8;
-	motu->rx_packet_formats.midi_byte_offset = 7;
 	motu->rx_packet_formats.pcm_byte_offset = 10;
 
 	return 0;

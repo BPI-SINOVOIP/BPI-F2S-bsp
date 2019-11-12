@@ -261,7 +261,7 @@ static int get_register_interruptible(struct ab8500 *ab8500, u8 bank,
 	mutex_unlock(&ab8500->lock);
 	dev_vdbg(ab8500->dev, "rd: addr %#x => data %#x\n", addr, ret);
 
-	return ret;
+	return (ret < 0) ? ret : 0;
 }
 
 static int ab8500_get_register(struct device *dev, u8 bank,
@@ -1059,15 +1059,15 @@ static struct attribute *ab9540_sysfs_entries[] = {
 	NULL,
 };
 
-static struct attribute_group ab8500_attr_group = {
+static const struct attribute_group ab8500_attr_group = {
 	.attrs	= ab8500_sysfs_entries,
 };
 
-static struct attribute_group ab8505_attr_group = {
+static const struct attribute_group ab8505_attr_group = {
 	.attrs	= ab8505_sysfs_entries,
 };
 
-static struct attribute_group ab9540_attr_group = {
+static const struct attribute_group ab9540_attr_group = {
 	.attrs	= ab9540_sysfs_entries,
 };
 

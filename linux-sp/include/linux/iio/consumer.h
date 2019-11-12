@@ -134,6 +134,17 @@ struct iio_cb_buffer *iio_channel_get_all_cb(struct device *dev,
 						       void *private),
 					     void *private);
 /**
+ * iio_channel_cb_set_buffer_watermark() - set the buffer watermark.
+ * @cb_buffer:		The callback buffer from whom we want the channel
+ *			information.
+ * @watermark: buffer watermark in bytes.
+ *
+ * This function allows to configure the buffer watermark.
+ */
+int iio_channel_cb_set_buffer_watermark(struct iio_cb_buffer *cb_buffer,
+					size_t watermark);
+
+/**
  * iio_channel_release_all_cb() - release and unregister the callback.
  * @cb_buffer:		The callback buffer that was allocated.
  */
@@ -214,6 +225,32 @@ int iio_read_channel_average_raw(struct iio_channel *chan, int *val);
  * do the appropriate transformation.
  */
 int iio_read_channel_processed(struct iio_channel *chan, int *val);
+
+/**
+ * iio_write_channel_attribute() - Write values to the device attribute.
+ * @chan:	The channel being queried.
+ * @val:	Value being written.
+ * @val2:	Value being written.val2 use depends on attribute type.
+ * @attribute:	info attribute to be read.
+ *
+ * Returns an error code or 0.
+ */
+int iio_write_channel_attribute(struct iio_channel *chan, int val,
+				int val2, enum iio_chan_info_enum attribute);
+
+/**
+ * iio_read_channel_attribute() - Read values from the device attribute.
+ * @chan:	The channel being queried.
+ * @val:	Value being written.
+ * @val2:	Value being written.Val2 use depends on attribute type.
+ * @attribute:	info attribute to be written.
+ *
+ * Returns an error code if failed. Else returns a description of what is in val
+ * and val2, such as IIO_VAL_INT_PLUS_MICRO telling us we have a value of val
+ * + val2/1e6
+ */
+int iio_read_channel_attribute(struct iio_channel *chan, int *val,
+			       int *val2, enum iio_chan_info_enum attribute);
 
 /**
  * iio_write_channel_raw() - write to a given channel
@@ -311,5 +348,42 @@ int iio_read_channel_scale(struct iio_channel *chan, int *val,
  */
 int iio_convert_raw_to_processed(struct iio_channel *chan, int raw,
 	int *processed, unsigned int scale);
+
+/**
+ * iio_get_channel_ext_info_count() - get number of ext_info attributes
+ *				      connected to the channel.
+ * @chan:		The channel being queried
+ *
+ * Returns the number of ext_info attributes
+ */
+unsigned int iio_get_channel_ext_info_count(struct iio_channel *chan);
+
+/**
+ * iio_read_channel_ext_info() - read ext_info attribute from a given channel
+ * @chan:		The channel being queried.
+ * @attr:		The ext_info attribute to read.
+ * @buf:		Where to store the attribute value. Assumed to hold
+ *			at least PAGE_SIZE bytes.
+ *
+ * Returns the number of bytes written to buf (perhaps w/o zero termination;
+ * it need not even be a string), or an error code.
+ */
+ssize_t iio_read_channel_ext_info(struct iio_channel *chan,
+				  const char *attr, char *buf);
+
+/**
+ * iio_write_channel_ext_info() - write ext_info attribute from a given channel
+ * @chan:		The channel being queried.
+ * @attr:		The ext_info attribute to read.
+ * @buf:		The new attribute value. Strings needs to be zero-
+ *			terminated, but the terminator should not be included
+ *			in the below len.
+ * @len:		The size of the new attribute value.
+ *
+ * Returns the number of accepted bytes, which should be the same as len.
+ * An error code can also be returned.
+ */
+ssize_t iio_write_channel_ext_info(struct iio_channel *chan, const char *attr,
+				   const char *buf, size_t len);
 
 #endif

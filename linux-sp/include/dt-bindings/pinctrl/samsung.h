@@ -1,14 +1,11 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * Samsung's Exynos pinctrl bindings
  *
  * Copyright (c) 2016 Samsung Electronics Co., Ltd.
  *		http://www.samsung.com
  * Author: Krzysztof Kozlowski <krzk@kernel.org>
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
-*/
+ */
 
 #ifndef __DT_BINDINGS_PINCTRL_SAMSUNG_H__
 #define __DT_BINDINGS_PINCTRL_SAMSUNG_H__
@@ -66,7 +63,8 @@
 #define EXYNOS_PIN_FUNC_4		4
 #define EXYNOS_PIN_FUNC_5		5
 #define EXYNOS_PIN_FUNC_6		6
-#define EXYNOS_PIN_FUNC_F		0xf
+#define EXYNOS_PIN_FUNC_EINT		0xf
+#define EXYNOS_PIN_FUNC_F		EXYNOS_PIN_FUNC_EINT
 
 /* Drive strengths for Exynos7 FSYS1 block */
 #define EXYNOS7_FSYS1_PIN_DRV_LV1	0

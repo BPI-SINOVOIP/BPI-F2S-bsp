@@ -222,6 +222,7 @@ static int axp20x_usb_power_set_current_max(struct axp20x_usb_power *power,
 	case 100000:
 		if (power->axp20x_id == AXP221_ID)
 			return -EINVAL;
+		/* fall through */
 	case 500000:
 	case 900000:
 		val = (900000 - intval) / 400000;
@@ -339,7 +340,7 @@ static int axp20x_usb_power_probe(struct platform_device *pdev)
 		"VBUS_REMOVAL", "VBUS_VALID", "VBUS_NOT_VALID", NULL };
 	static const char * const axp22x_irq_names[] = {
 		"VBUS_PLUGIN", "VBUS_REMOVAL", NULL };
-	static const char * const *irq_names;
+	const char * const *irq_names;
 	const struct power_supply_desc *usb_power_desc;
 	int i, irq, ret;
 

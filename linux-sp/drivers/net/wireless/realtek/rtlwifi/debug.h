@@ -105,6 +105,7 @@
 #define COMP_EASY_CONCURRENT	COMP_USB /* reuse of this bit is OK */
 #define COMP_BT_COEXIST			BIT(30)
 #define COMP_IQK			BIT(31)
+#define COMP_TX_REPORT			BIT_ULL(32)
 
 /*--------------------------------------------------------------
 		Define the rt_print components
@@ -169,7 +170,7 @@ enum dbgp_flag_e {
 struct rtl_priv;
 
 __printf(4, 5)
-void _rtl_dbg_trace(struct rtl_priv *rtlpriv, int comp, int level,
+void _rtl_dbg_trace(struct rtl_priv *rtlpriv, u64 comp, int level,
 		    const char *fmt, ...);
 
 __printf(4, 5)
@@ -198,7 +199,7 @@ struct rtl_priv;
 
 __printf(4, 5)
 static inline void RT_TRACE(struct rtl_priv *rtlpriv,
-			    int comp, int level,
+			    u64 comp, int level,
 			    const char *fmt, ...)
 {
 }
@@ -211,11 +212,23 @@ static inline void RTPRINT(struct rtl_priv *rtlpriv,
 }
 
 static inline void RT_PRINT_DATA(struct rtl_priv *rtlpriv,
-				 int comp, int level,
+				 u64 comp, int level,
 				 const char *titlestring,
 				 const void *hexdata, size_t hexdatalen)
 {
 }
 
+#endif
+
+#ifdef CONFIG_RTLWIFI_DEBUG
+void rtl_debug_add_one(struct ieee80211_hw *hw);
+void rtl_debug_remove_one(struct ieee80211_hw *hw);
+void rtl_debugfs_add_topdir(void);
+void rtl_debugfs_remove_topdir(void);
+#else
+#define rtl_debug_add_one(hw)
+#define rtl_debug_remove_one(hw)
+#define rtl_debugfs_add_topdir()
+#define rtl_debugfs_remove_topdir()
 #endif
 #endif

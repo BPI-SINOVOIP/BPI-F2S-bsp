@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 #include <errno.h>
 #include <inttypes.h>
 /* For the CPU_* macros */
@@ -16,7 +17,7 @@
 #include "debug.h"
 #include "stat.h"
 
-int test__openat_syscall_event_on_all_cpus(int subtest __maybe_unused)
+int test__openat_syscall_event_on_all_cpus(struct test *test __maybe_unused, int subtest __maybe_unused)
 {
 	int err = -1, fd, cpu;
 	struct cpu_map *cpus;
@@ -44,7 +45,7 @@ int test__openat_syscall_event_on_all_cpus(int subtest __maybe_unused)
 	if (IS_ERR(evsel)) {
 		tracing_path__strerror_open_tp(errno, errbuf, sizeof(errbuf), "syscalls", "sys_enter_openat");
 		pr_debug("%s\n", errbuf);
-		goto out_thread_map_delete;
+		goto out_cpu_map_delete;
 	}
 
 	if (perf_evsel__open(evsel, cpus, threads) < 0) {
@@ -115,9 +116,11 @@ int test__openat_syscall_event_on_all_cpus(int subtest __maybe_unused)
 
 	perf_evsel__free_counts(evsel);
 out_close_fd:
-	perf_evsel__close_fd(evsel, 1, threads->nr);
+	perf_evsel__close_fd(evsel);
 out_evsel_delete:
 	perf_evsel__delete(evsel);
+out_cpu_map_delete:
+	cpu_map__put(cpus);
 out_thread_map_delete:
 	thread_map__put(threads);
 	return err;

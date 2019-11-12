@@ -52,8 +52,8 @@ struct __dispatch {
  *  @return  Failure: NULL
  *
  */
-static inline void *octeon_get_dispatch_arg(struct octeon_device *octeon_dev,
-					    u16 opcode, u16 subcode)
+void *octeon_get_dispatch_arg(struct octeon_device *octeon_dev,
+			      u16 opcode, u16 subcode)
 {
 	int idx;
 	struct list_head *dispatch;
@@ -145,6 +145,8 @@ octeon_droq_destroy_ring_buffers(struct octeon_device *oct,
 
 	for (i = 0; i < droq->max_count; i++) {
 		pg_info = &droq->recv_buf_list[i].pg_info;
+		if (!pg_info)
+			continue;
 
 		if (pg_info->dma)
 			lio_unmap_ring(oct->pci_dev,
@@ -181,10 +183,7 @@ octeon_droq_setup_ring_buffers(struct octeon_device *oct,
 
 		droq->recv_buf_list[i].buffer = buf;
 		droq->recv_buf_list[i].data = get_rbd(buf);
-		droq->info_list[i].length = 0;
-
-		/* map ring buffers into memory */
-		desc_ring[i].info_ptr = lio_map_ring_info(droq, i);
+		desc_ring[i].info_ptr = 0;
 		desc_ring[i].buffer_ptr =
 			lio_map_ring(droq->recv_buf_list[i].buffer);
 	}
@@ -205,14 +204,15 @@ int octeon_delete_droq(struct octeon_device *oct, u32 q_no)
 	octeon_droq_destroy_ring_buffers(oct, droq);
 	vfree(droq->recv_buf_list);
 
-	if (droq->info_base_addr)
-		lio_free_info_buffer(oct, droq);
-
 	if (droq->desc_ring)
 		lio_dma_free(oct, (droq->max_count * OCT_DROQ_DESC_SIZE),
 			     droq->desc_ring, droq->desc_ring_dma);
 
 	memset(droq, 0, OCT_DROQ_SIZE);
+	oct->io_qmask.oq &= ~(1ULL << q_no);
+	vfree(oct->droq[q_no]);
+	oct->droq[q_no] = NULL;
+	oct->num_oqs--;
 
 	return 0;
 }
@@ -280,22 +280,13 @@ int octeon_init_droq(struct octeon_device *oct,
 	dev_dbg(&oct->pci_dev->dev, "droq[%d]: num_desc: %d\n", q_no,
 		droq->max_count);
 
-	droq->info_list = lio_alloc_info_buffer(oct, droq);
-	if (!droq->info_list) {
-		dev_err(&oct->pci_dev->dev, "Cannot allocate memory for info list.\n");
-		lio_dma_free(oct, (droq->max_count * OCT_DROQ_DESC_SIZE),
-			     droq->desc_ring, droq->desc_ring_dma);
-		return 1;
-	}
-
 	droq->recv_buf_list = (struct octeon_recv_buffer *)
-			      vmalloc_node(droq->max_count *
-						OCT_DROQ_RECVBUF_SIZE,
-						numa_node);
+	      vzalloc_node(array_size(droq->max_count, OCT_DROQ_RECVBUF_SIZE),
+			   numa_node);
 	if (!droq->recv_buf_list)
 		droq->recv_buf_list = (struct octeon_recv_buffer *)
-				      vmalloc(droq->max_count *
-						OCT_DROQ_RECVBUF_SIZE);
+		      vzalloc(array_size(droq->max_count,
+					 OCT_DROQ_RECVBUF_SIZE));
 	if (!droq->recv_buf_list) {
 		dev_err(&oct->pci_dev->dev, "Output queue recv buf list alloc failed\n");
 		goto init_droq_fail;
@@ -357,7 +348,7 @@ static inline struct octeon_recv_info *octeon_create_recv_info(
 	u32 i, bytes_left;
 	struct octeon_skb_page_info *pg_info;
 
-	info = &droq->info_list[idx];
+	info = (struct octeon_droq_info *)droq->recv_buf_list[idx].data;
 
 	recv_info = octeon_alloc_recv_info(sizeof(struct __dispatch));
 	if (!recv_info)
@@ -425,8 +416,7 @@ octeon_droq_refill_pullup_descs(struct octeon_droq *droq,
 							      droq->max_count);
 				desc_refilled++;
 				droq->refill_count--;
-			} while (droq->recv_buf_list[droq->refill_idx].
-				 buffer);
+			} while (droq->recv_buf_list[droq->refill_idx].buffer);
 		}
 		refill_index = incr_index(refill_index, 1, droq->max_count);
 	}                       /* while */
@@ -490,10 +480,8 @@ octeon_droq_refill(struct octeon_device *octeon_dev, struct octeon_droq *droq)
 		droq->recv_buf_list[droq->refill_idx].data = data;
 
 		desc_ring[droq->refill_idx].buffer_ptr =
-			lio_map_ring(droq->recv_buf_list[droq->
-				     refill_idx].buffer);
-		/* Reset any previous values in the length field. */
-		droq->info_list[droq->refill_idx].length = 0;
+			lio_map_ring(droq->recv_buf_list[
+				     droq->refill_idx].buffer);
 
 		droq->refill_idx = incr_index(droq->refill_idx, 1,
 					      droq->max_count);
@@ -542,11 +530,7 @@ void octeon_droq_check_oom(struct octeon_droq *droq)
 static inline u32
 octeon_droq_get_bufcount(u32 buf_size, u32 total_len)
 {
-	u32 buf_cnt = 0;
-
-	while (total_len > (buf_size * buf_cnt))
-		buf_cnt++;
-	return buf_cnt;
+	return ((total_len + buf_size - 1) / buf_size);
 }
 
 static int
@@ -594,11 +578,12 @@ static inline void octeon_droq_drop_packets(struct octeon_device *oct,
 	struct octeon_droq_info *info;
 
 	for (i = 0; i < cnt; i++) {
-		info = &droq->info_list[droq->read_idx];
+		info = (struct octeon_droq_info *)
+			droq->recv_buf_list[droq->read_idx].data;
 		octeon_swap_8B_data((u64 *)info, 2);
 
 		if (info->length) {
-			info->length -= OCT_RH_SIZE;
+			info->length += OCTNET_FRM_LENGTH_SIZE;
 			droq->stats.bytes_received += info->length;
 			buf_cnt = octeon_droq_get_bufcount(droq->buffer_size,
 							   (u32)info->length);
@@ -630,7 +615,8 @@ octeon_droq_fast_process_packets(struct octeon_device *oct,
 		struct octeon_skb_page_info *pg_info;
 		void *buf;
 
-		info = &droq->info_list[droq->read_idx];
+		info = (struct octeon_droq_info *)
+			droq->recv_buf_list[droq->read_idx].data;
 		octeon_swap_8B_data((u64 *)info, 2);
 
 		if (!info->length) {
@@ -644,9 +630,10 @@ octeon_droq_fast_process_packets(struct octeon_device *oct,
 		}
 
 		/* Len of resp hdr in included in the received data len. */
-		info->length -= OCT_RH_SIZE;
 		rh = &info->rh;
 
+		info->length += OCTNET_FRM_LENGTH_SIZE;
+		rh->r_dh.len += (ROUNDUP8(OCT_DROQ_INFO_SIZE) / sizeof(u64));
 		total_len += (u32)info->length;
 		if (opcode_slow_path(rh)) {
 			u32 buf_cnt;
@@ -690,8 +677,8 @@ octeon_droq_fast_process_packets(struct octeon_device *oct,
 									nicbuf,
 									cpy_len,
 									idx);
-						buf = droq->recv_buf_list[idx].
-							buffer;
+						buf = droq->recv_buf_list[
+							idx].buffer;
 						recv_buffer_fast_free(buf);
 						droq->recv_buf_list[idx].buffer
 							= NULL;
@@ -800,7 +787,7 @@ octeon_droq_process_packets(struct octeon_device *oct,
  * called before calling this routine.
  */
 
-static int
+int
 octeon_droq_process_poll_pkts(struct octeon_device *oct,
 			      struct octeon_droq *droq, u32 budget)
 {
@@ -847,71 +834,46 @@ octeon_droq_process_poll_pkts(struct octeon_device *oct,
 	return total_pkts_processed;
 }
 
+/* Enable Pkt Interrupt */
 int
-octeon_process_droq_poll_cmd(struct octeon_device *oct, u32 q_no, int cmd,
-			     u32 arg)
+octeon_enable_irq(struct octeon_device *oct, u32 q_no)
 {
-	struct octeon_droq *droq;
-
-	droq = oct->droq[q_no];
-
-	if (cmd == POLL_EVENT_PROCESS_PKTS)
-		return octeon_droq_process_poll_pkts(oct, droq, arg);
-
-	if (cmd == POLL_EVENT_PENDING_PKTS) {
-		u32 pkt_cnt = atomic_read(&droq->pkts_pending);
-
-		return  octeon_droq_process_packets(oct, droq, pkt_cnt);
-	}
-
-	if (cmd == POLL_EVENT_ENABLE_INTR) {
-		u32 value;
+	switch (oct->chip_id) {
+	case OCTEON_CN66XX:
+	case OCTEON_CN68XX: {
+		struct octeon_cn6xxx *cn6xxx =
+			(struct octeon_cn6xxx *)oct->chip;
 		unsigned long flags;
+		u32 value;
 
-		/* Enable Pkt Interrupt */
-		switch (oct->chip_id) {
-		case OCTEON_CN66XX:
-		case OCTEON_CN68XX: {
-			struct octeon_cn6xxx *cn6xxx =
-				(struct octeon_cn6xxx *)oct->chip;
-			spin_lock_irqsave
-				(&cn6xxx->lock_for_droq_int_enb_reg, flags);
-			value =
-				octeon_read_csr(oct,
-						CN6XXX_SLI_PKT_TIME_INT_ENB);
-			value |= (1 << q_no);
-			octeon_write_csr(oct,
-					 CN6XXX_SLI_PKT_TIME_INT_ENB,
-					 value);
-			value =
-				octeon_read_csr(oct,
-						CN6XXX_SLI_PKT_CNT_INT_ENB);
-			value |= (1 << q_no);
-			octeon_write_csr(oct,
-					 CN6XXX_SLI_PKT_CNT_INT_ENB,
-					 value);
+		spin_lock_irqsave
+			(&cn6xxx->lock_for_droq_int_enb_reg, flags);
+		value = octeon_read_csr(oct, CN6XXX_SLI_PKT_TIME_INT_ENB);
+		value |= (1 << q_no);
+		octeon_write_csr(oct, CN6XXX_SLI_PKT_TIME_INT_ENB, value);
+		value = octeon_read_csr(oct, CN6XXX_SLI_PKT_CNT_INT_ENB);
+		value |= (1 << q_no);
+		octeon_write_csr(oct, CN6XXX_SLI_PKT_CNT_INT_ENB, value);
 
-			/* don't bother flushing the enables */
+		/* don't bother flushing the enables */
 
-			spin_unlock_irqrestore
-				(&cn6xxx->lock_for_droq_int_enb_reg, flags);
-			return 0;
-		}
+		spin_unlock_irqrestore
+			(&cn6xxx->lock_for_droq_int_enb_reg, flags);
+	}
 		break;
-		case OCTEON_CN23XX_PF_VID: {
-			lio_enable_irq(oct->droq[q_no], oct->instr_queue[q_no]);
-		}
+	case OCTEON_CN23XX_PF_VID:
+		lio_enable_irq(oct->droq[q_no], oct->instr_queue[q_no]);
 		break;
 
-		case OCTEON_CN23XX_VF_VID:
-			lio_enable_irq(oct->droq[q_no], oct->instr_queue[q_no]);
+	case OCTEON_CN23XX_VF_VID:
+		lio_enable_irq(oct->droq[q_no], oct->instr_queue[q_no]);
 		break;
-		}
-		return 0;
+	default:
+		dev_err(&oct->pci_dev->dev, "%s Unknown Chip\n", __func__);
+		return 1;
 	}
 
-	dev_err(&oct->pci_dev->dev, "%s Unknown command: %d\n", __func__, cmd);
-	return -EINVAL;
+	return 0;
 }
 
 int octeon_register_droq_ops(struct octeon_device *oct, u32 q_no,

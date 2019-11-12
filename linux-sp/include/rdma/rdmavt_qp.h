@@ -2,7 +2,7 @@
 #define DEF_RDMAVT_INCQP_H
 
 /*
- * Copyright(c) 2016, 2017 Intel Corporation.
+ * Copyright(c) 2016 - 2018 Intel Corporation.
  *
  * This file is provided under a dual BSD/GPLv2 license.  When using or
  * redistributing this file, you may do so under either license.
@@ -91,6 +91,7 @@
  * RVT_S_WAIT_ACK - waiting for an ACK packet before sending more requests
  * RVT_S_SEND_ONE - send one packet, request ACK, then wait for ACK
  * RVT_S_ECN - a BECN was queued to the send engine
+ * RVT_S_MAX_BIT_MASK - The max bit that can be used by rdmavt
  */
 #define RVT_S_SIGNAL_REQ_WR	0x0001
 #define RVT_S_BUSY		0x0002
@@ -103,23 +104,26 @@
 #define RVT_S_WAIT_SSN_CREDIT	0x0100
 #define RVT_S_WAIT_DMA		0x0200
 #define RVT_S_WAIT_PIO		0x0400
-#define RVT_S_WAIT_PIO_DRAIN    0x0800
-#define RVT_S_WAIT_TX		0x1000
-#define RVT_S_WAIT_DMA_DESC	0x2000
-#define RVT_S_WAIT_KMEM		0x4000
-#define RVT_S_WAIT_PSN		0x8000
-#define RVT_S_WAIT_ACK		0x10000
-#define RVT_S_SEND_ONE		0x20000
-#define RVT_S_UNLIMITED_CREDIT	0x40000
-#define RVT_S_AHG_VALID		0x80000
-#define RVT_S_AHG_CLEAR		0x100000
-#define RVT_S_ECN		0x200000
+#define RVT_S_WAIT_TX		0x0800
+#define RVT_S_WAIT_DMA_DESC	0x1000
+#define RVT_S_WAIT_KMEM		0x2000
+#define RVT_S_WAIT_PSN		0x4000
+#define RVT_S_WAIT_ACK		0x8000
+#define RVT_S_SEND_ONE		0x10000
+#define RVT_S_UNLIMITED_CREDIT	0x20000
+#define RVT_S_ECN		0x40000
+#define RVT_S_MAX_BIT_MASK	0x800000
+
+/*
+ * Drivers should use s_flags starting with bit 31 down to the bit next to
+ * RVT_S_MAX_BIT_MASK
+ */
 
 /*
  * Wait flags that would prevent any packet type from being sent.
  */
 #define RVT_S_ANY_WAIT_IO \
-	(RVT_S_WAIT_PIO | RVT_S_WAIT_PIO_DRAIN | RVT_S_WAIT_TX | \
+	(RVT_S_WAIT_PIO | RVT_S_WAIT_TX | \
 	 RVT_S_WAIT_DMA_DESC | RVT_S_WAIT_KMEM)
 
 /*
@@ -277,13 +281,11 @@ struct rvt_qp {
 
 	unsigned long timeout_jiffies;  /* computed from timeout */
 
-	enum ib_mtu path_mtu;
 	int srate_mbps;		/* s_srate (below) converted to Mbit/s */
 	pid_t pid;		/* pid for user mode QPs */
 	u32 remote_qpn;
 	u32 qkey;               /* QKEY for this QP (for UD or RD) */
 	u32 s_size;             /* send work queue size */
-	u32 s_ahgpsn;           /* set to the psn in the copy of the header */
 
 	u16 pmtu;		/* decoded from path_mtu */
 	u8 log_pmtu;		/* shift for pmtu */
@@ -345,7 +347,6 @@ struct rvt_qp {
 	struct rvt_swqe *s_wqe;
 	struct rvt_sge_state s_sge;     /* current send request data */
 	struct rvt_mregion *s_rdma_mr;
-	u32 s_cur_size;         /* size of send packet in bytes */
 	u32 s_len;              /* total length of s_sge */
 	u32 s_rdma_read_len;    /* total length of s_rdma_read_sge */
 	u32 s_last_psn;         /* last response PSN processed */
@@ -359,8 +360,10 @@ struct rvt_qp {
 	u32 s_acked;            /* last un-ACK'ed entry */
 	u32 s_last;             /* last completed entry */
 	u32 s_lsn;              /* limit sequence number (credit) */
-	u16 s_hdrwords;         /* size of s_hdr in 32 bit words */
+	u32 s_ahgpsn;           /* set to the psn in the copy of the header */
+	u16 s_cur_size;         /* size of send packet in bytes */
 	u16 s_rdma_ack_cnt;
+	u8 s_hdrwords;         /* size of s_hdr in 32 bit words */
 	s8 s_ahgidx;
 	u8 s_state;             /* opcode of last packet sent */
 	u8 s_ack_state;         /* opcode of packet to ACK */
@@ -396,7 +399,7 @@ struct rvt_srq {
 #define RVT_QPNMAP_ENTRIES          (RVT_QPN_MAX / PAGE_SIZE / BITS_PER_BYTE)
 #define RVT_BITS_PER_PAGE           (PAGE_SIZE * BITS_PER_BYTE)
 #define RVT_BITS_PER_PAGE_MASK      (RVT_BITS_PER_PAGE - 1)
-#define RVT_QPN_MASK		    0xFFFFFF
+#define RVT_QPN_MASK		    IB_QPN_MASK
 
 /*
  * QPN-map pages start out as NULL, they get allocated upon
@@ -647,9 +650,24 @@ static inline u32 rvt_div_mtu(struct rvt_qp *qp, u32 len)
 	return len >> qp->log_pmtu;
 }
 
+/**
+ * rvt_timeout_to_jiffies - Convert a ULP timeout input into jiffies
+ * @timeout - timeout input(0 - 31).
+ *
+ * Return a timeout value in jiffies.
+ */
+static inline unsigned long rvt_timeout_to_jiffies(u8 timeout)
+{
+	if (timeout > 31)
+		timeout = 31;
+
+	return usecs_to_jiffies(1U << timeout) * 4096UL / 1000UL;
+}
+
 extern const int  ib_rvt_state_ops[];
 
 struct rvt_dev_info;
+int rvt_get_rwqe(struct rvt_qp *qp, bool wr_id_only);
 void rvt_comm_est(struct rvt_qp *qp);
 int rvt_error_qp(struct rvt_qp *qp, enum ib_wc_status err);
 void rvt_rc_error(struct rvt_qp *qp, enum ib_wc_status err);
@@ -660,4 +678,34 @@ void rvt_del_timers_sync(struct rvt_qp *qp);
 void rvt_stop_rc_timers(struct rvt_qp *qp);
 void rvt_add_retry_timer(struct rvt_qp *qp);
 
+/**
+ * struct rvt_qp_iter - the iterator for QPs
+ * @qp - the current QP
+ *
+ * This structure defines the current iterator
+ * state for sequenced access to all QPs relative
+ * to an rvt_dev_info.
+ */
+struct rvt_qp_iter {
+	struct rvt_qp *qp;
+	/* private: backpointer */
+	struct rvt_dev_info *rdi;
+	/* private: callback routine */
+	void (*cb)(struct rvt_qp *qp, u64 v);
+	/* private: for arg to callback routine */
+	u64 v;
+	/* private: number of SMI,GSI QPs for device */
+	int specials;
+	/* private: current iterator index */
+	int n;
+};
+
+struct rvt_qp_iter *rvt_qp_iter_init(struct rvt_dev_info *rdi,
+				     u64 v,
+				     void (*cb)(struct rvt_qp *qp, u64 v));
+int rvt_qp_iter_next(struct rvt_qp_iter *iter);
+void rvt_qp_iter(struct rvt_dev_info *rdi,
+		 u64 v,
+		 void (*cb)(struct rvt_qp *qp, u64 v));
+void rvt_qp_mr_clean(struct rvt_qp *qp, u32 lkey);
 #endif          /* DEF_RDMAVT_INCQP_H */

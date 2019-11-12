@@ -29,17 +29,17 @@
 #include <linux/sched/signal.h>
 #include <net/ip.h>
 
-#ifdef CONFIG_NET_RX_BUSY_POLL
-
-struct napi_struct;
-extern unsigned int sysctl_net_busy_read __read_mostly;
-extern unsigned int sysctl_net_busy_poll __read_mostly;
-
 /*		0 - Reserved to indicate value not set
  *     1..NR_CPUS - Reserved for sender_cpu
  *  NR_CPUS+1..~0 - Region available for NAPI IDs
  */
 #define MIN_NAPI_ID ((unsigned int)(NR_CPUS + 1))
+
+#ifdef CONFIG_NET_RX_BUSY_POLL
+
+struct napi_struct;
+extern unsigned int sysctl_net_busy_read __read_mostly;
+extern unsigned int sysctl_net_busy_poll __read_mostly;
 
 static inline bool net_busy_loop_on(void)
 {
@@ -136,6 +136,7 @@ static inline void sk_mark_napi_id(struct sock *sk, const struct sk_buff *skb)
 #ifdef CONFIG_NET_RX_BUSY_POLL
 	sk->sk_napi_id = skb->napi_id;
 #endif
+	sk_rx_queue_set(sk, skb);
 }
 
 /* variant used for unconnected sockets */

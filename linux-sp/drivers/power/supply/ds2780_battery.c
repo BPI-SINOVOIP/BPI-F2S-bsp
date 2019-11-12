@@ -21,7 +21,7 @@
 #include <linux/power_supply.h>
 #include <linux/idr.h>
 
-#include "../../w1/w1.h"
+#include <linux/w1.h>
 #include "../../w1/slaves/w1_ds2780.h"
 
 /* Current unit measurement in uA for a 1 milli-ohm sense resistor */
@@ -54,11 +54,6 @@ static inline struct ds2780_device_info *
 to_ds2780_device_info(struct power_supply *psy)
 {
 	return power_supply_get_drvdata(psy);
-}
-
-static inline struct power_supply *to_power_supply(struct device *dev)
-{
-	return dev_get_drvdata(dev);
 }
 
 static inline int ds2780_battery_io(struct ds2780_device_info *dev_info,
@@ -663,7 +658,7 @@ static ssize_t ds2780_write_param_eeprom_bin(struct file *filp,
 	return count;
 }
 
-static struct bin_attribute ds2780_param_eeprom_bin_attr = {
+static const struct bin_attribute ds2780_param_eeprom_bin_attr = {
 	.attr = {
 		.name = "param_eeprom",
 		.mode = S_IRUGO | S_IWUSR,
@@ -708,7 +703,7 @@ static ssize_t ds2780_write_user_eeprom_bin(struct file *filp,
 	return count;
 }
 
-static struct bin_attribute ds2780_user_eeprom_bin_attr = {
+static const struct bin_attribute ds2780_user_eeprom_bin_attr = {
 	.attr = {
 		.name = "user_eeprom",
 		.mode = S_IRUGO | S_IWUSR,

@@ -59,8 +59,10 @@ static struct mesh_table *mesh_table_alloc(void)
 		return NULL;
 
 	INIT_HLIST_HEAD(&newtbl->known_gates);
+	INIT_HLIST_HEAD(&newtbl->walk_head);
 	atomic_set(&newtbl->entries,  0);
 	spin_lock_init(&newtbl->gates_lock);
+	spin_lock_init(&newtbl->walk_lock);
 
 	return newtbl;
 }
@@ -249,31 +251,15 @@ mpp_path_lookup(struct ieee80211_sub_if_data *sdata, const u8 *dst)
 static struct mesh_path *
 __mesh_path_lookup_by_idx(struct mesh_table *tbl, int idx)
 {
-	int i = 0, ret;
-	struct mesh_path *mpath = NULL;
-	struct rhashtable_iter iter;
+	int i = 0;
+	struct mesh_path *mpath;
 
-	ret = rhashtable_walk_init(&tbl->rhead, &iter, GFP_ATOMIC);
-	if (ret)
-		return NULL;
-
-	ret = rhashtable_walk_start(&iter);
-	if (ret && ret != -EAGAIN)
-		goto err;
-
-	while ((mpath = rhashtable_walk_next(&iter))) {
-		if (IS_ERR(mpath) && PTR_ERR(mpath) == -EAGAIN)
-			continue;
-		if (IS_ERR(mpath))
-			break;
+	hlist_for_each_entry_rcu(mpath, &tbl->walk_head, walk_list) {
 		if (i++ == idx)
 			break;
 	}
-err:
-	rhashtable_walk_stop(&iter);
-	rhashtable_walk_exit(&iter);
 
-	if (IS_ERR(mpath) || !mpath)
+	if (!mpath)
 		return NULL;
 
 	if (mpath_expired(mpath)) {
@@ -399,8 +385,7 @@ struct mesh_path *mesh_path_new(struct ieee80211_sub_if_data *sdata,
 	skb_queue_head_init(&new_mpath->frame_queue);
 	new_mpath->exp_time = jiffies;
 	spin_lock_init(&new_mpath->state_lock);
-	setup_timer(&new_mpath->timer, mesh_path_timer,
-		    (unsigned long) new_mpath);
+	timer_setup(&new_mpath->timer, mesh_path_timer, 0);
 
 	return new_mpath;
 }
@@ -436,6 +421,7 @@ struct mesh_path *mesh_path_add(struct ieee80211_sub_if_data *sdata,
 		return ERR_PTR(-ENOMEM);
 
 	tbl = sdata->u.mesh.mesh_paths;
+	spin_lock_bh(&tbl->walk_lock);
 	do {
 		ret = rhashtable_lookup_insert_fast(&tbl->rhead,
 						    &new_mpath->rhash,
@@ -445,20 +431,20 @@ struct mesh_path *mesh_path_add(struct ieee80211_sub_if_data *sdata,
 			mpath = rhashtable_lookup_fast(&tbl->rhead,
 						       dst,
 						       mesh_rht_params);
-
+		else if (!ret)
+			hlist_add_head(&new_mpath->walk_list, &tbl->walk_head);
 	} while (unlikely(ret == -EEXIST && !mpath));
+	spin_unlock_bh(&tbl->walk_lock);
 
-	if (ret && ret != -EEXIST)
-		return ERR_PTR(ret);
-
-	/* At this point either new_mpath was added, or we found a
-	 * matching entry already in the table; in the latter case
-	 * free the unnecessary new entry.
-	 */
-	if (ret == -EEXIST) {
+	if (ret) {
 		kfree(new_mpath);
+
+		if (ret != -EEXIST)
+			return ERR_PTR(ret);
+
 		new_mpath = mpath;
 	}
+
 	sdata->u.mesh.mesh_paths_generation++;
 	return new_mpath;
 }
@@ -484,9 +470,17 @@ int mpp_path_add(struct ieee80211_sub_if_data *sdata,
 
 	memcpy(new_mpath->mpp, mpp, ETH_ALEN);
 	tbl = sdata->u.mesh.mpp_paths;
+
+	spin_lock_bh(&tbl->walk_lock);
 	ret = rhashtable_lookup_insert_fast(&tbl->rhead,
 					    &new_mpath->rhash,
 					    mesh_rht_params);
+	if (!ret)
+		hlist_add_head_rcu(&new_mpath->walk_list, &tbl->walk_head);
+	spin_unlock_bh(&tbl->walk_lock);
+
+	if (ret)
+		kfree(new_mpath);
 
 	sdata->u.mesh.mpp_paths_generation++;
 	return ret;
@@ -507,22 +501,9 @@ void mesh_plink_broken(struct sta_info *sta)
 	struct mesh_table *tbl = sdata->u.mesh.mesh_paths;
 	static const u8 bcast[ETH_ALEN] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 	struct mesh_path *mpath;
-	struct rhashtable_iter iter;
-	int ret;
 
-	ret = rhashtable_walk_init(&tbl->rhead, &iter, GFP_ATOMIC);
-	if (ret)
-		return;
-
-	ret = rhashtable_walk_start(&iter);
-	if (ret && ret != -EAGAIN)
-		goto out;
-
-	while ((mpath = rhashtable_walk_next(&iter))) {
-		if (IS_ERR(mpath) && PTR_ERR(mpath) == -EAGAIN)
-			continue;
-		if (IS_ERR(mpath))
-			break;
+	rcu_read_lock();
+	hlist_for_each_entry_rcu(mpath, &tbl->walk_head, walk_list) {
 		if (rcu_access_pointer(mpath->next_hop) == sta &&
 		    mpath->flags & MESH_PATH_ACTIVE &&
 		    !(mpath->flags & MESH_PATH_FIXED)) {
@@ -536,9 +517,7 @@ void mesh_plink_broken(struct sta_info *sta)
 				WLAN_REASON_MESH_PATH_DEST_UNREACHABLE, bcast);
 		}
 	}
-out:
-	rhashtable_walk_stop(&iter);
-	rhashtable_walk_exit(&iter);
+	rcu_read_unlock();
 }
 
 static void mesh_path_free_rcu(struct mesh_table *tbl,
@@ -558,6 +537,7 @@ static void mesh_path_free_rcu(struct mesh_table *tbl,
 
 static void __mesh_path_del(struct mesh_table *tbl, struct mesh_path *mpath)
 {
+	hlist_del_rcu(&mpath->walk_list);
 	rhashtable_remove_fast(&tbl->rhead, &mpath->rhash, mesh_rht_params);
 	mesh_path_free_rcu(tbl, mpath);
 }
@@ -578,29 +558,14 @@ void mesh_path_flush_by_nexthop(struct sta_info *sta)
 	struct ieee80211_sub_if_data *sdata = sta->sdata;
 	struct mesh_table *tbl = sdata->u.mesh.mesh_paths;
 	struct mesh_path *mpath;
-	struct rhashtable_iter iter;
-	int ret;
+	struct hlist_node *n;
 
-	ret = rhashtable_walk_init(&tbl->rhead, &iter, GFP_ATOMIC);
-	if (ret)
-		return;
-
-	ret = rhashtable_walk_start(&iter);
-	if (ret && ret != -EAGAIN)
-		goto out;
-
-	while ((mpath = rhashtable_walk_next(&iter))) {
-		if (IS_ERR(mpath) && PTR_ERR(mpath) == -EAGAIN)
-			continue;
-		if (IS_ERR(mpath))
-			break;
-
+	spin_lock_bh(&tbl->walk_lock);
+	hlist_for_each_entry_safe(mpath, n, &tbl->walk_head, walk_list) {
 		if (rcu_access_pointer(mpath->next_hop) == sta)
 			__mesh_path_del(tbl, mpath);
 	}
-out:
-	rhashtable_walk_stop(&iter);
-	rhashtable_walk_exit(&iter);
+	spin_unlock_bh(&tbl->walk_lock);
 }
 
 static void mpp_flush_by_proxy(struct ieee80211_sub_if_data *sdata,
@@ -608,55 +573,26 @@ static void mpp_flush_by_proxy(struct ieee80211_sub_if_data *sdata,
 {
 	struct mesh_table *tbl = sdata->u.mesh.mpp_paths;
 	struct mesh_path *mpath;
-	struct rhashtable_iter iter;
-	int ret;
+	struct hlist_node *n;
 
-	ret = rhashtable_walk_init(&tbl->rhead, &iter, GFP_ATOMIC);
-	if (ret)
-		return;
-
-	ret = rhashtable_walk_start(&iter);
-	if (ret && ret != -EAGAIN)
-		goto out;
-
-	while ((mpath = rhashtable_walk_next(&iter))) {
-		if (IS_ERR(mpath) && PTR_ERR(mpath) == -EAGAIN)
-			continue;
-		if (IS_ERR(mpath))
-			break;
-
+	spin_lock_bh(&tbl->walk_lock);
+	hlist_for_each_entry_safe(mpath, n, &tbl->walk_head, walk_list) {
 		if (ether_addr_equal(mpath->mpp, proxy))
 			__mesh_path_del(tbl, mpath);
 	}
-out:
-	rhashtable_walk_stop(&iter);
-	rhashtable_walk_exit(&iter);
+	spin_unlock_bh(&tbl->walk_lock);
 }
 
 static void table_flush_by_iface(struct mesh_table *tbl)
 {
 	struct mesh_path *mpath;
-	struct rhashtable_iter iter;
-	int ret;
+	struct hlist_node *n;
 
-	ret = rhashtable_walk_init(&tbl->rhead, &iter, GFP_ATOMIC);
-	if (ret)
-		return;
-
-	ret = rhashtable_walk_start(&iter);
-	if (ret && ret != -EAGAIN)
-		goto out;
-
-	while ((mpath = rhashtable_walk_next(&iter))) {
-		if (IS_ERR(mpath) && PTR_ERR(mpath) == -EAGAIN)
-			continue;
-		if (IS_ERR(mpath))
-			break;
+	spin_lock_bh(&tbl->walk_lock);
+	hlist_for_each_entry_safe(mpath, n, &tbl->walk_head, walk_list) {
 		__mesh_path_del(tbl, mpath);
 	}
-out:
-	rhashtable_walk_stop(&iter);
-	rhashtable_walk_exit(&iter);
+	spin_unlock_bh(&tbl->walk_lock);
 }
 
 /**
@@ -688,7 +624,7 @@ static int table_path_del(struct mesh_table *tbl,
 {
 	struct mesh_path *mpath;
 
-	rcu_read_lock();
+	spin_lock_bh(&tbl->walk_lock);
 	mpath = rhashtable_lookup_fast(&tbl->rhead, addr, mesh_rht_params);
 	if (!mpath) {
 		rcu_read_unlock();
@@ -696,7 +632,7 @@ static int table_path_del(struct mesh_table *tbl,
 	}
 
 	__mesh_path_del(tbl, mpath);
-	rcu_read_unlock();
+	spin_unlock_bh(&tbl->walk_lock);
 	return 0;
 }
 
@@ -867,30 +803,16 @@ void mesh_path_tbl_expire(struct ieee80211_sub_if_data *sdata,
 			  struct mesh_table *tbl)
 {
 	struct mesh_path *mpath;
-	struct rhashtable_iter iter;
-	int ret;
+	struct hlist_node *n;
 
-	ret = rhashtable_walk_init(&tbl->rhead, &iter, GFP_KERNEL);
-	if (ret)
-		return;
-
-	ret = rhashtable_walk_start(&iter);
-	if (ret && ret != -EAGAIN)
-		goto out;
-
-	while ((mpath = rhashtable_walk_next(&iter))) {
-		if (IS_ERR(mpath) && PTR_ERR(mpath) == -EAGAIN)
-			continue;
-		if (IS_ERR(mpath))
-			break;
+	spin_lock_bh(&tbl->walk_lock);
+	hlist_for_each_entry_safe(mpath, n, &tbl->walk_head, walk_list) {
 		if ((!(mpath->flags & MESH_PATH_RESOLVING)) &&
 		    (!(mpath->flags & MESH_PATH_FIXED)) &&
 		     time_after(jiffies, mpath->exp_time + MESH_PATH_EXPIRE))
 			__mesh_path_del(tbl, mpath);
 	}
-out:
-	rhashtable_walk_stop(&iter);
-	rhashtable_walk_exit(&iter);
+	spin_unlock_bh(&tbl->walk_lock);
 }
 
 void mesh_path_expire(struct ieee80211_sub_if_data *sdata)

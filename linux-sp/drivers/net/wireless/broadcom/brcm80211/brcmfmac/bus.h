@@ -71,6 +71,7 @@ struct brcmf_bus_dcmd {
  * @wowl_config: specify if dongle is configured for wowl when going to suspend
  * @get_ramsize: obtain size of device memory.
  * @get_memdump: obtain device memory dump in provided buffer.
+ * @get_fwname: obtain firmware name.
  *
  * This structure provides an abstract interface towards the
  * bus specific driver. For control messages to common driver
@@ -87,6 +88,8 @@ struct brcmf_bus_ops {
 	void (*wowl_config)(struct device *dev, bool enabled);
 	size_t (*get_ramsize)(struct device *dev);
 	int (*get_memdump)(struct device *dev, void *data, size_t len);
+	int (*get_fwname)(struct device *dev, const char *ext,
+			  unsigned char *fw_name);
 };
 
 
@@ -113,6 +116,17 @@ struct brcmf_bus_msgbuf {
 
 
 /**
+ * struct brcmf_bus_stats - bus statistic counters.
+ *
+ * @pktcowed: packets cowed for extra headroom/unorphan.
+ * @pktcow_failed: packets dropped due to failed cow-ing.
+ */
+struct brcmf_bus_stats {
+	atomic_t pktcowed;
+	atomic_t pktcow_failed;
+};
+
+/**
  * struct brcmf_bus - interface structure between common and bus layer
  *
  * @bus_priv: pointer to private bus device.
@@ -120,13 +134,13 @@ struct brcmf_bus_msgbuf {
  * @dev: device pointer of bus device.
  * @drvr: public driver information.
  * @state: operational state of the bus interface.
+ * @stats: statistics shared between common and bus layer.
  * @maxctl: maximum size for rxctl request message.
- * @tx_realloc: number of tx packets realloced for headroom.
- * @dstats: dongle-based statistical data.
- * @dcmd_list: bus/device specific dongle initialization commands.
  * @chip: device identifier of the dongle chip.
+ * @always_use_fws_queue: bus wants use queue also when fwsignal is inactive.
  * @wowl_supported: is wowl supported by bus driver.
  * @chiprev: revision of the dongle chip.
+ * @msgbuf: msgbuf protocol parameters provided by bus layer.
  */
 struct brcmf_bus {
 	union {
@@ -138,8 +152,8 @@ struct brcmf_bus {
 	struct device *dev;
 	struct brcmf_pub *drvr;
 	enum brcmf_bus_state state;
+	struct brcmf_bus_stats stats;
 	uint maxctl;
-	unsigned long tx_realloc;
 	u32 chip;
 	u32 chiprev;
 	bool always_use_fws_queue;
@@ -214,6 +228,13 @@ int brcmf_bus_get_memdump(struct brcmf_bus *bus, void *data, size_t len)
 	return bus->ops->get_memdump(bus->dev, data, len);
 }
 
+static inline
+int brcmf_bus_get_fwname(struct brcmf_bus *bus, const char *ext,
+			 unsigned char *fw_name)
+{
+	return bus->ops->get_fwname(bus->dev, ext, fw_name);
+}
+
 /*
  * interface functions from common layer
  */
@@ -229,11 +250,12 @@ int brcmf_attach(struct device *dev, struct brcmf_mp_device *settings);
 void brcmf_detach(struct device *dev);
 /* Indication from bus module that dongle should be reset */
 void brcmf_dev_reset(struct device *dev);
+/* Request from bus module to initiate a coredump */
+void brcmf_dev_coredump(struct device *dev);
 
 /* Configure the "global" bus state used by upper layers */
 void brcmf_bus_change_state(struct brcmf_bus *bus, enum brcmf_bus_state state);
 
-int brcmf_bus_started(struct device *dev);
 s32 brcmf_iovar_data_set(struct device *dev, char *name, void *data, u32 len);
 void brcmf_bus_add_txhdrlen(struct device *dev, uint len);
 

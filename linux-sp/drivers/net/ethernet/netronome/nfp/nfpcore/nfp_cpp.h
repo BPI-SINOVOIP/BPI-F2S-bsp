@@ -42,6 +42,7 @@
 
 #include <linux/ctype.h>
 #include <linux/types.h>
+#include <linux/sizes.h>
 
 #ifndef NFP_SUBSYS
 #define NFP_SUBSYS "nfp"
@@ -59,6 +60,13 @@
 #define PCI_64BIT_BAR_COUNT             3
 
 #define NFP_CPP_NUM_TARGETS             16
+/* Max size of area it should be safe to request */
+#define NFP_CPP_SAFE_AREA_SIZE		SZ_2M
+
+/* NFP_MUTEX_WAIT_* are timeouts in seconds when waiting for a mutex */
+#define NFP_MUTEX_WAIT_FIRST_WARN	15
+#define NFP_MUTEX_WAIT_NEXT_WARN	5
+#define NFP_MUTEX_WAIT_ERROR		60
 
 struct device;
 
@@ -78,6 +86,11 @@ struct resource;
 #define NFP_CPP_ACTION_RW               32
 
 #define NFP_CPP_TARGET_ID_MASK          0x1f
+
+#define NFP_CPP_ATOMIC_RD(target, island) \
+	NFP_CPP_ISLAND_ID((target), 3, 0, (island))
+#define NFP_CPP_ATOMIC_WR(target, island) \
+	NFP_CPP_ISLAND_ID((target), 4, 0, (island))
 
 /**
  * NFP_CPP_ID() - pack target, token, and action into a CPP ID.
@@ -214,13 +227,6 @@ u32 nfp_cpp_model(struct nfp_cpp *cpp);
 u16 nfp_cpp_interface(struct nfp_cpp *cpp);
 int nfp_cpp_serial(struct nfp_cpp *cpp, const u8 **serial);
 
-void *nfp_hwinfo_cache(struct nfp_cpp *cpp);
-void nfp_hwinfo_cache_set(struct nfp_cpp *cpp, void *val);
-void *nfp_rtsym_cache(struct nfp_cpp *cpp);
-void nfp_rtsym_cache_set(struct nfp_cpp *cpp, void *val);
-
-void nfp_nffw_cache_flush(struct nfp_cpp *cpp);
-
 struct nfp_cpp_area *nfp_cpp_area_alloc_with_name(struct nfp_cpp *cpp,
 						  u32 cpp_id,
 						  const char *name,
@@ -229,6 +235,9 @@ struct nfp_cpp_area *nfp_cpp_area_alloc_with_name(struct nfp_cpp *cpp,
 struct nfp_cpp_area *nfp_cpp_area_alloc(struct nfp_cpp *cpp, u32 cpp_id,
 					unsigned long long address,
 					unsigned long size);
+struct nfp_cpp_area *
+nfp_cpp_area_alloc_acquire(struct nfp_cpp *cpp, const char *name, u32 cpp_id,
+			   unsigned long long address, unsigned long size);
 void nfp_cpp_area_free(struct nfp_cpp_area *area);
 int nfp_cpp_area_acquire(struct nfp_cpp_area *area);
 int nfp_cpp_area_acquire_nonblocking(struct nfp_cpp_area *area);
@@ -238,8 +247,7 @@ int nfp_cpp_area_read(struct nfp_cpp_area *area, unsigned long offset,
 		      void *buffer, size_t length);
 int nfp_cpp_area_write(struct nfp_cpp_area *area, unsigned long offset,
 		       const void *buffer, size_t length);
-int nfp_cpp_area_check_range(struct nfp_cpp_area *area,
-			     unsigned long long offset, unsigned long size);
+size_t nfp_cpp_area_size(struct nfp_cpp_area *area);
 const char *nfp_cpp_area_name(struct nfp_cpp_area *cpp_area);
 void *nfp_cpp_area_priv(struct nfp_cpp_area *cpp_area);
 struct nfp_cpp *nfp_cpp_area_cpp(struct nfp_cpp_area *cpp_area);
@@ -277,6 +285,10 @@ int nfp_cpp_readq(struct nfp_cpp *cpp, u32 cpp_id,
 int nfp_cpp_writeq(struct nfp_cpp *cpp, u32 cpp_id,
 		   unsigned long long address, u64 value);
 
+u8 __iomem *
+nfp_cpp_map_area(struct nfp_cpp *cpp, const char *name, int domain, int target,
+		 u64 addr, unsigned long size, struct nfp_cpp_area **area);
+
 struct nfp_cpp_mutex;
 
 int nfp_cpp_mutex_init(struct nfp_cpp *cpp, int target,
@@ -288,6 +300,19 @@ void nfp_cpp_mutex_free(struct nfp_cpp_mutex *mutex);
 int nfp_cpp_mutex_lock(struct nfp_cpp_mutex *mutex);
 int nfp_cpp_mutex_unlock(struct nfp_cpp_mutex *mutex);
 int nfp_cpp_mutex_trylock(struct nfp_cpp_mutex *mutex);
+int nfp_cpp_mutex_reclaim(struct nfp_cpp *cpp, int target,
+			  unsigned long long address);
+
+/**
+ * nfp_cppcore_pcie_unit() - Get PCI Unit of a CPP handle
+ * @cpp:	CPP handle
+ *
+ * Return: PCI unit for the NFP CPP handle
+ */
+static inline u8 nfp_cppcore_pcie_unit(struct nfp_cpp *cpp)
+{
+	return NFP_CPP_INTERFACE_UNIT_of(nfp_cpp_interface(cpp));
+}
 
 struct nfp_cpp_explicit;
 
@@ -339,8 +364,8 @@ struct nfp_cpp_operations {
 	int (*init)(struct nfp_cpp *cpp);
 	void (*free)(struct nfp_cpp *cpp);
 
-	void (*read_serial)(struct device *dev, u8 *serial);
-	u16 (*get_interface)(struct device *dev);
+	int (*read_serial)(struct device *dev, u8 *serial);
+	int (*get_interface)(struct device *dev);
 
 	int (*area_init)(struct nfp_cpp_area *area,
 			 u32 dest, unsigned long long address,

@@ -34,7 +34,6 @@
 #include <linux/pci.h>
 #include <linux/kernel.h>
 #include <linux/slab.h>
-#include <linux/version.h>
 #include <linux/delay.h>
 #include <asm/byteorder.h>
 #include <linux/dma-mapping.h>
@@ -46,6 +45,7 @@
 #include <linux/etherdevice.h>
 #include <linux/vmalloc.h>
 #include <linux/crash_dump.h>
+#include <linux/crc32.h>
 #include <linux/qed/qed_if.h>
 #include <linux/qed/qed_ll2_if.h>
 
@@ -64,6 +64,7 @@
 
 #define QED_ROCE_QPS			(8192)
 #define QED_ROCE_DPIS			(8)
+#define QED_RDMA_SRQS                   QED_ROCE_QPS
 
 static char version[] =
 	"QLogic FastLinQ 4xxxx Core Module qed " DRV_MODULE_VERSION "\n";
@@ -123,7 +124,7 @@ static void qed_free_pci(struct qed_dev *cdev)
 {
 	struct pci_dev *pdev = cdev->pdev;
 
-	if (cdev->doorbells)
+	if (cdev->doorbells && cdev->db_size)
 		iounmap(cdev->doorbells);
 	if (cdev->regview)
 		iounmap(cdev->regview);
@@ -207,14 +208,22 @@ static int qed_init_pci(struct qed_dev *cdev, struct pci_dev *pdev)
 		goto err2;
 	}
 
-	if (IS_PF(cdev)) {
-		cdev->db_phys_addr = pci_resource_start(cdev->pdev, 2);
-		cdev->db_size = pci_resource_len(cdev->pdev, 2);
-		cdev->doorbells = ioremap_wc(cdev->db_phys_addr, cdev->db_size);
-		if (!cdev->doorbells) {
-			DP_NOTICE(cdev, "Cannot map doorbell space\n");
-			return -ENOMEM;
+	cdev->db_phys_addr = pci_resource_start(cdev->pdev, 2);
+	cdev->db_size = pci_resource_len(cdev->pdev, 2);
+	if (!cdev->db_size) {
+		if (IS_PF(cdev)) {
+			DP_NOTICE(cdev, "No Doorbell bar available\n");
+			return -EINVAL;
+		} else {
+			return 0;
 		}
+	}
+
+	cdev->doorbells = ioremap_wc(cdev->db_phys_addr, cdev->db_size);
+
+	if (!cdev->doorbells) {
+		DP_NOTICE(cdev, "Cannot map doorbell space\n");
+		return -ENOMEM;
 	}
 
 	return 0;
@@ -230,6 +239,8 @@ err0:
 int qed_fill_dev_info(struct qed_dev *cdev,
 		      struct qed_dev_info *dev_info)
 {
+	struct qed_hwfn *p_hwfn = QED_LEADING_HWFN(cdev);
+	struct qed_hw_info *hw_info = &p_hwfn->hw_info;
 	struct qed_tunnel_info *tun = &cdev->tunnel;
 	struct qed_ptt  *ptt;
 
@@ -253,23 +264,23 @@ int qed_fill_dev_info(struct qed_dev *cdev,
 	dev_info->pci_mem_start = cdev->pci_params.mem_start;
 	dev_info->pci_mem_end = cdev->pci_params.mem_end;
 	dev_info->pci_irq = cdev->pci_params.irq;
-	dev_info->rdma_supported = (cdev->hwfns[0].hw_info.personality ==
-				    QED_PCI_ETH_ROCE);
-	dev_info->is_mf_default = IS_MF_DEFAULT(&cdev->hwfns[0]);
+	dev_info->rdma_supported = QED_IS_RDMA_PERSONALITY(p_hwfn);
 	dev_info->dev_type = cdev->type;
-	ether_addr_copy(dev_info->hw_mac, cdev->hwfns[0].hw_info.hw_mac_addr);
+	ether_addr_copy(dev_info->hw_mac, hw_info->hw_mac_addr);
 
 	if (IS_PF(cdev)) {
 		dev_info->fw_major = FW_MAJOR_VERSION;
 		dev_info->fw_minor = FW_MINOR_VERSION;
 		dev_info->fw_rev = FW_REVISION_VERSION;
 		dev_info->fw_eng = FW_ENGINEERING_VERSION;
-		dev_info->mf_mode = cdev->mf_mode;
+		dev_info->b_inter_pf_switch = test_bit(QED_MF_INTER_PF_SWITCH,
+						       &cdev->mf_bits);
 		dev_info->tx_switching = true;
 
-		if (QED_LEADING_HWFN(cdev)->hw_info.b_wol_support ==
-		    QED_WOL_SUPPORT_PME)
+		if (hw_info->b_wol_support == QED_WOL_SUPPORT_PME)
 			dev_info->wol_support = true;
+
+		dev_info->abs_pf_id = QED_LEADING_HWFN(cdev)->abs_pf_id;
 	} else {
 		qed_vf_get_fw_version(&cdev->hwfns[0], &dev_info->fw_major,
 				      &dev_info->fw_minor, &dev_info->fw_rev,
@@ -282,6 +293,9 @@ int qed_fill_dev_info(struct qed_dev *cdev,
 			qed_mcp_get_mfw_ver(QED_LEADING_HWFN(cdev), ptt,
 					    &dev_info->mfw_rev, NULL);
 
+			qed_mcp_get_mbi_ver(QED_LEADING_HWFN(cdev), ptt,
+					    &dev_info->mbi_version);
+
 			qed_mcp_get_flash_size(QED_LEADING_HWFN(cdev), ptt,
 					       &dev_info->flash_size);
 
@@ -292,7 +306,7 @@ int qed_fill_dev_info(struct qed_dev *cdev,
 				    &dev_info->mfw_rev, NULL);
 	}
 
-	dev_info->mtu = QED_LEADING_HWFN(cdev)->hw_info.mtu;
+	dev_info->mtu = hw_info->mtu;
 
 	return 0;
 }
@@ -336,6 +350,7 @@ static struct qed_dev *qed_probe(struct pci_dev *pdev,
 	if (!cdev)
 		goto err0;
 
+	cdev->drv_type = DRV_ID_DRV_TYPE_LINUX;
 	cdev->protocol = params->protocol;
 
 	if (params->is_vf)
@@ -356,7 +371,7 @@ static struct qed_dev *qed_probe(struct pci_dev *pdev,
 		goto err2;
 	}
 
-	DP_INFO(cdev, "qed_probe completed successffuly\n");
+	DP_INFO(cdev, "qed_probe completed successfully\n");
 
 	return cdev;
 
@@ -552,8 +567,16 @@ static irqreturn_t qed_single_int(int irq, void *dev_instance)
 		/* Fastpath interrupts */
 		for (j = 0; j < 64; j++) {
 			if ((0x2ULL << j) & status) {
-				hwfn->simd_proto_handler[j].func(
-					hwfn->simd_proto_handler[j].token);
+				struct qed_simd_fp_handler *p_handler =
+					&hwfn->simd_proto_handler[j];
+
+				if (p_handler->func)
+					p_handler->func(p_handler->token);
+				else
+					DP_NOTICE(hwfn,
+						  "Not calling fastpath handler as it is NULL [handler #%d, status 0x%llx]\n",
+						  j, status);
+
 				status &= ~(0x2ULL << j);
 				rc = IRQ_HANDLED;
 			}
@@ -607,6 +630,18 @@ int qed_slowpath_irq_req(struct qed_hwfn *hwfn)
 	return rc;
 }
 
+static void qed_slowpath_tasklet_flush(struct qed_hwfn *p_hwfn)
+{
+	/* Calling the disable function will make sure that any
+	 * currently-running function is completed. The following call to the
+	 * enable function makes this sequence a flush-like operation.
+	 */
+	if (p_hwfn->b_sp_dpc_enabled) {
+		tasklet_disable(p_hwfn->sp_dpc);
+		tasklet_enable(p_hwfn->sp_dpc);
+	}
+}
+
 void qed_slowpath_irq_sync(struct qed_hwfn *p_hwfn)
 {
 	struct qed_dev *cdev = p_hwfn->cdev;
@@ -618,6 +653,8 @@ void qed_slowpath_irq_sync(struct qed_hwfn *p_hwfn)
 		synchronize_irq(cdev->int_params.msix_table[id].vector);
 	else
 		synchronize_irq(cdev->pdev->irq);
+
+	qed_slowpath_tasklet_flush(p_hwfn);
 }
 
 static void qed_slowpath_irq_free(struct qed_dev *cdev)
@@ -652,7 +689,7 @@ static int qed_nic_stop(struct qed_dev *cdev)
 			tasklet_disable(p_hwfn->sp_dpc);
 			p_hwfn->b_sp_dpc_enabled = false;
 			DP_VERBOSE(cdev, NETIF_MSG_IFDOWN,
-				   "Disabled sp taskelt [hwfn %d] at %p\n",
+				   "Disabled sp tasklet [hwfn %d] at %p\n",
 				   i, p_hwfn->sp_dpc);
 		}
 	}
@@ -745,12 +782,20 @@ static int qed_slowpath_setup_int(struct qed_dev *cdev,
 	for_each_hwfn(cdev, i) {
 		memset(&sb_cnt_info, 0, sizeof(sb_cnt_info));
 		qed_int_get_num_sbs(&cdev->hwfns[i], &sb_cnt_info);
-		cdev->int_params.in.num_vectors += sb_cnt_info.sb_cnt;
+		cdev->int_params.in.num_vectors += sb_cnt_info.cnt;
 		cdev->int_params.in.num_vectors++; /* slowpath */
 	}
 
 	/* We want a minimum of one slowpath and one fastpath vector per hwfn */
 	cdev->int_params.in.min_msix_cnt = cdev->num_hwfns * 2;
+
+	if (is_kdump_kernel()) {
+		DP_INFO(cdev,
+			"Kdump kernel: Limit the max number of requested MSI-X vectors to %hd\n",
+			cdev->int_params.in.min_msix_cnt);
+		cdev->int_params.in.num_vectors =
+			cdev->int_params.in.min_msix_cnt;
+	}
 
 	rc = qed_set_int_mode(cdev, false);
 	if (rc)  {
@@ -763,7 +808,7 @@ static int qed_slowpath_setup_int(struct qed_dev *cdev,
 				       cdev->num_hwfns;
 
 	if (!IS_ENABLED(CONFIG_QED_RDMA) ||
-	    QED_LEADING_HWFN(cdev)->hw_info.personality != QED_PCI_ETH_ROCE)
+	    !QED_IS_RDMA_PERSONALITY(QED_LEADING_HWFN(cdev)))
 		return 0;
 
 	for_each_hwfn(cdev, i)
@@ -894,6 +939,7 @@ static void qed_update_pf_params(struct qed_dev *cdev,
 	if (IS_ENABLED(CONFIG_QED_RDMA)) {
 		params->rdma_pf_params.num_qps = QED_ROCE_QPS;
 		params->rdma_pf_params.min_dpis = QED_ROCE_DPIS;
+		params->rdma_pf_params.num_srqs = QED_RDMA_SRQS;
 		/* divide by 3 the MRs to avoid MF ILT overflow */
 		params->rdma_pf_params.gl_pi = QED_ROCE_PROTOCOL_INDEX;
 	}
@@ -902,14 +948,14 @@ static void qed_update_pf_params(struct qed_dev *cdev,
 		params->eth_pf_params.num_arfs_filters = 0;
 
 	/* In case we might support RDMA, don't allow qede to be greedy
-	 * with the L2 contexts. Allow for 64 queues [rx, tx, xdp] per hwfn.
+	 * with the L2 contexts. Allow for 64 queues [rx, tx cos, xdp]
+	 * per hwfn.
 	 */
-	if (QED_LEADING_HWFN(cdev)->hw_info.personality ==
-	    QED_PCI_ETH_ROCE) {
+	if (QED_IS_RDMA_PERSONALITY(QED_LEADING_HWFN(cdev))) {
 		u16 *num_cons;
 
 		num_cons = &params->eth_pf_params.num_cons;
-		*num_cons = min_t(u16, *num_cons, 192);
+		*num_cons = min_t(u16, *num_cons, QED_MAX_L2_CONS);
 	}
 
 	for (i = 0; i < cdev->num_hwfns; i++) {
@@ -917,6 +963,68 @@ static void qed_update_pf_params(struct qed_dev *cdev,
 
 		p_hwfn->pf_params = *params;
 	}
+}
+
+static void qed_slowpath_wq_stop(struct qed_dev *cdev)
+{
+	int i;
+
+	if (IS_VF(cdev))
+		return;
+
+	for_each_hwfn(cdev, i) {
+		if (!cdev->hwfns[i].slowpath_wq)
+			continue;
+
+		flush_workqueue(cdev->hwfns[i].slowpath_wq);
+		destroy_workqueue(cdev->hwfns[i].slowpath_wq);
+	}
+}
+
+static void qed_slowpath_task(struct work_struct *work)
+{
+	struct qed_hwfn *hwfn = container_of(work, struct qed_hwfn,
+					     slowpath_task.work);
+	struct qed_ptt *ptt = qed_ptt_acquire(hwfn);
+
+	if (!ptt) {
+		queue_delayed_work(hwfn->slowpath_wq, &hwfn->slowpath_task, 0);
+		return;
+	}
+
+	if (test_and_clear_bit(QED_SLOWPATH_MFW_TLV_REQ,
+			       &hwfn->slowpath_task_flags))
+		qed_mfw_process_tlv_req(hwfn, ptt);
+
+	qed_ptt_release(hwfn, ptt);
+}
+
+static int qed_slowpath_wq_start(struct qed_dev *cdev)
+{
+	struct qed_hwfn *hwfn;
+	char name[NAME_SIZE];
+	int i;
+
+	if (IS_VF(cdev))
+		return 0;
+
+	for_each_hwfn(cdev, i) {
+		hwfn = &cdev->hwfns[i];
+
+		snprintf(name, NAME_SIZE, "slowpath-%02x:%02x.%02x",
+			 cdev->pdev->bus->number,
+			 PCI_SLOT(cdev->pdev->devfn), hwfn->abs_pf_id);
+
+		hwfn->slowpath_wq = alloc_workqueue(name, 0, 0);
+		if (!hwfn->slowpath_wq) {
+			DP_NOTICE(hwfn, "Cannot create slowpath workqueue\n");
+			return -ENOMEM;
+		}
+
+		INIT_DELAYED_WORK(&hwfn->slowpath_task, qed_slowpath_task);
+	}
+
+	return 0;
 }
 
 static int qed_slowpath_start(struct qed_dev *cdev,
@@ -928,12 +1036,13 @@ static int qed_slowpath_start(struct qed_dev *cdev,
 	struct qed_tunnel_info tunn_info;
 	const u8 *data = NULL;
 	struct qed_hwfn *hwfn;
-#ifdef CONFIG_RFS_ACCEL
 	struct qed_ptt *p_ptt;
-#endif
 	int rc = -EINVAL;
 
 	if (qed_iov_wq_start(cdev))
+		goto err;
+
+	if (qed_slowpath_wq_start(cdev))
 		goto err;
 
 	if (IS_PF(cdev)) {
@@ -946,7 +1055,6 @@ static int qed_slowpath_start(struct qed_dev *cdev,
 			goto err;
 		}
 
-#ifdef CONFIG_RFS_ACCEL
 		if (cdev->num_hwfns == 1) {
 			p_ptt = qed_ptt_acquire(QED_LEADING_HWFN(cdev));
 			if (p_ptt) {
@@ -957,7 +1065,6 @@ static int qed_slowpath_start(struct qed_dev *cdev,
 				goto err;
 			}
 		}
-#endif
 	}
 
 	cdev->rx_coalesce_usecs = QED_DEFAULT_RX_USECS;
@@ -1065,14 +1172,14 @@ err:
 	if (IS_PF(cdev))
 		release_firmware(cdev->firmware);
 
-#ifdef CONFIG_RFS_ACCEL
 	if (IS_PF(cdev) && (cdev->num_hwfns == 1) &&
 	    QED_LEADING_HWFN(cdev)->p_arfs_ptt)
 		qed_ptt_release(QED_LEADING_HWFN(cdev),
 				QED_LEADING_HWFN(cdev)->p_arfs_ptt);
-#endif
 
 	qed_iov_wq_stop(cdev, false);
+
+	qed_slowpath_wq_stop(cdev);
 
 	return rc;
 }
@@ -1082,14 +1189,14 @@ static int qed_slowpath_stop(struct qed_dev *cdev)
 	if (!cdev)
 		return -ENODEV;
 
+	qed_slowpath_wq_stop(cdev);
+
 	qed_ll2_dealloc_if(cdev);
 
 	if (IS_PF(cdev)) {
-#ifdef CONFIG_RFS_ACCEL
 		if (cdev->num_hwfns == 1)
 			qed_ptt_release(QED_LEADING_HWFN(cdev),
 					QED_LEADING_HWFN(cdev)->p_arfs_ptt);
-#endif
 		qed_free_stream_mem(cdev);
 		if (IS_QED_ETH_IF(cdev))
 			qed_sriov_disable(cdev, true);
@@ -1112,17 +1219,13 @@ static int qed_slowpath_stop(struct qed_dev *cdev)
 	return 0;
 }
 
-static void qed_set_id(struct qed_dev *cdev, char name[NAME_SIZE],
-		       char ver_str[VER_SIZE])
+static void qed_set_name(struct qed_dev *cdev, char name[NAME_SIZE])
 {
 	int i;
 
 	memcpy(cdev->name, name, NAME_SIZE);
 	for_each_hwfn(cdev, i)
 		snprintf(cdev->hwfns[i].name, NAME_SIZE, "%s-%d", name, i);
-
-	memcpy(cdev->ver_str, ver_str, VER_SIZE);
-	cdev->drv_type = DRV_ID_DRV_TYPE_LINUX;
 }
 
 static u32 qed_sb_init(struct qed_dev *cdev,
@@ -1282,6 +1385,10 @@ static int qed_set_link(struct qed_dev *cdev, struct qed_link_params *params)
 			break;
 		}
 	}
+
+	if (params->override_flags & QED_LINK_OVERRIDE_EEE_CONFIG)
+		memcpy(&link_params->eee, &params->eee,
+		       sizeof(link_params->eee));
 
 	rc = qed_mcp_set_link(hwfn, ptt, params->link_up);
 
@@ -1469,6 +1576,21 @@ static void qed_fill_link(struct qed_hwfn *hwfn,
 	if (link.partner_adv_pause == QED_LINK_PARTNER_ASYMMETRIC_PAUSE ||
 	    link.partner_adv_pause == QED_LINK_PARTNER_BOTH_PAUSE)
 		if_link->lp_caps |= QED_LM_Asym_Pause_BIT;
+
+	if (link_caps.default_eee == QED_MCP_EEE_UNSUPPORTED) {
+		if_link->eee_supported = false;
+	} else {
+		if_link->eee_supported = true;
+		if_link->eee_active = link.eee_active;
+		if_link->sup_caps = link_caps.eee_speed_caps;
+		/* MFW clears adv_caps on eee disable; use configured value */
+		if_link->eee.adv_caps = link.eee_adv_caps ? link.eee_adv_caps :
+					params.eee.adv_caps;
+		if_link->eee.lp_adv_caps = link.eee_lp_adv_caps;
+		if_link->eee.enable = params.eee.enable;
+		if_link->eee.tx_lpi_enable = params.eee.tx_lpi_enable;
+		if_link->eee.tx_lpi_timer = params.eee.tx_lpi_timer;
+	}
 }
 
 static void qed_get_current_link(struct qed_dev *cdev,
@@ -1512,44 +1634,362 @@ static int qed_drain(struct qed_dev *cdev)
 			return -EBUSY;
 		}
 		rc = qed_mcp_drain(hwfn, ptt);
+		qed_ptt_release(hwfn, ptt);
 		if (rc)
 			return rc;
-		qed_ptt_release(hwfn, ptt);
 	}
 
 	return 0;
 }
 
-static void qed_get_coalesce(struct qed_dev *cdev, u16 *rx_coal, u16 *tx_coal)
+static u32 qed_nvm_flash_image_access_crc(struct qed_dev *cdev,
+					  struct qed_nvm_image_att *nvm_image,
+					  u32 *crc)
 {
-	*rx_coal = cdev->rx_coalesce_usecs;
-	*tx_coal = cdev->tx_coalesce_usecs;
+	u8 *buf = NULL;
+	int rc, j;
+	u32 val;
+
+	/* Allocate a buffer for holding the nvram image */
+	buf = kzalloc(nvm_image->length, GFP_KERNEL);
+	if (!buf)
+		return -ENOMEM;
+
+	/* Read image into buffer */
+	rc = qed_mcp_nvm_read(cdev, nvm_image->start_addr,
+			      buf, nvm_image->length);
+	if (rc) {
+		DP_ERR(cdev, "Failed reading image from nvm\n");
+		goto out;
+	}
+
+	/* Convert the buffer into big-endian format (excluding the
+	 * closing 4 bytes of CRC).
+	 */
+	for (j = 0; j < nvm_image->length - 4; j += 4) {
+		val = cpu_to_be32(*(u32 *)&buf[j]);
+		*(u32 *)&buf[j] = val;
+	}
+
+	/* Calc CRC for the "actual" image buffer, i.e. not including
+	 * the last 4 CRC bytes.
+	 */
+	*crc = (~cpu_to_be32(crc32(0xffffffff, buf, nvm_image->length - 4)));
+
+out:
+	kfree(buf);
+
+	return rc;
+}
+
+/* Binary file format -
+ *     /----------------------------------------------------------------------\
+ * 0B  |                       0x4 [command index]                            |
+ * 4B  | image_type     | Options        |  Number of register settings       |
+ * 8B  |                       Value                                          |
+ * 12B |                       Mask                                           |
+ * 16B |                       Offset                                         |
+ *     \----------------------------------------------------------------------/
+ * There can be several Value-Mask-Offset sets as specified by 'Number of...'.
+ * Options - 0'b - Calculate & Update CRC for image
+ */
+static int qed_nvm_flash_image_access(struct qed_dev *cdev, const u8 **data,
+				      bool *check_resp)
+{
+	struct qed_nvm_image_att nvm_image;
+	struct qed_hwfn *p_hwfn;
+	bool is_crc = false;
+	u32 image_type;
+	int rc = 0, i;
+	u16 len;
+
+	*data += 4;
+	image_type = **data;
+	p_hwfn = QED_LEADING_HWFN(cdev);
+	for (i = 0; i < p_hwfn->nvm_info.num_images; i++)
+		if (image_type == p_hwfn->nvm_info.image_att[i].image_type)
+			break;
+	if (i == p_hwfn->nvm_info.num_images) {
+		DP_ERR(cdev, "Failed to find nvram image of type %08x\n",
+		       image_type);
+		return -ENOENT;
+	}
+
+	nvm_image.start_addr = p_hwfn->nvm_info.image_att[i].nvm_start_addr;
+	nvm_image.length = p_hwfn->nvm_info.image_att[i].len;
+
+	DP_VERBOSE(cdev, NETIF_MSG_DRV,
+		   "Read image %02x; type = %08x; NVM [%08x,...,%08x]\n",
+		   **data, image_type, nvm_image.start_addr,
+		   nvm_image.start_addr + nvm_image.length - 1);
+	(*data)++;
+	is_crc = !!(**data & BIT(0));
+	(*data)++;
+	len = *((u16 *)*data);
+	*data += 2;
+	if (is_crc) {
+		u32 crc = 0;
+
+		rc = qed_nvm_flash_image_access_crc(cdev, &nvm_image, &crc);
+		if (rc) {
+			DP_ERR(cdev, "Failed calculating CRC, rc = %d\n", rc);
+			goto exit;
+		}
+
+		rc = qed_mcp_nvm_write(cdev, QED_NVM_WRITE_NVRAM,
+				       (nvm_image.start_addr +
+					nvm_image.length - 4), (u8 *)&crc, 4);
+		if (rc)
+			DP_ERR(cdev, "Failed writing to %08x, rc = %d\n",
+			       nvm_image.start_addr + nvm_image.length - 4, rc);
+		goto exit;
+	}
+
+	/* Iterate over the values for setting */
+	while (len) {
+		u32 offset, mask, value, cur_value;
+		u8 buf[4];
+
+		value = *((u32 *)*data);
+		*data += 4;
+		mask = *((u32 *)*data);
+		*data += 4;
+		offset = *((u32 *)*data);
+		*data += 4;
+
+		rc = qed_mcp_nvm_read(cdev, nvm_image.start_addr + offset, buf,
+				      4);
+		if (rc) {
+			DP_ERR(cdev, "Failed reading from %08x\n",
+			       nvm_image.start_addr + offset);
+			goto exit;
+		}
+
+		cur_value = le32_to_cpu(*((__le32 *)buf));
+		DP_VERBOSE(cdev, NETIF_MSG_DRV,
+			   "NVM %08x: %08x -> %08x [Value %08x Mask %08x]\n",
+			   nvm_image.start_addr + offset, cur_value,
+			   (cur_value & ~mask) | (value & mask), value, mask);
+		value = (value & mask) | (cur_value & ~mask);
+		rc = qed_mcp_nvm_write(cdev, QED_NVM_WRITE_NVRAM,
+				       nvm_image.start_addr + offset,
+				       (u8 *)&value, 4);
+		if (rc) {
+			DP_ERR(cdev, "Failed writing to %08x\n",
+			       nvm_image.start_addr + offset);
+			goto exit;
+		}
+
+		len--;
+	}
+exit:
+	return rc;
+}
+
+/* Binary file format -
+ *     /----------------------------------------------------------------------\
+ * 0B  |                       0x3 [command index]                            |
+ * 4B  | b'0: check_response?   | b'1-31  reserved                            |
+ * 8B  | File-type |                   reserved                               |
+ *     \----------------------------------------------------------------------/
+ *     Start a new file of the provided type
+ */
+static int qed_nvm_flash_image_file_start(struct qed_dev *cdev,
+					  const u8 **data, bool *check_resp)
+{
+	int rc;
+
+	*data += 4;
+	*check_resp = !!(**data & BIT(0));
+	*data += 4;
+
+	DP_VERBOSE(cdev, NETIF_MSG_DRV,
+		   "About to start a new file of type %02x\n", **data);
+	rc = qed_mcp_nvm_put_file_begin(cdev, **data);
+	*data += 4;
+
+	return rc;
+}
+
+/* Binary file format -
+ *     /----------------------------------------------------------------------\
+ * 0B  |                       0x2 [command index]                            |
+ * 4B  |                       Length in bytes                                |
+ * 8B  | b'0: check_response?   | b'1-31  reserved                            |
+ * 12B |                       Offset in bytes                                |
+ * 16B |                       Data ...                                       |
+ *     \----------------------------------------------------------------------/
+ *     Write data as part of a file that was previously started. Data should be
+ *     of length equal to that provided in the message
+ */
+static int qed_nvm_flash_image_file_data(struct qed_dev *cdev,
+					 const u8 **data, bool *check_resp)
+{
+	u32 offset, len;
+	int rc;
+
+	*data += 4;
+	len = *((u32 *)(*data));
+	*data += 4;
+	*check_resp = !!(**data & BIT(0));
+	*data += 4;
+	offset = *((u32 *)(*data));
+	*data += 4;
+
+	DP_VERBOSE(cdev, NETIF_MSG_DRV,
+		   "About to write File-data: %08x bytes to offset %08x\n",
+		   len, offset);
+
+	rc = qed_mcp_nvm_write(cdev, QED_PUT_FILE_DATA, offset,
+			       (char *)(*data), len);
+	*data += len;
+
+	return rc;
+}
+
+/* Binary file format [General header] -
+ *     /----------------------------------------------------------------------\
+ * 0B  |                       QED_NVM_SIGNATURE                              |
+ * 4B  |                       Length in bytes                                |
+ * 8B  | Highest command in this batchfile |          Reserved                |
+ *     \----------------------------------------------------------------------/
+ */
+static int qed_nvm_flash_image_validate(struct qed_dev *cdev,
+					const struct firmware *image,
+					const u8 **data)
+{
+	u32 signature, len;
+
+	/* Check minimum size */
+	if (image->size < 12) {
+		DP_ERR(cdev, "Image is too short [%08x]\n", (u32)image->size);
+		return -EINVAL;
+	}
+
+	/* Check signature */
+	signature = *((u32 *)(*data));
+	if (signature != QED_NVM_SIGNATURE) {
+		DP_ERR(cdev, "Wrong signature '%08x'\n", signature);
+		return -EINVAL;
+	}
+
+	*data += 4;
+	/* Validate internal size equals the image-size */
+	len = *((u32 *)(*data));
+	if (len != image->size) {
+		DP_ERR(cdev, "Size mismatch: internal = %08x image = %08x\n",
+		       len, (u32)image->size);
+		return -EINVAL;
+	}
+
+	*data += 4;
+	/* Make sure driver familiar with all commands necessary for this */
+	if (*((u16 *)(*data)) >= QED_NVM_FLASH_CMD_NVM_MAX) {
+		DP_ERR(cdev, "File contains unsupported commands [Need %04x]\n",
+		       *((u16 *)(*data)));
+		return -EINVAL;
+	}
+
+	*data += 4;
+
+	return 0;
+}
+
+static int qed_nvm_flash(struct qed_dev *cdev, const char *name)
+{
+	const struct firmware *image;
+	const u8 *data, *data_end;
+	u32 cmd_type;
+	int rc;
+
+	rc = request_firmware(&image, name, &cdev->pdev->dev);
+	if (rc) {
+		DP_ERR(cdev, "Failed to find '%s'\n", name);
+		return rc;
+	}
+
+	DP_VERBOSE(cdev, NETIF_MSG_DRV,
+		   "Flashing '%s' - firmware's data at %p, size is %08x\n",
+		   name, image->data, (u32)image->size);
+	data = image->data;
+	data_end = data + image->size;
+
+	rc = qed_nvm_flash_image_validate(cdev, image, &data);
+	if (rc)
+		goto exit;
+
+	while (data < data_end) {
+		bool check_resp = false;
+
+		/* Parse the actual command */
+		cmd_type = *((u32 *)data);
+		switch (cmd_type) {
+		case QED_NVM_FLASH_CMD_FILE_DATA:
+			rc = qed_nvm_flash_image_file_data(cdev, &data,
+							   &check_resp);
+			break;
+		case QED_NVM_FLASH_CMD_FILE_START:
+			rc = qed_nvm_flash_image_file_start(cdev, &data,
+							    &check_resp);
+			break;
+		case QED_NVM_FLASH_CMD_NVM_CHANGE:
+			rc = qed_nvm_flash_image_access(cdev, &data,
+							&check_resp);
+			break;
+		default:
+			DP_ERR(cdev, "Unknown command %08x\n", cmd_type);
+			rc = -EINVAL;
+			goto exit;
+		}
+
+		if (rc) {
+			DP_ERR(cdev, "Command %08x failed\n", cmd_type);
+			goto exit;
+		}
+
+		/* Check response if needed */
+		if (check_resp) {
+			u32 mcp_response = 0;
+
+			if (qed_mcp_nvm_resp(cdev, (u8 *)&mcp_response)) {
+				DP_ERR(cdev, "Failed getting MCP response\n");
+				rc = -EINVAL;
+				goto exit;
+			}
+
+			switch (mcp_response & FW_MSG_CODE_MASK) {
+			case FW_MSG_CODE_OK:
+			case FW_MSG_CODE_NVM_OK:
+			case FW_MSG_CODE_NVM_PUT_FILE_FINISH_OK:
+			case FW_MSG_CODE_PHY_OK:
+				break;
+			default:
+				DP_ERR(cdev, "MFW returns error: %08x\n",
+				       mcp_response);
+				rc = -EINVAL;
+				goto exit;
+			}
+		}
+	}
+
+exit:
+	release_firmware(image);
+
+	return rc;
+}
+
+static int qed_nvm_get_image(struct qed_dev *cdev, enum qed_nvm_images type,
+			     u8 *buf, u16 len)
+{
+	struct qed_hwfn *hwfn = QED_LEADING_HWFN(cdev);
+
+	return qed_mcp_get_nvm_image(hwfn, type, buf, len);
 }
 
 static int qed_set_coalesce(struct qed_dev *cdev, u16 rx_coal, u16 tx_coal,
-			    u16 qid, u16 sb_id)
+			    void *handle)
 {
-	struct qed_hwfn *hwfn;
-	struct qed_ptt *ptt;
-	int hwfn_index;
-	int status = 0;
-
-	hwfn_index = qid % cdev->num_hwfns;
-	hwfn = &cdev->hwfns[hwfn_index];
-	ptt = qed_ptt_acquire(hwfn);
-	if (!ptt)
-		return -EAGAIN;
-
-	status = qed_set_rxq_coalesce(hwfn, ptt, rx_coal,
-				      qid / cdev->num_hwfns, sb_id);
-	if (status)
-		goto out;
-	status = qed_set_txq_coalesce(hwfn, ptt, tx_coal,
-				      qid / cdev->num_hwfns, sb_id);
-out:
-	qed_ptt_release(hwfn, ptt);
-
-	return status;
+		return qed_set_queue_coalesce(rx_coal, tx_coal, handle);
 }
 
 static int qed_set_led(struct qed_dev *cdev, enum qed_led_mode mode)
@@ -1663,6 +2103,28 @@ out:
 	return status;
 }
 
+static int qed_read_module_eeprom(struct qed_dev *cdev, char *buf,
+				  u8 dev_addr, u32 offset, u32 len)
+{
+	struct qed_hwfn *hwfn = QED_LEADING_HWFN(cdev);
+	struct qed_ptt *ptt;
+	int rc = 0;
+
+	if (IS_VF(cdev))
+		return 0;
+
+	ptt = qed_ptt_acquire(hwfn);
+	if (!ptt)
+		return -EAGAIN;
+
+	rc = qed_mcp_phy_sfp_read(hwfn, ptt, MFW_PORT(hwfn), dev_addr,
+				  offset, len, buf);
+
+	qed_ptt_release(hwfn, ptt);
+
+	return rc;
+}
+
 static struct qed_selftest_ops qed_selftest_ops_pass = {
 	.selftest_memory = &qed_selftest_memory,
 	.selftest_interrupt = &qed_selftest_interrupt,
@@ -1676,7 +2138,7 @@ const struct qed_common_ops qed_common_ops_pass = {
 	.probe = &qed_probe,
 	.remove = &qed_remove,
 	.set_power_state = &qed_set_power_state,
-	.set_id = &qed_set_id,
+	.set_name = &qed_set_name,
 	.update_pf_params = &qed_update_pf_params,
 	.slowpath_start = &qed_slowpath_start,
 	.slowpath_stop = &qed_slowpath_stop,
@@ -1697,13 +2159,15 @@ const struct qed_common_ops qed_common_ops_pass = {
 	.dbg_all_data_size = &qed_dbg_all_data_size,
 	.chain_alloc = &qed_chain_alloc,
 	.chain_free = &qed_chain_free,
-	.get_coalesce = &qed_get_coalesce,
+	.nvm_flash = &qed_nvm_flash,
+	.nvm_get_image = &qed_nvm_get_image,
 	.set_coalesce = &qed_set_coalesce,
 	.set_led = &qed_set_led,
 	.update_drv_state = &qed_update_drv_state,
 	.update_mac = &qed_update_mac,
 	.update_mtu = &qed_update_mtu,
 	.update_wol = &qed_update_wol,
+	.read_module_eeprom = &qed_read_module_eeprom,
 };
 
 void qed_get_protocol_stats(struct qed_dev *cdev,
@@ -1734,4 +2198,90 @@ void qed_get_protocol_stats(struct qed_dev *cdev,
 			   "Invalid protocol type = %d\n", type);
 		return;
 	}
+}
+
+int qed_mfw_tlv_req(struct qed_hwfn *hwfn)
+{
+	DP_VERBOSE(hwfn->cdev, NETIF_MSG_DRV,
+		   "Scheduling slowpath task [Flag: %d]\n",
+		   QED_SLOWPATH_MFW_TLV_REQ);
+	smp_mb__before_atomic();
+	set_bit(QED_SLOWPATH_MFW_TLV_REQ, &hwfn->slowpath_task_flags);
+	smp_mb__after_atomic();
+	queue_delayed_work(hwfn->slowpath_wq, &hwfn->slowpath_task, 0);
+
+	return 0;
+}
+
+static void
+qed_fill_generic_tlv_data(struct qed_dev *cdev, struct qed_mfw_tlv_generic *tlv)
+{
+	struct qed_common_cb_ops *op = cdev->protocol_ops.common;
+	struct qed_eth_stats_common *p_common;
+	struct qed_generic_tlvs gen_tlvs;
+	struct qed_eth_stats stats;
+	int i;
+
+	memset(&gen_tlvs, 0, sizeof(gen_tlvs));
+	op->get_generic_tlv_data(cdev->ops_cookie, &gen_tlvs);
+
+	if (gen_tlvs.feat_flags & QED_TLV_IP_CSUM)
+		tlv->flags.ipv4_csum_offload = true;
+	if (gen_tlvs.feat_flags & QED_TLV_LSO)
+		tlv->flags.lso_supported = true;
+	tlv->flags.b_set = true;
+
+	for (i = 0; i < QED_TLV_MAC_COUNT; i++) {
+		if (is_valid_ether_addr(gen_tlvs.mac[i])) {
+			ether_addr_copy(tlv->mac[i], gen_tlvs.mac[i]);
+			tlv->mac_set[i] = true;
+		}
+	}
+
+	qed_get_vport_stats(cdev, &stats);
+	p_common = &stats.common;
+	tlv->rx_frames = p_common->rx_ucast_pkts + p_common->rx_mcast_pkts +
+			 p_common->rx_bcast_pkts;
+	tlv->rx_frames_set = true;
+	tlv->rx_bytes = p_common->rx_ucast_bytes + p_common->rx_mcast_bytes +
+			p_common->rx_bcast_bytes;
+	tlv->rx_bytes_set = true;
+	tlv->tx_frames = p_common->tx_ucast_pkts + p_common->tx_mcast_pkts +
+			 p_common->tx_bcast_pkts;
+	tlv->tx_frames_set = true;
+	tlv->tx_bytes = p_common->tx_ucast_bytes + p_common->tx_mcast_bytes +
+			p_common->tx_bcast_bytes;
+	tlv->rx_bytes_set = true;
+}
+
+int qed_mfw_fill_tlv_data(struct qed_hwfn *hwfn, enum qed_mfw_tlv_type type,
+			  union qed_mfw_tlv_data *tlv_buf)
+{
+	struct qed_dev *cdev = hwfn->cdev;
+	struct qed_common_cb_ops *ops;
+
+	ops = cdev->protocol_ops.common;
+	if (!ops || !ops->get_protocol_tlv_data || !ops->get_generic_tlv_data) {
+		DP_NOTICE(hwfn, "Can't collect TLV management info\n");
+		return -EINVAL;
+	}
+
+	switch (type) {
+	case QED_MFW_TLV_GENERIC:
+		qed_fill_generic_tlv_data(hwfn->cdev, &tlv_buf->generic);
+		break;
+	case QED_MFW_TLV_ETH:
+		ops->get_protocol_tlv_data(cdev->ops_cookie, &tlv_buf->eth);
+		break;
+	case QED_MFW_TLV_FCOE:
+		ops->get_protocol_tlv_data(cdev->ops_cookie, &tlv_buf->fcoe);
+		break;
+	case QED_MFW_TLV_ISCSI:
+		ops->get_protocol_tlv_data(cdev->ops_cookie, &tlv_buf->iscsi);
+		break;
+	default:
+		break;
+	}
+
+	return 0;
 }

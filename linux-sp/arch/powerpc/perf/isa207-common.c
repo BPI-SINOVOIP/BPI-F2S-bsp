@@ -59,7 +59,7 @@ static bool is_event_valid(u64 event)
 {
 	u64 valid_mask = EVENT_VALID_MASK;
 
-	if (cpu_has_feature(CPU_FTR_ARCH_300) && !cpu_has_feature(CPU_FTR_POWER9_DD1))
+	if (cpu_has_feature(CPU_FTR_ARCH_300))
 		valid_mask = p9_EVENT_VALID_MASK;
 
 	return !(event & ~valid_mask);
@@ -86,8 +86,6 @@ static void mmcra_sdar_mode(u64 event, unsigned long *mmcra)
 	 * Incase of Power9:
 	 * Marked event: MMCRA[SDAR_MODE] will be set to 0b00 ('No Updates'),
 	 *               or if group already have any marked events.
-	 * Non-Marked events (for DD1):
-	 *	MMCRA[SDAR_MODE] will be set to 0b01
 	 * For rest
 	 *	MMCRA[SDAR_MODE] will be set from event code.
 	 *      If sdar_mode from event is zero, default to 0b01. Hardware
@@ -96,17 +94,17 @@ static void mmcra_sdar_mode(u64 event, unsigned long *mmcra)
 	if (cpu_has_feature(CPU_FTR_ARCH_300)) {
 		if (is_event_marked(event) || (*mmcra & MMCRA_SAMPLE_ENABLE))
 			*mmcra &= MMCRA_SDAR_MODE_NO_UPDATES;
-		else if (!cpu_has_feature(CPU_FTR_POWER9_DD1) && p9_SDAR_MODE(event))
+		else if (p9_SDAR_MODE(event))
 			*mmcra |=  p9_SDAR_MODE(event) << MMCRA_SDAR_MODE_SHIFT;
 		else
-			*mmcra |= MMCRA_SDAR_MODE_TLB;
+			*mmcra |= MMCRA_SDAR_MODE_DCACHE;
 	} else
 		*mmcra |= MMCRA_SDAR_MODE_TLB;
 }
 
 static u64 thresh_cmp_val(u64 value)
 {
-	if (cpu_has_feature(CPU_FTR_ARCH_300) && !cpu_has_feature(CPU_FTR_POWER9_DD1))
+	if (cpu_has_feature(CPU_FTR_ARCH_300))
 		return value << p9_MMCRA_THR_CMP_SHIFT;
 
 	return value << MMCRA_THR_CMP_SHIFT;
@@ -114,7 +112,7 @@ static u64 thresh_cmp_val(u64 value)
 
 static unsigned long combine_from_event(u64 event)
 {
-	if (cpu_has_feature(CPU_FTR_ARCH_300) && !cpu_has_feature(CPU_FTR_POWER9_DD1))
+	if (cpu_has_feature(CPU_FTR_ARCH_300))
 		return p9_EVENT_COMBINE(event);
 
 	return EVENT_COMBINE(event);
@@ -122,7 +120,7 @@ static unsigned long combine_from_event(u64 event)
 
 static unsigned long combine_shift(unsigned long pmc)
 {
-	if (cpu_has_feature(CPU_FTR_ARCH_300) && !cpu_has_feature(CPU_FTR_POWER9_DD1))
+	if (cpu_has_feature(CPU_FTR_ARCH_300))
 		return p9_MMCR1_COMBINE_SHIFT(pmc);
 
 	return MMCR1_COMBINE_SHIFT(pmc);
@@ -228,8 +226,13 @@ void isa207_get_mem_weight(u64 *weight)
 	u64 mmcra = mfspr(SPRN_MMCRA);
 	u64 exp = MMCRA_THR_CTR_EXP(mmcra);
 	u64 mantissa = MMCRA_THR_CTR_MANT(mmcra);
+	u64 sier = mfspr(SPRN_SIER);
+	u64 val = (sier & ISA207_SIER_TYPE_MASK) >> ISA207_SIER_TYPE_SHIFT;
 
-	*weight = mantissa << (2 * exp);
+	if (val == 0 || val == 7)
+		*weight = 0;
+	else
+		*weight = mantissa << (2 * exp);
 }
 
 int isa207_get_constraint(u64 event, unsigned long *maskp, unsigned long *valp)
@@ -488,8 +491,8 @@ static int find_alternative(u64 event, const unsigned int ev_alt[][MAX_ALT], int
 	return -1;
 }
 
-int isa207_get_alternatives(u64 event, u64 alt[],
-				const unsigned int ev_alt[][MAX_ALT], int size)
+int isa207_get_alternatives(u64 event, u64 alt[], int size, unsigned int flags,
+					const unsigned int ev_alt[][MAX_ALT])
 {
 	int i, j, num_alt = 0;
 	u64 alt_event;
@@ -503,6 +506,31 @@ int isa207_get_alternatives(u64 event, u64 alt[],
 			if (alt_event && alt_event != event)
 				alt[num_alt++] = alt_event;
 		}
+	}
+
+	if (flags & PPMU_ONLY_COUNT_RUN) {
+		/*
+		 * We're only counting in RUN state, so PM_CYC is equivalent to
+		 * PM_RUN_CYC and PM_INST_CMPL === PM_RUN_INST_CMPL.
+		 */
+		j = num_alt;
+		for (i = 0; i < num_alt; ++i) {
+			switch (alt[i]) {
+			case 0x1e:			/* PMC_CYC */
+				alt[j++] = 0x600f4;	/* PM_RUN_CYC */
+				break;
+			case 0x600f4:
+				alt[j++] = 0x1e;
+				break;
+			case 0x2:			/* PM_INST_CMPL */
+				alt[j++] = 0x500fa;	/* PM_RUN_INST_CMPL */
+				break;
+			case 0x500fa:
+				alt[j++] = 0x2;
+				break;
+			}
+		}
+		num_alt = j;
 	}
 
 	return num_alt;

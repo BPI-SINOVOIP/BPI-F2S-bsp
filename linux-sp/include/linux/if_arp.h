@@ -31,7 +31,7 @@ static inline struct arphdr *arp_hdr(const struct sk_buff *skb)
 	return (struct arphdr *)skb_network_header(skb);
 }
 
-static inline int arp_hdr_len(struct net_device *dev)
+static inline unsigned int arp_hdr_len(const struct net_device *dev)
 {
 	switch (dev->type) {
 #if IS_ENABLED(CONFIG_FIREWIRE_NET)
@@ -54,6 +54,7 @@ static inline bool dev_is_mac_header_xmit(const struct net_device *dev)
 	case ARPHRD_IPGRE:
 	case ARPHRD_VOID:
 	case ARPHRD_NONE:
+	case ARPHRD_RAWIP:
 		return false;
 	default:
 		return true;

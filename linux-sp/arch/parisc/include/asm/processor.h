@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * include/asm-parisc/processor.h
  *
@@ -103,6 +104,8 @@ struct cpuinfo_parisc {
 	unsigned long bh_count;     /* number of times bh was invoked */
 	unsigned long fp_rev;
 	unsigned long fp_model;
+	unsigned long cpu_num;      /* CPU number from PAT firmware */
+	unsigned long cpu_loc;      /* CPU location from PAT firmware */
 	unsigned int state;
 	struct parisc_device *dev;
 	unsigned long loops_per_jiffy;
@@ -253,11 +256,7 @@ on downward growing arches, it looks like this:
  * it in here from the current->personality
  */
 
-#ifdef CONFIG_64BIT
-#define USER_WIDE_MODE	(!test_thread_flag(TIF_32BIT))
-#else
-#define USER_WIDE_MODE	0
-#endif
+#define USER_WIDE_MODE	(!is_32bit_task())
 
 #define start_thread(regs, new_pc, new_sp) do {		\
 	elf_addr_t *sp = (elf_addr_t *)new_sp;		\
@@ -312,6 +311,8 @@ extern int _parisc_requires_coherency;
 #else
 #define parisc_requires_coherency()	(0)
 #endif
+
+extern int running_on_qemu;
 
 #endif /* __ASSEMBLY__ */
 

@@ -351,7 +351,7 @@ static int fc0012_get_rf_strength(struct dvb_frontend *fe, u16 *strength)
 	int ret;
 	unsigned char tmp;
 	int int_temp, lna_gain, int_lna, tot_agc_gain, power;
-	const int fc0012_lna_gain_table[] = {
+	static const int fc0012_lna_gain_table[] = {
 		/* low gain */
 		-63, -58, -99, -73,
 		-63, -65, -54, -60,
@@ -415,11 +415,10 @@ exit:
 
 static const struct dvb_tuner_ops fc0012_tuner_ops = {
 	.info = {
-		.name           = "Fitipower FC0012",
+		.name              = "Fitipower FC0012",
 
-		.frequency_min  = 37000000,	/* estimate */
-		.frequency_max  = 862000000,	/* estimate */
-		.frequency_step = 0,
+		.frequency_min_hz  =  37 * MHz,	/* estimate */
+		.frequency_max_hz  = 862 * MHz,	/* estimate */
 	},
 
 	.release	= fc0012_release,

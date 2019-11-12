@@ -95,7 +95,7 @@ static inline void aspeed_sig_desc_print_val(
  *
  * @desc: The signal descriptor of interest
  * @enabled: True to query the enabled state, false to query disabled state
- * @regmap: The IP block's regmap instance
+ * @map: The IP block's regmap instance
  *
  * Return: 1 if the descriptor's bitfield is configured to the state
  * selected by @enabled, 0 if not, and less than zero if an unrecoverable
@@ -212,6 +212,27 @@ static int aspeed_sig_expr_set(const struct aspeed_sig_expr *expr,
 
 		if (desc->ip == ASPEED_IP_SCU && desc->reg == HW_STRAP2)
 			continue;
+
+		/* On AST2500, Set bits in SCU7C are cleared from SCU70 */
+		if (desc->ip == ASPEED_IP_SCU && desc->reg == HW_STRAP1) {
+			unsigned int rev_id;
+
+			ret = regmap_read(maps[ASPEED_IP_SCU],
+				HW_REVISION_ID, &rev_id);
+			if (ret < 0)
+				return ret;
+
+			if (0x04 == (rev_id >> 24)) {
+				u32 value = ~val & desc->mask;
+
+				if (value) {
+					ret = regmap_write(maps[desc->ip],
+						HW_REVISION_ID, value);
+					if (ret < 0)
+						return ret;
+				}
+			}
+		}
 
 		ret = regmap_update_bits(maps[desc->ip], desc->reg,
 					 desc->mask, val);
@@ -573,7 +594,7 @@ static inline const struct aspeed_pin_config *find_pinconf_config(
 /**
  * @param: pinconf configuration parameter
  * @arg: The supported argument for @param, or -1 if any value is supported
- * @value: The register value to write to configure @arg for @param
+ * @val: The register value to write to configure @arg for @param
  *
  * The map is to be used in conjunction with the configuration array supplied
  * by the driver implementation.

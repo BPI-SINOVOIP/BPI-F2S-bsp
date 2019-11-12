@@ -1,15 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0
 /******************************************************************************
  *
  * Copyright(c) 2007 - 2012 Realtek Corporation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of version 2 of the GNU General Public License as
- * published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
- * more details.
  *
  ******************************************************************************/
 
@@ -404,7 +396,7 @@ static void halbtc8723b1ant_MonitorWiFiCtr(PBTC_COEXIST pBtCoexist)
 {
 	s32	wifiRssi = 0;
 	bool bWifiBusy = false, bWifiUnderBMode = false;
-	static u8 nCCKLockCounter = 0;
+	static u8 nCCKLockCounter;
 
 	pBtCoexist->fBtcGet(pBtCoexist, BTC_GET_BL_WIFI_BUSY, &bWifiBusy);
 	pBtCoexist->fBtcGet(pBtCoexist, BTC_GET_S4_WIFI_RSSI, &wifiRssi);
@@ -488,7 +480,7 @@ static void halbtc8723b1ant_MonitorWiFiCtr(PBTC_COEXIST pBtCoexist)
 
 static bool halbtc8723b1ant_IsWifiStatusChanged(PBTC_COEXIST pBtCoexist)
 {
-	static bool	bPreWifiBusy = false, bPreUnder4way = false, bPreBtHsOn = false;
+	static bool	bPreWifiBusy, bPreUnder4way, bPreBtHsOn;
 	bool bWifiBusy = false, bUnder4way = false, bBtHsOn = false;
 	bool bWifiConnected = false;
 
@@ -2754,7 +2746,7 @@ void EXhalbtc8723b1ant_DisplayCoexInfo(PBTC_COEXIST pBtCoexist)
 	u32 wifiBw, wifiTrafficDir, faOfdm, faCck, wifiLinkStatus;
 	u8 wifiDot11Chnl, wifiHsChnl;
 	u32 fwVer = 0, btPatchVer = 0;
-	static u8 PopReportIn10s = 0;
+	static u8 PopReportIn10s;
 
 	CL_SPRINTF(
 		cliBuf,
@@ -3751,7 +3743,7 @@ void EXhalbtc8723b1ant_PnpNotify(PBTC_COEXIST pBtCoexist, u8 pnpState)
 
 void EXhalbtc8723b1ant_Periodical(PBTC_COEXIST pBtCoexist)
 {
-	static u8 disVerInfoCnt = 0;
+	static u8 disVerInfoCnt;
 	u32 fwVer = 0, btPatchVer = 0;
 
 	BTC_PRINT(BTC_MSG_ALGORITHM, ALGO_TRACE, ("[BTCoex], ==========================Periodical ===========================\n"));

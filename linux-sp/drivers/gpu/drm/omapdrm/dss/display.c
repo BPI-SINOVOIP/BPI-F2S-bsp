@@ -1,8 +1,6 @@
 /*
- * linux/drivers/video/omap2/dss/display.c
- *
  * Copyright (C) 2009 Nokia Corporation
- * Author: Tomi Valkeinen <tomi.valkeinen@nokia.com>
+ * Author: Tomi Valkeinen <tomi.valkeinen@ti.com>
  *
  * Some code and ideas taken from drivers/video/omap/ driver
  * by Imre Deak.
@@ -30,51 +28,11 @@
 
 #include "omapdss.h"
 
-void omapdss_default_get_resolution(struct omap_dss_device *dssdev,
-			u16 *xres, u16 *yres)
-{
-	*xres = dssdev->panel.vm.hactive;
-	*yres = dssdev->panel.vm.vactive;
-}
-EXPORT_SYMBOL(omapdss_default_get_resolution);
-
-int omapdss_default_get_recommended_bpp(struct omap_dss_device *dssdev)
-{
-	switch (dssdev->type) {
-	case OMAP_DISPLAY_TYPE_DPI:
-		if (dssdev->phy.dpi.data_lines == 24)
-			return 24;
-		else
-			return 16;
-
-	case OMAP_DISPLAY_TYPE_DBI:
-		if (dssdev->ctrl.pixel_size == 24)
-			return 24;
-		else
-			return 16;
-	case OMAP_DISPLAY_TYPE_DSI:
-		if (dssdev->panel.dsi_pix_fmt == OMAP_DSS_DSI_FMT_RGB565)
-			return 16;
-		else
-			return 24;
-	case OMAP_DISPLAY_TYPE_VENC:
-	case OMAP_DISPLAY_TYPE_SDI:
-	case OMAP_DISPLAY_TYPE_HDMI:
-	case OMAP_DISPLAY_TYPE_DVI:
-		return 24;
-	default:
-		BUG();
-		return 0;
-	}
-}
-EXPORT_SYMBOL(omapdss_default_get_recommended_bpp);
-
-void omapdss_default_get_timings(struct omap_dss_device *dssdev,
-				 struct videomode *vm)
+static void omapdss_default_get_timings(struct omap_dss_device *dssdev,
+					struct videomode *vm)
 {
 	*vm = dssdev->panel.vm;
 }
-EXPORT_SYMBOL(omapdss_default_get_timings);
 
 static LIST_HEAD(panel_list);
 static DEFINE_MUTEX(panel_list_mutex);
@@ -87,34 +45,21 @@ int omapdss_register_display(struct omap_dss_device *dssdev)
 	int id;
 
 	/*
-	 * Note: this presumes all the displays are either using DT or non-DT,
-	 * which normally should be the case. This also presumes that all
-	 * displays either have an DT alias, or none has.
+	 * Note: this presumes that all displays either have an DT alias, or
+	 * none has.
 	 */
-
-	if (dssdev->dev->of_node) {
-		id = of_alias_get_id(dssdev->dev->of_node, "display");
-
-		if (id < 0)
-			id = disp_num_counter++;
-	} else {
+	id = of_alias_get_id(dssdev->dev->of_node, "display");
+	if (id < 0)
 		id = disp_num_counter++;
-	}
 
 	snprintf(dssdev->alias, sizeof(dssdev->alias), "display%d", id);
 
 	/* Use 'label' property for name, if it exists */
-	if (dssdev->dev->of_node)
-		of_property_read_string(dssdev->dev->of_node, "label",
-			&dssdev->name);
+	of_property_read_string(dssdev->dev->of_node, "label", &dssdev->name);
 
 	if (dssdev->name == NULL)
 		dssdev->name = dssdev->alias;
 
-	if (drv && drv->get_resolution == NULL)
-		drv->get_resolution = omapdss_default_get_resolution;
-	if (drv && drv->get_recommended_bpp == NULL)
-		drv->get_recommended_bpp = omapdss_default_get_recommended_bpp;
 	if (drv && drv->get_timings == NULL)
 		drv->get_timings = omapdss_default_get_timings;
 
@@ -227,17 +172,3 @@ out:
 	return dssdev;
 }
 EXPORT_SYMBOL(omap_dss_get_next_device);
-
-struct omap_dss_device *omap_dss_find_device(void *data,
-		int (*match)(struct omap_dss_device *dssdev, void *data))
-{
-	struct omap_dss_device *dssdev = NULL;
-
-	while ((dssdev = omap_dss_get_next_device(dssdev)) != NULL) {
-		if (match(dssdev, data))
-			return dssdev;
-	}
-
-	return NULL;
-}
-EXPORT_SYMBOL(omap_dss_find_device);

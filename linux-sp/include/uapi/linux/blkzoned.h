@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
 /*
  * Zoned block devices handling.
  *
@@ -116,7 +117,7 @@ struct blk_zone_report {
 	__u32		nr_zones;
 	__u8		reserved[4];
 	struct blk_zone zones[0];
-} __packed;
+};
 
 /**
  * struct blk_zone_range - BLKRESETZONE ioctl request

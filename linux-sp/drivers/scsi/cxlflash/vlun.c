@@ -12,8 +12,9 @@
  * 2 of the License, or (at your option) any later version.
  */
 
+#include <linux/interrupt.h>
+#include <linux/pci.h>
 #include <linux/syscalls.h>
-#include <misc/cxl.h>
 #include <asm/unaligned.h>
 #include <asm/bitsperlong.h>
 
@@ -425,20 +426,20 @@ static int write_same16(struct scsi_device *sdev,
 {
 	u8 *cmd_buf = NULL;
 	u8 *scsi_cmd = NULL;
-	u8 *sense_buf = NULL;
 	int rc = 0;
 	int result = 0;
-	int ws_limit = SISLITE_MAX_WS_BLOCKS;
 	u64 offset = lba;
 	int left = nblks;
-	u32 to = sdev->request_queue->rq_timeout;
 	struct cxlflash_cfg *cfg = shost_priv(sdev->host);
 	struct device *dev = &cfg->dev->dev;
+	const u32 s = ilog2(sdev->sector_size) - 9;
+	const u32 to = sdev->request_queue->rq_timeout;
+	const u32 ws_limit = blk_queue_get_max_sectors(sdev->request_queue,
+						       REQ_OP_WRITE_SAME) >> s;
 
 	cmd_buf = kzalloc(CMD_BUFSIZE, GFP_KERNEL);
 	scsi_cmd = kzalloc(MAX_COMMAND_SIZE, GFP_KERNEL);
-	sense_buf = kzalloc(SCSI_SENSE_BUFFERSIZE, GFP_KERNEL);
-	if (unlikely(!cmd_buf || !scsi_cmd || !sense_buf)) {
+	if (unlikely(!cmd_buf || !scsi_cmd)) {
 		rc = -ENOMEM;
 		goto out;
 	}
@@ -446,6 +447,7 @@ static int write_same16(struct scsi_device *sdev,
 	while (left > 0) {
 
 		scsi_cmd[0] = WRITE_SAME_16;
+		scsi_cmd[1] = cfg->ws_unmap ? 0x8 : 0;
 		put_unaligned_be64(offset, &scsi_cmd[2]);
 		put_unaligned_be32(ws_limit < left ? ws_limit : left,
 				   &scsi_cmd[10]);
@@ -453,7 +455,7 @@ static int write_same16(struct scsi_device *sdev,
 		/* Drop the ioctl read semahpore across lengthy call */
 		up_read(&cfg->ioctl_rwsem);
 		result = scsi_execute(sdev, scsi_cmd, DMA_TO_DEVICE, cmd_buf,
-				      CMD_BUFSIZE, sense_buf, NULL, to,
+				      CMD_BUFSIZE, NULL, NULL, to,
 				      CMD_RETRIES, 0, 0, NULL);
 		down_read(&cfg->ioctl_rwsem);
 		rc = check_state(cfg);
@@ -478,7 +480,6 @@ static int write_same16(struct scsi_device *sdev,
 out:
 	kfree(cmd_buf);
 	kfree(scsi_cmd);
-	kfree(sense_buf);
 	dev_dbg(dev, "%s: returning rc=%d\n", __func__, rc);
 	return rc;
 }
@@ -594,7 +595,9 @@ static int grow_lxt(struct afu *afu,
 	rhte->lxt_cnt = my_new_size;
 	dma_wmb(); /* Make RHT entry's LXT table size update visible */
 
-	cxlflash_afu_sync(afu, ctxid, rhndl, AFU_LW_SYNC);
+	rc = cxlflash_afu_sync(afu, ctxid, rhndl, AFU_LW_SYNC);
+	if (unlikely(rc))
+		rc = -EAGAIN;
 
 	/* free old lxt if reallocated */
 	if (lxt != lxt_old)
@@ -673,8 +676,11 @@ static int shrink_lxt(struct afu *afu,
 	rhte->lxt_start = lxt;
 	dma_wmb(); /* Make RHT entry's LXT table update visible */
 
-	if (needs_sync)
-		cxlflash_afu_sync(afu, ctxid, rhndl, AFU_HW_SYNC);
+	if (needs_sync) {
+		rc = cxlflash_afu_sync(afu, ctxid, rhndl, AFU_HW_SYNC);
+		if (unlikely(rc))
+			rc = -EAGAIN;
+	}
 
 	if (needs_ws) {
 		/*
@@ -688,11 +694,7 @@ static int shrink_lxt(struct afu *afu,
 	/* Free LBAs allocated to freed chunks */
 	mutex_lock(&blka->mutex);
 	for (i = delta - 1; i >= 0; i--) {
-		/* Mask the higher 48 bits before shifting, even though
-		 * it is a noop
-		 */
-		aun = (lxt_old[my_new_size + i].rlba_base & SISL_ASTATUS_MASK);
-		aun = (aun >> MC_CHUNK_SHIFT);
+		aun = lxt_old[my_new_size + i].rlba_base >> MC_CHUNK_SHIFT;
 		if (needs_ws)
 			write_same16(sdev, aun, MC_CHUNK_SIZE);
 		ba_free(&blka->ba_lun, aun);
@@ -792,6 +794,21 @@ int _cxlflash_vlun_resize(struct scsi_device *sdev,
 		rc = grow_lxt(afu, sdev, ctxid, rhndl, rhte, &new_size);
 	else if (new_size < rhte->lxt_cnt)
 		rc = shrink_lxt(afu, sdev, rhndl, rhte, ctxi, &new_size);
+	else {
+		/*
+		 * Rare case where there is already sufficient space, just
+		 * need to perform a translation sync with the AFU. This
+		 * scenario likely follows a previous sync failure during
+		 * a resize operation. Accordingly, perform the heavyweight
+		 * form of translation sync as it is unknown which type of
+		 * resize failed previously.
+		 */
+		rc = cxlflash_afu_sync(afu, ctxid, rhndl, AFU_HW_SYNC);
+		if (unlikely(rc)) {
+			rc = -EAGAIN;
+			goto out;
+		}
+	}
 
 	resize->hdr.return_flags = 0;
 	resize->last_lba = (new_size * MC_CHUNK_SIZE * gli->blk_len);
@@ -1084,10 +1101,13 @@ static int clone_lxt(struct afu *afu,
 {
 	struct cxlflash_cfg *cfg = afu->parent;
 	struct device *dev = &cfg->dev->dev;
-	struct sisl_lxt_entry *lxt;
+	struct sisl_lxt_entry *lxt = NULL;
+	bool locked = false;
 	u32 ngrps;
 	u64 aun;		/* chunk# allocated by block allocator */
-	int i, j;
+	int j;
+	int i = 0;
+	int rc = 0;
 
 	ngrps = LXT_NUM_GROUPS(rhte_src->lxt_cnt);
 
@@ -1095,33 +1115,29 @@ static int clone_lxt(struct afu *afu,
 		/* allocate new LXTs for clone */
 		lxt = kzalloc((sizeof(*lxt) * LXT_GROUP_SIZE * ngrps),
 				GFP_KERNEL);
-		if (unlikely(!lxt))
-			return -ENOMEM;
+		if (unlikely(!lxt)) {
+			rc = -ENOMEM;
+			goto out;
+		}
 
 		/* copy over */
 		memcpy(lxt, rhte_src->lxt_start,
 		       (sizeof(*lxt) * rhte_src->lxt_cnt));
 
-		/* clone the LBAs in block allocator via ref_cnt */
+		/* clone the LBAs in block allocator via ref_cnt, note that the
+		 * block allocator mutex must be held until it is established
+		 * that this routine will complete without the need for a
+		 * cleanup.
+		 */
 		mutex_lock(&blka->mutex);
+		locked = true;
 		for (i = 0; i < rhte_src->lxt_cnt; i++) {
 			aun = (lxt[i].rlba_base >> MC_CHUNK_SHIFT);
 			if (ba_clone(&blka->ba_lun, aun) == -1ULL) {
-				/* free the clones already made */
-				for (j = 0; j < i; j++) {
-					aun = (lxt[j].rlba_base >>
-					       MC_CHUNK_SHIFT);
-					ba_free(&blka->ba_lun, aun);
-				}
-
-				mutex_unlock(&blka->mutex);
-				kfree(lxt);
-				return -EIO;
+				rc = -EIO;
+				goto err;
 			}
 		}
-		mutex_unlock(&blka->mutex);
-	} else {
-		lxt = NULL;
 	}
 
 	/*
@@ -1136,10 +1152,31 @@ static int clone_lxt(struct afu *afu,
 	rhte->lxt_cnt = rhte_src->lxt_cnt;
 	dma_wmb(); /* Make RHT entry's LXT table size update visible */
 
-	cxlflash_afu_sync(afu, ctxid, rhndl, AFU_LW_SYNC);
+	rc = cxlflash_afu_sync(afu, ctxid, rhndl, AFU_LW_SYNC);
+	if (unlikely(rc)) {
+		rc = -EAGAIN;
+		goto err2;
+	}
 
-	dev_dbg(dev, "%s: returning\n", __func__);
-	return 0;
+out:
+	if (locked)
+		mutex_unlock(&blka->mutex);
+	dev_dbg(dev, "%s: returning rc=%d\n", __func__, rc);
+	return rc;
+err2:
+	/* Reset the RHTE */
+	rhte->lxt_cnt = 0;
+	dma_wmb();
+	rhte->lxt_start = NULL;
+	dma_wmb();
+err:
+	/* free the clones already made */
+	for (j = 0; j < i; j++) {
+		aun = (lxt[j].rlba_base >> MC_CHUNK_SHIFT);
+		ba_free(&blka->ba_lun, aun);
+	}
+	kfree(lxt);
+	goto out;
 }
 
 /**

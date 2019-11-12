@@ -1,6 +1,8 @@
 /*
  * Pinctrl data for the NVIDIA Tegra114 pinmux
  *
+ * Author: Pritesh Raithatha <praithatha@nvidia.com>
+ *
  * Copyright (c) 2012-2013, NVIDIA CORPORATION.  All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -13,7 +15,7 @@
  * more details.
  */
 
-#include <linux/module.h>
+#include <linux/init.h>
 #include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/pinctrl/pinctrl.h>
@@ -1837,6 +1839,7 @@ static const struct tegra_pingroup tegra114_groups[] = {
 
 static const struct tegra_pinctrl_soc_data tegra114_pinctrl = {
 	.ngpios = NUM_GPIOS,
+	.gpio_compatible = "nvidia,tegra30-gpio",
 	.pins = tegra114_pins,
 	.npins = ARRAY_SIZE(tegra114_pins),
 	.functions = tegra114_functions,
@@ -1857,7 +1860,6 @@ static const struct of_device_id tegra114_pinctrl_of_match[] = {
 	{ .compatible = "nvidia,tegra114-pinmux", },
 	{ },
 };
-MODULE_DEVICE_TABLE(of, tegra114_pinctrl_of_match);
 
 static struct platform_driver tegra114_pinctrl_driver = {
 	.driver = {
@@ -1866,8 +1868,9 @@ static struct platform_driver tegra114_pinctrl_driver = {
 	},
 	.probe = tegra114_pinctrl_probe,
 };
-module_platform_driver(tegra114_pinctrl_driver);
 
-MODULE_AUTHOR("Pritesh Raithatha <praithatha@nvidia.com>");
-MODULE_DESCRIPTION("NVIDIA Tegra114 pinctrl driver");
-MODULE_LICENSE("GPL v2");
+static int __init tegra114_pinctrl_init(void)
+{
+	return platform_driver_register(&tegra114_pinctrl_driver);
+}
+arch_initcall(tegra114_pinctrl_init);

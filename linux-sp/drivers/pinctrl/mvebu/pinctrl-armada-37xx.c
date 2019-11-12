@@ -13,7 +13,9 @@
 #include <linux/gpio/driver.h>
 #include <linux/mfd/syscon.h>
 #include <linux/of.h>
+#include <linux/of_address.h>
 #include <linux/of_device.h>
+#include <linux/of_irq.h>
 #include <linux/pinctrl/pinconf-generic.h>
 #include <linux/pinctrl/pinconf.h>
 #include <linux/pinctrl/pinctrl.h>
@@ -30,7 +32,12 @@
 #define OUTPUT_CTL	0x20
 #define SELECTION	0x30
 
-#define NB_FUNCS 2
+#define IRQ_EN		0x0
+#define IRQ_POL		0x08
+#define IRQ_STATUS	0x10
+#define IRQ_WKUP	0x18
+
+#define NB_FUNCS 3
 #define GPIO_PER_REG	32
 
 /**
@@ -73,17 +80,33 @@ struct armada_37xx_pmx_func {
 	unsigned int		ngroups;
 };
 
+struct armada_37xx_pm_state {
+	u32 out_en_l;
+	u32 out_en_h;
+	u32 out_val_l;
+	u32 out_val_h;
+	u32 irq_en_l;
+	u32 irq_en_h;
+	u32 irq_pol_l;
+	u32 irq_pol_h;
+	u32 selection;
+};
+
 struct armada_37xx_pinctrl {
 	struct regmap			*regmap;
+	void __iomem			*base;
 	const struct armada_37xx_pin_data	*data;
 	struct device			*dev;
 	struct gpio_chip		gpio_chip;
+	struct irq_chip			irq_chip;
+	spinlock_t			irq_lock;
 	struct pinctrl_desc		pctl;
 	struct pinctrl_dev		*pctl_dev;
 	struct armada_37xx_pin_group	*groups;
 	unsigned int			ngroups;
 	struct armada_37xx_pmx_func	*funcs;
 	unsigned int			nfuncs;
+	struct armada_37xx_pm_state	pm;
 };
 
 #define PIN_GRP(_name, _start, _nr, _mask, _func1, _func2)	\
@@ -114,6 +137,16 @@ struct armada_37xx_pinctrl {
 		.reg_mask = _mask,		\
 		.val = {_val1, _val2},		\
 		.funcs = {_func1, "gpio"}	\
+	}
+
+#define PIN_GRP_GPIO_3(_name, _start, _nr, _mask, _v1, _v2, _v3, _f1, _f2) \
+	{					\
+		.name = _name,			\
+		.start_pin = _start,		\
+		.npins = _nr,			\
+		.reg_mask = _mask,		\
+		.val = {_v1, _v2, _v3},	\
+		.funcs = {_f1, _f2, "gpio"}	\
 	}
 
 #define PIN_GRP_EXTRA(_name, _start, _nr, _mask, _v1, _v2, _start2, _nr2, \
@@ -147,8 +180,9 @@ static struct armada_37xx_pin_group armada_37xx_nb_groups[] = {
 	PIN_GRP_GPIO("onewire", 4, 1, BIT(16), "onewire"),
 	PIN_GRP_GPIO("uart1", 25, 2, BIT(17), "uart"),
 	PIN_GRP_GPIO("spi_quad", 15, 2, BIT(18), "spi"),
-	PIN_GRP_EXTRA("uart2", 9, 2, BIT(13) | BIT(14) | BIT(19),
-		      BIT(13) | BIT(14), BIT(19), 18, 2, "gpio", "uart"),
+	PIN_GRP_EXTRA("uart2", 9, 2, BIT(1) | BIT(13) | BIT(14) | BIT(19),
+		      BIT(1) | BIT(13) | BIT(14), BIT(1) | BIT(19),
+		      18, 2, "gpio", "uart"),
 	PIN_GRP_GPIO("led0_od", 11, 1, BIT(20), "led"),
 	PIN_GRP_GPIO("led1_od", 12, 1, BIT(21), "led"),
 	PIN_GRP_GPIO("led2_od", 13, 1, BIT(22), "led"),
@@ -159,23 +193,24 @@ static struct armada_37xx_pin_group armada_37xx_nb_groups[] = {
 static struct armada_37xx_pin_group armada_37xx_sb_groups[] = {
 	PIN_GRP_GPIO("usb32_drvvbus0", 0, 1, BIT(0), "drvbus"),
 	PIN_GRP_GPIO("usb2_drvvbus1", 1, 1, BIT(1), "drvbus"),
-	PIN_GRP_GPIO("sdio_sb", 24, 5, BIT(2), "sdio"),
-	PIN_GRP_EXTRA("rgmii", 6, 14, BIT(3), 0, BIT(3), 23, 1, "mii", "gpio"),
+	PIN_GRP_GPIO("sdio_sb", 24, 6, BIT(2), "sdio"),
+	PIN_GRP_GPIO("rgmii", 6, 12, BIT(3), "mii"),
 	PIN_GRP_GPIO("pcie1", 3, 2, BIT(4), "pcie"),
 	PIN_GRP_GPIO("ptp", 20, 3, BIT(5), "ptp"),
 	PIN_GRP("ptp_clk", 21, 1, BIT(6), "ptp", "mii"),
 	PIN_GRP("ptp_trig", 22, 1, BIT(7), "ptp", "mii"),
-	PIN_GRP("mii_col", 23, 1, BIT(8), "mii", "mii_err"),
+	PIN_GRP_GPIO_3("mii_col", 23, 1, BIT(8) | BIT(14), 0, BIT(8), BIT(14),
+		       "mii", "mii_err"),
 };
 
-const struct armada_37xx_pin_data armada_37xx_pin_nb = {
+static const struct armada_37xx_pin_data armada_37xx_pin_nb = {
 	.nr_pins = 36,
 	.name = "GPIO1",
 	.groups = armada_37xx_nb_groups,
 	.ngroups = ARRAY_SIZE(armada_37xx_nb_groups),
 };
 
-const struct armada_37xx_pin_data armada_37xx_pin_sb = {
+static const struct armada_37xx_pin_data armada_37xx_pin_sb = {
 	.nr_pins = 30,
 	.name = "GPIO2",
 	.groups = armada_37xx_sb_groups,
@@ -190,18 +225,6 @@ static inline void armada_37xx_update_reg(unsigned int *reg,
 		offset -= GPIO_PER_REG;
 		*reg += sizeof(u32);
 	}
-}
-
-static int armada_37xx_get_func_reg(struct armada_37xx_pin_group *grp,
-				    const char *func)
-{
-	int f;
-
-	for (f = 0; f < NB_FUNCS; f++)
-		if (!strcmp(grp->funcs[f], func))
-			return f;
-
-	return -ENOTSUPP;
 }
 
 static struct armada_37xx_pin_group *armada_37xx_find_next_grp_by_pin(
@@ -232,7 +255,7 @@ static int armada_37xx_pin_config_group_set(struct pinctrl_dev *pctldev,
 	return -ENOTSUPP;
 }
 
-static struct pinconf_ops armada_37xx_pinconf_ops = {
+static const struct pinconf_ops armada_37xx_pinconf_ops = {
 	.is_generic = true,
 	.pin_config_group_get = armada_37xx_pin_config_group_get,
 	.pin_config_group_set = armada_37xx_pin_config_group_set,
@@ -322,10 +345,9 @@ static int armada_37xx_pmx_set_by_name(struct pinctrl_dev *pctldev,
 	dev_dbg(info->dev, "enable function %s group %s\n",
 		name, grp->name);
 
-	func = armada_37xx_get_func_reg(grp, name);
-
+	func = match_string(grp->funcs, NB_FUNCS, name);
 	if (func < 0)
-		return func;
+		return -ENOTSUPP;
 
 	val = grp->val[func];
 
@@ -344,6 +366,14 @@ static int armada_37xx_pmx_set(struct pinctrl_dev *pctldev,
 	const char *name = info->funcs[selector].name;
 
 	return armada_37xx_pmx_set_by_name(pctldev, name, grp);
+}
+
+static inline void armada_37xx_irq_update_reg(unsigned int *reg,
+					  struct irq_data *d)
+{
+	int offset = irqd_to_hwirq(d);
+
+	armada_37xx_update_reg(reg, offset);
 }
 
 static int armada_37xx_gpio_direction_input(struct gpio_chip *chip,
@@ -378,12 +408,21 @@ static int armada_37xx_gpio_direction_output(struct gpio_chip *chip,
 {
 	struct armada_37xx_pinctrl *info = gpiochip_get_data(chip);
 	unsigned int reg = OUTPUT_EN;
-	unsigned int mask;
+	unsigned int mask, val, ret;
 
 	armada_37xx_update_reg(&reg, offset);
 	mask = BIT(offset);
 
-	return regmap_update_bits(info->regmap, reg, mask, mask);
+	ret = regmap_update_bits(info->regmap, reg, mask, mask);
+
+	if (ret)
+		return ret;
+
+	reg = OUTPUT_VAL;
+	val = value ? mask : 0;
+	regmap_update_bits(info->regmap, reg, mask, val);
+
+	return 0;
 }
 
 static int armada_37xx_gpio_get(struct gpio_chip *chip, unsigned int offset)
@@ -468,6 +507,280 @@ static const struct gpio_chip armada_37xx_gpiolib_chip = {
 	.owner = THIS_MODULE,
 };
 
+static void armada_37xx_irq_ack(struct irq_data *d)
+{
+	struct gpio_chip *chip = irq_data_get_irq_chip_data(d);
+	struct armada_37xx_pinctrl *info = gpiochip_get_data(chip);
+	u32 reg = IRQ_STATUS;
+	unsigned long flags;
+
+	armada_37xx_irq_update_reg(&reg, d);
+	spin_lock_irqsave(&info->irq_lock, flags);
+	writel(d->mask, info->base + reg);
+	spin_unlock_irqrestore(&info->irq_lock, flags);
+}
+
+static void armada_37xx_irq_mask(struct irq_data *d)
+{
+	struct gpio_chip *chip = irq_data_get_irq_chip_data(d);
+	struct armada_37xx_pinctrl *info = gpiochip_get_data(chip);
+	u32 val, reg = IRQ_EN;
+	unsigned long flags;
+
+	armada_37xx_irq_update_reg(&reg, d);
+	spin_lock_irqsave(&info->irq_lock, flags);
+	val = readl(info->base + reg);
+	writel(val & ~d->mask, info->base + reg);
+	spin_unlock_irqrestore(&info->irq_lock, flags);
+}
+
+static void armada_37xx_irq_unmask(struct irq_data *d)
+{
+	struct gpio_chip *chip = irq_data_get_irq_chip_data(d);
+	struct armada_37xx_pinctrl *info = gpiochip_get_data(chip);
+	u32 val, reg = IRQ_EN;
+	unsigned long flags;
+
+	armada_37xx_irq_update_reg(&reg, d);
+	spin_lock_irqsave(&info->irq_lock, flags);
+	val = readl(info->base + reg);
+	writel(val | d->mask, info->base + reg);
+	spin_unlock_irqrestore(&info->irq_lock, flags);
+}
+
+static int armada_37xx_irq_set_wake(struct irq_data *d, unsigned int on)
+{
+	struct gpio_chip *chip = irq_data_get_irq_chip_data(d);
+	struct armada_37xx_pinctrl *info = gpiochip_get_data(chip);
+	u32 val, reg = IRQ_WKUP;
+	unsigned long flags;
+
+	armada_37xx_irq_update_reg(&reg, d);
+	spin_lock_irqsave(&info->irq_lock, flags);
+	val = readl(info->base + reg);
+	if (on)
+		val |= (BIT(d->hwirq % GPIO_PER_REG));
+	else
+		val &= ~(BIT(d->hwirq % GPIO_PER_REG));
+	writel(val, info->base + reg);
+	spin_unlock_irqrestore(&info->irq_lock, flags);
+
+	return 0;
+}
+
+static int armada_37xx_irq_set_type(struct irq_data *d, unsigned int type)
+{
+	struct gpio_chip *chip = irq_data_get_irq_chip_data(d);
+	struct armada_37xx_pinctrl *info = gpiochip_get_data(chip);
+	u32 val, reg = IRQ_POL;
+	unsigned long flags;
+
+	spin_lock_irqsave(&info->irq_lock, flags);
+	armada_37xx_irq_update_reg(&reg, d);
+	val = readl(info->base + reg);
+	switch (type) {
+	case IRQ_TYPE_EDGE_RISING:
+		val &= ~(BIT(d->hwirq % GPIO_PER_REG));
+		break;
+	case IRQ_TYPE_EDGE_FALLING:
+		val |= (BIT(d->hwirq % GPIO_PER_REG));
+		break;
+	case IRQ_TYPE_EDGE_BOTH: {
+		u32 in_val, in_reg = INPUT_VAL;
+
+		armada_37xx_irq_update_reg(&in_reg, d);
+		regmap_read(info->regmap, in_reg, &in_val);
+
+		/* Set initial polarity based on current input level. */
+		if (in_val & d->mask)
+			val |= d->mask;		/* falling */
+		else
+			val &= ~d->mask;	/* rising */
+		break;
+	}
+	default:
+		spin_unlock_irqrestore(&info->irq_lock, flags);
+		return -EINVAL;
+	}
+	writel(val, info->base + reg);
+	spin_unlock_irqrestore(&info->irq_lock, flags);
+
+	return 0;
+}
+
+static int armada_37xx_edge_both_irq_swap_pol(struct armada_37xx_pinctrl *info,
+					     u32 pin_idx)
+{
+	u32 reg_idx = pin_idx / GPIO_PER_REG;
+	u32 bit_num = pin_idx % GPIO_PER_REG;
+	u32 p, l, ret;
+	unsigned long flags;
+
+	regmap_read(info->regmap, INPUT_VAL + 4*reg_idx, &l);
+
+	spin_lock_irqsave(&info->irq_lock, flags);
+	p = readl(info->base + IRQ_POL + 4 * reg_idx);
+	if ((p ^ l) & (1 << bit_num)) {
+		/*
+		 * For the gpios which are used for both-edge irqs, when their
+		 * interrupts happen, their input levels are changed,
+		 * yet their interrupt polarities are kept in old values, we
+		 * should synchronize their interrupt polarities; for example,
+		 * at first a gpio's input level is low and its interrupt
+		 * polarity control is "Detect rising edge", then the gpio has
+		 * a interrupt , its level turns to high, we should change its
+		 * polarity control to "Detect falling edge" correspondingly.
+		 */
+		p ^= 1 << bit_num;
+		writel(p, info->base + IRQ_POL + 4 * reg_idx);
+		ret = 0;
+	} else {
+		/* Spurious irq */
+		ret = -1;
+	}
+
+	spin_unlock_irqrestore(&info->irq_lock, flags);
+	return ret;
+}
+
+static void armada_37xx_irq_handler(struct irq_desc *desc)
+{
+	struct gpio_chip *gc = irq_desc_get_handler_data(desc);
+	struct irq_chip *chip = irq_desc_get_chip(desc);
+	struct armada_37xx_pinctrl *info = gpiochip_get_data(gc);
+	struct irq_domain *d = gc->irq.domain;
+	int i;
+
+	chained_irq_enter(chip, desc);
+	for (i = 0; i <= d->revmap_size / GPIO_PER_REG; i++) {
+		u32 status;
+		unsigned long flags;
+
+		spin_lock_irqsave(&info->irq_lock, flags);
+		status = readl_relaxed(info->base + IRQ_STATUS + 4 * i);
+		/* Manage only the interrupt that was enabled */
+		status &= readl_relaxed(info->base + IRQ_EN + 4 * i);
+		spin_unlock_irqrestore(&info->irq_lock, flags);
+		while (status) {
+			u32 hwirq = ffs(status) - 1;
+			u32 virq = irq_find_mapping(d, hwirq +
+						     i * GPIO_PER_REG);
+			u32 t = irq_get_trigger_type(virq);
+
+			if ((t & IRQ_TYPE_SENSE_MASK) == IRQ_TYPE_EDGE_BOTH) {
+				/* Swap polarity (race with GPIO line) */
+				if (armada_37xx_edge_both_irq_swap_pol(info,
+					hwirq + i * GPIO_PER_REG)) {
+					/*
+					 * For spurious irq, which gpio level
+					 * is not as expected after incoming
+					 * edge, just ack the gpio irq.
+					 */
+					writel(1 << hwirq,
+					       info->base +
+					       IRQ_STATUS + 4 * i);
+					goto update_status;
+				}
+			}
+
+			generic_handle_irq(virq);
+
+update_status:
+			/* Update status in case a new IRQ appears */
+			spin_lock_irqsave(&info->irq_lock, flags);
+			status = readl_relaxed(info->base +
+					       IRQ_STATUS + 4 * i);
+			/* Manage only the interrupt that was enabled */
+			status &= readl_relaxed(info->base + IRQ_EN + 4 * i);
+			spin_unlock_irqrestore(&info->irq_lock, flags);
+		}
+	}
+	chained_irq_exit(chip, desc);
+}
+
+static unsigned int armada_37xx_irq_startup(struct irq_data *d)
+{
+	/*
+	 * The mask field is a "precomputed bitmask for accessing the
+	 * chip registers" which was introduced for the generic
+	 * irqchip framework. As we don't use this framework, we can
+	 * reuse this field for our own usage.
+	 */
+	d->mask = BIT(d->hwirq % GPIO_PER_REG);
+
+	armada_37xx_irq_unmask(d);
+
+	return 0;
+}
+
+static int armada_37xx_irqchip_register(struct platform_device *pdev,
+					struct armada_37xx_pinctrl *info)
+{
+	struct device_node *np = info->dev->of_node;
+	struct gpio_chip *gc = &info->gpio_chip;
+	struct irq_chip *irqchip = &info->irq_chip;
+	struct resource res;
+	int ret = -ENODEV, i, nr_irq_parent;
+
+	/* Check if we have at least one gpio-controller child node */
+	for_each_child_of_node(info->dev->of_node, np) {
+		if (of_property_read_bool(np, "gpio-controller")) {
+			ret = 0;
+			break;
+		}
+	};
+	if (ret)
+		return ret;
+
+	nr_irq_parent = of_irq_count(np);
+	spin_lock_init(&info->irq_lock);
+
+	if (!nr_irq_parent) {
+		dev_err(&pdev->dev, "Invalid or no IRQ\n");
+		return 0;
+	}
+
+	if (of_address_to_resource(info->dev->of_node, 1, &res)) {
+		dev_err(info->dev, "cannot find IO resource\n");
+		return -ENOENT;
+	}
+
+	info->base = devm_ioremap_resource(info->dev, &res);
+	if (IS_ERR(info->base))
+		return PTR_ERR(info->base);
+
+	irqchip->irq_ack = armada_37xx_irq_ack;
+	irqchip->irq_mask = armada_37xx_irq_mask;
+	irqchip->irq_unmask = armada_37xx_irq_unmask;
+	irqchip->irq_set_wake = armada_37xx_irq_set_wake;
+	irqchip->irq_set_type = armada_37xx_irq_set_type;
+	irqchip->irq_startup = armada_37xx_irq_startup;
+	irqchip->name = info->data->name;
+	ret = gpiochip_irqchip_add(gc, irqchip, 0,
+				   handle_edge_irq, IRQ_TYPE_NONE);
+	if (ret) {
+		dev_info(&pdev->dev, "could not add irqchip\n");
+		return ret;
+	}
+
+	/*
+	 * Many interrupts are connected to the parent interrupt
+	 * controller. But we do not take advantage of this and use
+	 * the chained irq with all of them.
+	 */
+	for (i = 0; i < nr_irq_parent; i++) {
+		int irq = irq_of_parse_and_map(np, i);
+
+		if (irq < 0)
+			continue;
+
+		gpiochip_set_chained_irqchip(gc, irqchip, irq,
+					     armada_37xx_irq_handler);
+	}
+
+	return 0;
+}
+
 static int armada_37xx_gpiochip_register(struct platform_device *pdev,
 					struct armada_37xx_pinctrl *info)
 {
@@ -494,6 +807,9 @@ static int armada_37xx_gpiochip_register(struct platform_device *pdev,
 	gc->label = info->data->name;
 
 	ret = devm_gpiochip_add_data(&pdev->dev, gc, info);
+	if (ret)
+		return ret;
+	ret = armada_37xx_irqchip_register(pdev, info);
 	if (ret)
 		return ret;
 
@@ -553,9 +869,10 @@ static int armada_37xx_fill_group(struct armada_37xx_pinctrl *info)
 		struct armada_37xx_pin_group *grp = &info->groups[n];
 		int i, j, f;
 
-		grp->pins = devm_kzalloc(info->dev,
-					 (grp->npins + grp->extra_npins) *
-					 sizeof(*grp->pins), GFP_KERNEL);
+		grp->pins = devm_kcalloc(info->dev,
+					 grp->npins + grp->extra_npins,
+					 sizeof(*grp->pins),
+					 GFP_KERNEL);
 		if (!grp->pins)
 			return -ENOMEM;
 
@@ -565,7 +882,7 @@ static int armada_37xx_fill_group(struct armada_37xx_pinctrl *info)
 		for (j = 0; j < grp->extra_npins; j++)
 			grp->pins[i+j] = grp->extra_pin + j;
 
-		for (f = 0; f < NB_FUNCS; f++) {
+		for (f = 0; (f < NB_FUNCS) && grp->funcs[f]; f++) {
 			int ret;
 			/* check for unique functions and count groups */
 			ret = armada_37xx_add_function(info->funcs, &funcsize,
@@ -605,7 +922,8 @@ static int armada_37xx_fill_func(struct armada_37xx_pinctrl *info)
 		const char **groups;
 		int g;
 
-		funcs[n].groups = devm_kzalloc(info->dev, funcs[n].ngroups *
+		funcs[n].groups = devm_kcalloc(info->dev,
+					       funcs[n].ngroups,
 					       sizeof(*(funcs[n].groups)),
 					       GFP_KERNEL);
 		if (!funcs[n].groups)
@@ -617,12 +935,12 @@ static int armada_37xx_fill_func(struct armada_37xx_pinctrl *info)
 			struct armada_37xx_pin_group *gp = &info->groups[g];
 			int f;
 
-			for (f = 0; f < NB_FUNCS; f++) {
-				if (strcmp(gp->funcs[f], name) == 0) {
-					*groups = gp->name;
-					groups++;
-				}
-			}
+			f = match_string(gp->funcs, NB_FUNCS, name);
+			if (f < 0)
+				continue;
+
+			*groups = gp->name;
+			groups++;
 		}
 	}
 	return 0;
@@ -645,8 +963,9 @@ static int armada_37xx_pinctrl_register(struct platform_device *pdev,
 	ctrldesc->pmxops = &armada_37xx_pmx_ops;
 	ctrldesc->confops = &armada_37xx_pinconf_ops;
 
-	pindesc = devm_kzalloc(&pdev->dev, sizeof(*pindesc) *
-			       pin_data->nr_pins, GFP_KERNEL);
+	pindesc = devm_kcalloc(&pdev->dev,
+			       pin_data->nr_pins, sizeof(*pindesc),
+			       GFP_KERNEL);
 	if (!pindesc)
 		return -ENOMEM;
 
@@ -665,8 +984,10 @@ static int armada_37xx_pinctrl_register(struct platform_device *pdev,
 	 * we allocate functions for number of pins and hope there are
 	 * fewer unique functions than pins available
 	 */
-	info->funcs = devm_kzalloc(&pdev->dev, pin_data->nr_pins *
-			   sizeof(struct armada_37xx_pmx_func), GFP_KERNEL);
+	info->funcs = devm_kcalloc(&pdev->dev,
+				   pin_data->nr_pins,
+				   sizeof(struct armada_37xx_pmx_func),
+				   GFP_KERNEL);
 	if (!info->funcs)
 		return -ENOMEM;
 
@@ -688,14 +1009,118 @@ static int armada_37xx_pinctrl_register(struct platform_device *pdev,
 	return 0;
 }
 
+#if defined(CONFIG_PM)
+static int armada_3700_pinctrl_suspend(struct device *dev)
+{
+	struct armada_37xx_pinctrl *info = dev_get_drvdata(dev);
+
+	/* Save GPIO state */
+	regmap_read(info->regmap, OUTPUT_EN, &info->pm.out_en_l);
+	regmap_read(info->regmap, OUTPUT_EN + sizeof(u32), &info->pm.out_en_h);
+	regmap_read(info->regmap, OUTPUT_VAL, &info->pm.out_val_l);
+	regmap_read(info->regmap, OUTPUT_VAL + sizeof(u32),
+		    &info->pm.out_val_h);
+
+	info->pm.irq_en_l = readl(info->base + IRQ_EN);
+	info->pm.irq_en_h = readl(info->base + IRQ_EN + sizeof(u32));
+	info->pm.irq_pol_l = readl(info->base + IRQ_POL);
+	info->pm.irq_pol_h = readl(info->base + IRQ_POL + sizeof(u32));
+
+	/* Save pinctrl state */
+	regmap_read(info->regmap, SELECTION, &info->pm.selection);
+
+	return 0;
+}
+
+static int armada_3700_pinctrl_resume(struct device *dev)
+{
+	struct armada_37xx_pinctrl *info = dev_get_drvdata(dev);
+	struct gpio_chip *gc;
+	struct irq_domain *d;
+	int i;
+
+	/* Restore GPIO state */
+	regmap_write(info->regmap, OUTPUT_EN, info->pm.out_en_l);
+	regmap_write(info->regmap, OUTPUT_EN + sizeof(u32),
+		     info->pm.out_en_h);
+	regmap_write(info->regmap, OUTPUT_VAL, info->pm.out_val_l);
+	regmap_write(info->regmap, OUTPUT_VAL + sizeof(u32),
+		     info->pm.out_val_h);
+
+	/*
+	 * Input levels may change during suspend, which is not monitored at
+	 * that time. GPIOs used for both-edge IRQs may not be synchronized
+	 * anymore with their polarities (rising/falling edge) and must be
+	 * re-configured manually.
+	 */
+	gc = &info->gpio_chip;
+	d = gc->irq.domain;
+	for (i = 0; i < gc->ngpio; i++) {
+		u32 irq_bit = BIT(i % GPIO_PER_REG);
+		u32 mask, *irq_pol, input_reg, virq, type, level;
+
+		if (i < GPIO_PER_REG) {
+			mask = info->pm.irq_en_l;
+			irq_pol = &info->pm.irq_pol_l;
+			input_reg = INPUT_VAL;
+		} else {
+			mask = info->pm.irq_en_h;
+			irq_pol = &info->pm.irq_pol_h;
+			input_reg = INPUT_VAL + sizeof(u32);
+		}
+
+		if (!(mask & irq_bit))
+			continue;
+
+		virq = irq_find_mapping(d, i);
+		type = irq_get_trigger_type(virq);
+
+		/*
+		 * Synchronize level and polarity for both-edge irqs:
+		 *     - a high input level expects a falling edge,
+		 *     - a low input level exepects a rising edge.
+		 */
+		if ((type & IRQ_TYPE_SENSE_MASK) ==
+		    IRQ_TYPE_EDGE_BOTH) {
+			regmap_read(info->regmap, input_reg, &level);
+			if ((*irq_pol ^ level) & irq_bit)
+				*irq_pol ^= irq_bit;
+		}
+	}
+
+	writel(info->pm.irq_en_l, info->base + IRQ_EN);
+	writel(info->pm.irq_en_h, info->base + IRQ_EN + sizeof(u32));
+	writel(info->pm.irq_pol_l, info->base + IRQ_POL);
+	writel(info->pm.irq_pol_h, info->base + IRQ_POL + sizeof(u32));
+
+	/* Restore pinctrl state */
+	regmap_write(info->regmap, SELECTION, info->pm.selection);
+
+	return 0;
+}
+
+/*
+ * Since pinctrl is an infrastructure module, its resume should be issued prior
+ * to other IO drivers.
+ */
+static const struct dev_pm_ops armada_3700_pinctrl_pm_ops = {
+	.suspend_late = armada_3700_pinctrl_suspend,
+	.resume_early = armada_3700_pinctrl_resume,
+};
+
+#define PINCTRL_ARMADA_37XX_DEV_PM_OPS (&armada_3700_pinctrl_pm_ops)
+#else
+#define PINCTRL_ARMADA_37XX_DEV_PM_OPS NULL
+#endif /* CONFIG_PM */
+
 static const struct of_device_id armada_37xx_pinctrl_of_match[] = {
 	{
 		.compatible = "marvell,armada3710-sb-pinctrl",
-		.data = (void *)&armada_37xx_pin_sb,
+		.data = &armada_37xx_pin_sb,
 	},
 	{
 		.compatible = "marvell,armada3710-nb-pinctrl",
-		.data = (void *)&armada_37xx_pin_nb,
+		.data = &armada_37xx_pin_nb,
 	},
 	{ },
 };
@@ -741,6 +1166,7 @@ static struct platform_driver armada_37xx_pinctrl_driver = {
 	.driver = {
 		.name = "armada-37xx-pinctrl",
 		.of_match_table = armada_37xx_pinctrl_of_match,
+		.pm = PINCTRL_ARMADA_37XX_DEV_PM_OPS,
 	},
 };
 

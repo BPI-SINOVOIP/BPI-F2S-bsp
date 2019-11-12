@@ -18,6 +18,7 @@
 #include <linux/spi/spi.h>
 #include <linux/platform_data/davinci_asp.h>
 #include <linux/reboot.h>
+#include <linux/regmap.h>
 #include <linux/videodev2.h>
 
 #include <mach/serial.h>
@@ -75,6 +76,11 @@ extern unsigned int da850_max_speed;
 #define DA8XX_VPIF_BASE		0x01e17000
 #define DA8XX_GPIO_BASE		0x01e26000
 #define DA8XX_PSC1_BASE		0x01e27000
+
+#define DA8XX_DSP_L2_RAM_BASE	0x11800000
+#define DA8XX_DSP_L1P_RAM_BASE	(DA8XX_DSP_L2_RAM_BASE + 0x600000)
+#define DA8XX_DSP_L1D_RAM_BASE	(DA8XX_DSP_L2_RAM_BASE + 0x700000)
+
 #define DA8XX_AEMIF_CS2_BASE	0x60000000
 #define DA8XX_AEMIF_CS3_BASE	0x62000000
 #define DA8XX_AEMIF_CTL_BASE	0x68000000
@@ -82,7 +88,12 @@ extern unsigned int da850_max_speed;
 #define DA8XX_ARM_RAM_BASE	0xffff0000
 
 void da830_init(void);
+void da830_init_time(void);
+void da830_register_clocks(void);
+
 void da850_init(void);
+void da850_init_time(void);
+void da850_register_clocks(void);
 
 int da830_register_edma(struct edma_rsv_info *rsv);
 int da850_register_edma(struct edma_rsv_info *rsv[2]);
@@ -92,9 +103,7 @@ int da8xx_register_watchdog(void);
 int da8xx_register_usb_phy(void);
 int da8xx_register_usb20(unsigned mA, unsigned potpgt);
 int da8xx_register_usb11(struct da8xx_ohci_root_hub *pdata);
-int da8xx_register_usb_refclkin(int rate);
-int da8xx_register_usb20_phy_clk(bool use_usb_refclkin);
-int da8xx_register_usb11_phy_clk(bool use_usb_refclkin);
+int da8xx_register_usb_phy_clocks(void);
 int da850_register_sata_refclk(int rate);
 int da8xx_register_emac(void);
 int da8xx_register_uio_pruss(void);
@@ -113,12 +122,11 @@ int da850_register_vpif_display
 			(struct vpif_display_config *display_config);
 int da850_register_vpif_capture
 			(struct vpif_capture_config *capture_config);
-void da8xx_restart(enum reboot_mode mode, const char *cmd);
 void da8xx_rproc_reserve_cma(void);
 int da8xx_register_rproc(void);
 int da850_register_gpio(void);
 int da830_register_gpio(void);
-int da8xx_register_cfgchip(void);
+struct regmap *da8xx_get_cfgchip(void);
 
 extern struct platform_device da8xx_serial_device[];
 extern struct emac_platform_data da8xx_emac_pdata;

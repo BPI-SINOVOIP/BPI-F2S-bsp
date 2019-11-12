@@ -122,6 +122,7 @@ static int hibmc_drm_fb_create(struct drm_fb_helper *helper,
 	hi_fbdev->fb = hibmc_framebuffer_init(priv->dev, &mode_cmd, gobj);
 	if (IS_ERR(hi_fbdev->fb)) {
 		ret = PTR_ERR(hi_fbdev->fb);
+		hi_fbdev->fb = NULL;
 		DRM_ERROR("failed to initialize framebuffer: %d\n", ret);
 		goto out_release_fbi;
 	}
@@ -131,7 +132,6 @@ static int hibmc_drm_fb_create(struct drm_fb_helper *helper,
 
 	strcpy(info->fix.id, "hibmcdrmfb");
 
-	info->flags = FBINFO_DEFAULT;
 	info->fbops = &hibmc_drm_fb_ops;
 
 	drm_fb_helper_fill_fix(info, hi_fbdev->fb->fb.pitches[0],
@@ -158,7 +158,7 @@ out_unpin_bo:
 out_unreserve_ttm_bo:
 	ttm_bo_unreserve(&bo->bo);
 out_unref_gem:
-	drm_gem_object_unreference_unlocked(gobj);
+	drm_gem_object_put_unlocked(gobj);
 
 	return ret;
 }
@@ -173,7 +173,7 @@ static void hibmc_fbdev_destroy(struct hibmc_fbdev *fbdev)
 	drm_fb_helper_fini(fbh);
 
 	if (gfb)
-		drm_framebuffer_unreference(&gfb->fb);
+		drm_framebuffer_put(&gfb->fb);
 }
 
 static const struct drm_fb_helper_funcs hibmc_fbdev_helper_funcs = {

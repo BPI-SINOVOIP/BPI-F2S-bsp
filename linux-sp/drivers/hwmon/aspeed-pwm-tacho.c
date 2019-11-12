@@ -7,19 +7,21 @@
  */
 
 #include <linux/clk.h>
+#include <linux/delay.h>
 #include <linux/errno.h>
 #include <linux/gpio/consumer.h>
-#include <linux/delay.h>
 #include <linux/hwmon.h>
 #include <linux/hwmon-sysfs.h>
 #include <linux/io.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
-#include <linux/of_platform.h>
 #include <linux/of_device.h>
+#include <linux/of_platform.h>
 #include <linux/platform_device.h>
-#include <linux/sysfs.h>
 #include <linux/regmap.h>
+#include <linux/reset.h>
+#include <linux/sysfs.h>
+#include <linux/thermal.h>
 
 /* ASPEED PWM & FAN Tach Register Definition */
 #define ASPEED_PTCR_CTRL		0x00
@@ -146,16 +148,41 @@
 
 #define PWM_MAX 255
 
+#define BOTH_EDGES 0x02 /* 10b */
+
 #define M_PWM_DIV_H 0x00
 #define M_PWM_DIV_L 0x05
 #define M_PWM_PERIOD 0x5F
 #define M_TACH_CLK_DIV 0x00
-#define M_TACH_MODE 0x00
-#define M_TACH_UNIT 0x1000
+/*
+ * 5:4 Type N fan tach mode selection bit:
+ * 00: falling
+ * 01: rising
+ * 10: both
+ * 11: reserved.
+ */
+#define M_TACH_MODE 0x02 /* 10b */
+#define M_TACH_UNIT 0x0210
 #define INIT_FAN_CTRL 0xFF
+
+/* How long we sleep in us while waiting for an RPM result. */
+#define ASPEED_RPM_STATUS_SLEEP_USEC	500
+
+#define MAX_CDEV_NAME_LEN 16
+
+struct aspeed_cooling_device {
+	char name[16];
+	struct aspeed_pwm_tacho_data *priv;
+	struct thermal_cooling_device *tcdev;
+	int pwm_port;
+	u8 *cooling_levels;
+	u8 max_state;
+	u8 cur_state;
+};
 
 struct aspeed_pwm_tacho_data {
 	struct regmap *regmap;
+	struct reset_control *rst;
 	unsigned long clk_freq;
 	bool pwm_present[8];
 	bool fan_tach_present[16];
@@ -163,10 +190,12 @@ struct aspeed_pwm_tacho_data {
 	u8 type_pwm_clock_division_h[3];
 	u8 type_pwm_clock_division_l[3];
 	u8 type_fan_tach_clock_division[3];
+	u8 type_fan_tach_mode[3];
 	u16 type_fan_tach_unit[3];
 	u8 pwm_port_type[8];
 	u8 pwm_port_fan_ctrl[8];
 	u8 fan_tach_ch_source[16];
+	struct aspeed_cooling_device *cdev[8];
 	const struct attribute_group *groups[3];
 };
 
@@ -498,8 +527,9 @@ static u32 aspeed_get_fan_tach_ch_measure_period(struct aspeed_pwm_tacho_data
 static int aspeed_get_fan_tach_ch_rpm(struct aspeed_pwm_tacho_data *priv,
 				      u8 fan_tach_ch)
 {
-	u32 raw_data, tach_div, clk_source, sec, val;
-	u8 fan_tach_ch_source, type;
+	u32 raw_data, tach_div, clk_source, msec, usec, val;
+	u8 fan_tach_ch_source, type, mode, both;
+	int ret;
 
 	regmap_write(priv->regmap, ASPEED_PTCR_TRIGGER, 0);
 	regmap_write(priv->regmap, ASPEED_PTCR_TRIGGER, 0x1 << fan_tach_ch);
@@ -507,16 +537,31 @@ static int aspeed_get_fan_tach_ch_rpm(struct aspeed_pwm_tacho_data *priv,
 	fan_tach_ch_source = priv->fan_tach_ch_source[fan_tach_ch];
 	type = priv->pwm_port_type[fan_tach_ch_source];
 
-	sec = (1000 / aspeed_get_fan_tach_ch_measure_period(priv, type));
-	msleep(sec);
+	msec = (1000 / aspeed_get_fan_tach_ch_measure_period(priv, type));
+	usec = msec * 1000;
 
-	regmap_read(priv->regmap, ASPEED_PTCR_RESULT, &val);
-	if (!(val & RESULT_STATUS_MASK))
-		return -ETIMEDOUT;
+	ret = regmap_read_poll_timeout(
+		priv->regmap,
+		ASPEED_PTCR_RESULT,
+		val,
+		(val & RESULT_STATUS_MASK),
+		ASPEED_RPM_STATUS_SLEEP_USEC,
+		usec);
+
+	/* return -ETIMEDOUT if we didn't get an answer. */
+	if (ret)
+		return ret;
 
 	raw_data = val & RESULT_VALUE_MASK;
 	tach_div = priv->type_fan_tach_clock_division[type];
-	tach_div = 0x4 << (tach_div * 2);
+	/*
+	 * We need the mode to determine if the raw_data is double (from
+	 * counting both edges).
+	 */
+	mode = priv->type_fan_tach_mode[type];
+	both = (mode & BOTH_EDGES) ? 1 : 0;
+
+	tach_div = (0x4 << both) << (tach_div * 2);
 	clk_source = priv->clk_freq;
 
 	if (raw_data == 0)
@@ -702,6 +747,7 @@ static void aspeed_create_type(struct aspeed_pwm_tacho_data *priv)
 	aspeed_set_tacho_type_enable(priv->regmap, TYPEM, true);
 	priv->type_fan_tach_clock_division[TYPEM] = M_TACH_CLK_DIV;
 	priv->type_fan_tach_unit[TYPEM] = M_TACH_UNIT;
+	priv->type_fan_tach_mode[TYPEM] = M_TACH_MODE;
 	aspeed_set_tacho_type_values(priv->regmap, TYPEM, M_TACH_MODE,
 				     M_TACH_UNIT, M_TACH_CLK_DIV);
 }
@@ -735,6 +781,94 @@ static void aspeed_create_fan_tach_channel(struct aspeed_pwm_tacho_data *priv,
 	}
 }
 
+static int
+aspeed_pwm_cz_get_max_state(struct thermal_cooling_device *tcdev,
+			    unsigned long *state)
+{
+	struct aspeed_cooling_device *cdev = tcdev->devdata;
+
+	*state = cdev->max_state;
+
+	return 0;
+}
+
+static int
+aspeed_pwm_cz_get_cur_state(struct thermal_cooling_device *tcdev,
+			    unsigned long *state)
+{
+	struct aspeed_cooling_device *cdev = tcdev->devdata;
+
+	*state = cdev->cur_state;
+
+	return 0;
+}
+
+static int
+aspeed_pwm_cz_set_cur_state(struct thermal_cooling_device *tcdev,
+			    unsigned long state)
+{
+	struct aspeed_cooling_device *cdev = tcdev->devdata;
+
+	if (state > cdev->max_state)
+		return -EINVAL;
+
+	cdev->cur_state = state;
+	cdev->priv->pwm_port_fan_ctrl[cdev->pwm_port] =
+					cdev->cooling_levels[cdev->cur_state];
+	aspeed_set_pwm_port_fan_ctrl(cdev->priv, cdev->pwm_port,
+				     cdev->cooling_levels[cdev->cur_state]);
+
+	return 0;
+}
+
+static const struct thermal_cooling_device_ops aspeed_pwm_cool_ops = {
+	.get_max_state = aspeed_pwm_cz_get_max_state,
+	.get_cur_state = aspeed_pwm_cz_get_cur_state,
+	.set_cur_state = aspeed_pwm_cz_set_cur_state,
+};
+
+static int aspeed_create_pwm_cooling(struct device *dev,
+				     struct device_node *child,
+				     struct aspeed_pwm_tacho_data *priv,
+				     u32 pwm_port, u8 num_levels)
+{
+	int ret;
+	struct aspeed_cooling_device *cdev;
+
+	cdev = devm_kzalloc(dev, sizeof(*cdev), GFP_KERNEL);
+
+	if (!cdev)
+		return -ENOMEM;
+
+	cdev->cooling_levels = devm_kzalloc(dev, num_levels, GFP_KERNEL);
+	if (!cdev->cooling_levels)
+		return -ENOMEM;
+
+	cdev->max_state = num_levels - 1;
+	ret = of_property_read_u8_array(child, "cooling-levels",
+					cdev->cooling_levels,
+					num_levels);
+	if (ret) {
+		dev_err(dev, "Property 'cooling-levels' cannot be read.\n");
+		return ret;
+	}
+	snprintf(cdev->name, MAX_CDEV_NAME_LEN, "%s%d", child->name, pwm_port);
+
+	cdev->tcdev = thermal_of_cooling_device_register(child,
+							 cdev->name,
+							 cdev,
+							 &aspeed_pwm_cool_ops);
+	if (IS_ERR(cdev->tcdev))
+		return PTR_ERR(cdev->tcdev);
+
+	cdev->priv = priv;
+	cdev->pwm_port = pwm_port;
+
+	priv->cdev[pwm_port] = cdev;
+
+	return 0;
+}
+
 static int aspeed_create_fan(struct device *dev,
 			     struct device_node *child,
 			     struct aspeed_pwm_tacho_data *priv)
@@ -748,10 +882,19 @@ static int aspeed_create_fan(struct device *dev,
 		return ret;
 	aspeed_create_pwm_port(priv, (u8)pwm_port);
 
+	ret = of_property_count_u8_elems(child, "cooling-levels");
+
+	if (ret > 0) {
+		ret = aspeed_create_pwm_cooling(dev, child, priv, pwm_port,
+						ret);
+		if (ret)
+			return ret;
+	}
+
 	count = of_property_count_u8_elems(child, "aspeed,fan-tach-ch");
 	if (count < 1)
 		return -EINVAL;
-	fan_tach_ch = devm_kzalloc(dev, sizeof(*fan_tach_ch) * count,
+	fan_tach_ch = devm_kcalloc(dev, count, sizeof(*fan_tach_ch),
 				   GFP_KERNEL);
 	if (!fan_tach_ch)
 		return -ENOMEM;
@@ -762,6 +905,13 @@ static int aspeed_create_fan(struct device *dev,
 	aspeed_create_fan_tach_channel(priv, fan_tach_ch, count, pwm_port);
 
 	return 0;
+}
+
+static void aspeed_pwm_tacho_remove(void *data)
+{
+	struct aspeed_pwm_tacho_data *priv = data;
+
+	reset_control_assert(priv->rst);
 }
 
 static int aspeed_pwm_tacho_probe(struct platform_device *pdev)
@@ -790,6 +940,19 @@ static int aspeed_pwm_tacho_probe(struct platform_device *pdev)
 			&aspeed_pwm_tacho_regmap_config);
 	if (IS_ERR(priv->regmap))
 		return PTR_ERR(priv->regmap);
+
+	priv->rst = devm_reset_control_get_exclusive(dev, NULL);
+	if (IS_ERR(priv->rst)) {
+		dev_err(dev,
+			"missing or invalid reset controller device tree entry");
+		return PTR_ERR(priv->rst);
+	}
+	reset_control_deassert(priv->rst);
+
+	ret = devm_add_action_or_reset(dev, aspeed_pwm_tacho_remove, priv);
+	if (ret)
+		return ret;
+
 	regmap_write(priv->regmap, ASPEED_PTCR_TACH_SOURCE, 0);
 	regmap_write(priv->regmap, ASPEED_PTCR_TACH_SOURCE_EXT, 0);
 
@@ -804,9 +967,10 @@ static int aspeed_pwm_tacho_probe(struct platform_device *pdev)
 
 	for_each_child_of_node(np, child) {
 		ret = aspeed_create_fan(dev, child, priv);
-		of_node_put(child);
-		if (ret)
+		if (ret) {
+			of_node_put(child);
 			return ret;
+		}
 	}
 
 	priv->groups[0] = &pwm_dev_group;

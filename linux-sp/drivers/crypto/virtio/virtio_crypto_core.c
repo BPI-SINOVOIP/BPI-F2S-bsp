@@ -29,7 +29,6 @@ void
 virtcrypto_clear_request(struct virtio_crypto_request *vc_req)
 {
 	if (vc_req) {
-		kzfree(vc_req->iv);
 		kzfree(vc_req->req_data);
 		kfree(vc_req->sgs);
 	}
@@ -41,40 +40,18 @@ static void virtcrypto_dataq_callback(struct virtqueue *vq)
 	struct virtio_crypto_request *vc_req;
 	unsigned long flags;
 	unsigned int len;
-	struct ablkcipher_request *ablk_req;
-	int error;
 	unsigned int qid = vq->index;
 
 	spin_lock_irqsave(&vcrypto->data_vq[qid].lock, flags);
 	do {
 		virtqueue_disable_cb(vq);
 		while ((vc_req = virtqueue_get_buf(vq, &len)) != NULL) {
-			if (vc_req->type == VIRTIO_CRYPTO_SYM_OP_CIPHER) {
-				switch (vc_req->status) {
-				case VIRTIO_CRYPTO_OK:
-					error = 0;
-					break;
-				case VIRTIO_CRYPTO_INVSESS:
-				case VIRTIO_CRYPTO_ERR:
-					error = -EINVAL;
-					break;
-				case VIRTIO_CRYPTO_BADMSG:
-					error = -EBADMSG;
-					break;
-				default:
-					error = -EIO;
-					break;
-				}
-				ablk_req = vc_req->ablkcipher_req;
-
-				spin_unlock_irqrestore(
-					&vcrypto->data_vq[qid].lock, flags);
-				/* Finish the encrypt or decrypt process */
-				virtio_crypto_ablkcipher_finalize_req(vc_req,
-				    ablk_req, error);
-				spin_lock_irqsave(
-					&vcrypto->data_vq[qid].lock, flags);
-			}
+			spin_unlock_irqrestore(
+				&vcrypto->data_vq[qid].lock, flags);
+			if (vc_req->alg_cb)
+				vc_req->alg_cb(vc_req, len);
+			spin_lock_irqsave(
+				&vcrypto->data_vq[qid].lock, flags);
 		}
 	} while (!virtqueue_enable_cb(vq));
 	spin_unlock_irqrestore(&vcrypto->data_vq[qid].lock, flags);
@@ -134,9 +111,6 @@ static int virtcrypto_find_vqs(struct virtio_crypto *vi)
 			ret = -ENOMEM;
 			goto err_engine;
 		}
-
-		vi->data_vq[i].engine->cipher_one_request =
-			virtio_crypto_ablkcipher_crypt_req;
 	}
 
 	kfree(names);
@@ -172,7 +146,7 @@ static void virtcrypto_clean_affinity(struct virtio_crypto *vi, long hcpu)
 
 	if (vi->affinity_hint_set) {
 		for (i = 0; i < vi->max_data_queues; i++)
-			virtqueue_set_affinity(vi->data_vq[i].vq, -1);
+			virtqueue_set_affinity(vi->data_vq[i].vq, NULL);
 
 		vi->affinity_hint_set = false;
 	}
@@ -199,7 +173,7 @@ static void virtcrypto_set_affinity(struct virtio_crypto *vcrypto)
 	 *
 	 */
 	for_each_online_cpu(cpu) {
-		virtqueue_set_affinity(vcrypto->data_vq[i].vq, cpu);
+		virtqueue_set_affinity(vcrypto->data_vq[i].vq, cpumask_of(cpu));
 		if (++i >= vcrypto->max_data_queues)
 			break;
 	}
@@ -270,7 +244,7 @@ static int virtcrypto_update_status(struct virtio_crypto *vcrypto)
 
 			return -EPERM;
 		}
-		dev_info(&vcrypto->vdev->dev, "Accelerator is ready\n");
+		dev_info(&vcrypto->vdev->dev, "Accelerator device is ready\n");
 	} else {
 		virtcrypto_dev_stop(vcrypto);
 		dev_info(&vcrypto->vdev->dev, "Accelerator is not ready\n");
@@ -329,6 +303,13 @@ static int virtcrypto_probe(struct virtio_device *vdev)
 	u32 max_data_queues = 0, max_cipher_key_len = 0;
 	u32 max_auth_key_len = 0;
 	u64 max_size = 0;
+	u32 cipher_algo_l = 0;
+	u32 cipher_algo_h = 0;
+	u32 hash_algo = 0;
+	u32 mac_algo_l = 0;
+	u32 mac_algo_h = 0;
+	u32 aead_algo = 0;
+	u32 crypto_services = 0;
 
 	if (!virtio_has_feature(vdev, VIRTIO_F_VERSION_1))
 		return -ENODEV;
@@ -365,6 +346,20 @@ static int virtcrypto_probe(struct virtio_device *vdev)
 		max_auth_key_len, &max_auth_key_len);
 	virtio_cread(vdev, struct virtio_crypto_config,
 		max_size, &max_size);
+	virtio_cread(vdev, struct virtio_crypto_config,
+		crypto_services, &crypto_services);
+	virtio_cread(vdev, struct virtio_crypto_config,
+		cipher_algo_l, &cipher_algo_l);
+	virtio_cread(vdev, struct virtio_crypto_config,
+		cipher_algo_h, &cipher_algo_h);
+	virtio_cread(vdev, struct virtio_crypto_config,
+		hash_algo, &hash_algo);
+	virtio_cread(vdev, struct virtio_crypto_config,
+		mac_algo_l, &mac_algo_l);
+	virtio_cread(vdev, struct virtio_crypto_config,
+		mac_algo_h, &mac_algo_h);
+	virtio_cread(vdev, struct virtio_crypto_config,
+		aead_algo, &aead_algo);
 
 	/* Add virtio crypto device to global table */
 	err = virtcrypto_devmgr_add_dev(vcrypto);
@@ -384,6 +379,14 @@ static int virtcrypto_probe(struct virtio_device *vdev)
 	vcrypto->max_cipher_key_len = max_cipher_key_len;
 	vcrypto->max_auth_key_len = max_auth_key_len;
 	vcrypto->max_size = max_size;
+	vcrypto->crypto_services = crypto_services;
+	vcrypto->cipher_algo_l = cipher_algo_l;
+	vcrypto->cipher_algo_h = cipher_algo_h;
+	vcrypto->mac_algo_l = mac_algo_l;
+	vcrypto->mac_algo_h = mac_algo_h;
+	vcrypto->hash_algo = hash_algo;
+	vcrypto->aead_algo = aead_algo;
+
 
 	dev_info(&vdev->dev,
 		"max_queues: %u, max_cipher_key_len: %u, max_auth_key_len: %u, max_size 0x%llx\n",

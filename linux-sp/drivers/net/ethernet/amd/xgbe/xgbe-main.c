@@ -120,6 +120,7 @@
 #include <linux/netdevice.h>
 #include <linux/etherdevice.h>
 #include <linux/io.h>
+#include <linux/notifier.h>
 
 #include "xgbe.h"
 #include "xgbe-common.h"
@@ -130,7 +131,7 @@ MODULE_VERSION(XGBE_DRV_VERSION);
 MODULE_DESCRIPTION(XGBE_DRV_DESC);
 
 static int debug = -1;
-module_param(debug, int, S_IWUSR | S_IRUGO);
+module_param(debug, int, 0644);
 MODULE_PARM_DESC(debug, " Network interface message level setting");
 
 static const u32 default_msg_level = (NETIF_MSG_LINK | NETIF_MSG_IFDOWN |
@@ -140,14 +141,16 @@ static void xgbe_default_config(struct xgbe_prv_data *pdata)
 {
 	DBGPR("-->xgbe_default_config\n");
 
-	pdata->pblx8 = DMA_PBL_X8_ENABLE;
+	pdata->blen = DMA_SBMR_BLEN_64;
+	pdata->pbl = DMA_PBL_128;
+	pdata->aal = 1;
+	pdata->rd_osr_limit = 8;
+	pdata->wr_osr_limit = 8;
 	pdata->tx_sf_mode = MTL_TSF_ENABLE;
 	pdata->tx_threshold = MTL_TX_THRESHOLD_64;
-	pdata->tx_pbl = DMA_PBL_16;
 	pdata->tx_osp_mode = DMA_OSP_ENABLE;
 	pdata->rx_sf_mode = MTL_RSF_DISABLE;
 	pdata->rx_threshold = MTL_RX_THRESHOLD_64;
-	pdata->rx_pbl = DMA_PBL_16;
 	pdata->pause_autoneg = 1;
 	pdata->tx_pause = 1;
 	pdata->rx_pause = 1;
@@ -190,6 +193,7 @@ struct xgbe_prv_data *xgbe_alloc_pdata(struct device *dev)
 	mutex_init(&pdata->i2c_mutex);
 	init_completion(&pdata->i2c_complete);
 	init_completion(&pdata->mdio_complete);
+	INIT_LIST_HEAD(&pdata->vxlan_ports);
 
 	pdata->msg_enable = netif_msg_init(debug, default_msg_level);
 
@@ -261,7 +265,6 @@ int xgbe_config_netdev(struct xgbe_prv_data *pdata)
 {
 	struct net_device *netdev = pdata->netdev;
 	struct device *dev = pdata->dev;
-	unsigned int i;
 	int ret;
 
 	netdev->irq = pdata->dev_irq;
@@ -277,7 +280,11 @@ int xgbe_config_netdev(struct xgbe_prv_data *pdata)
 	pdata->desc_ded_period = jiffies;
 
 	/* Issue software reset to device */
-	pdata->hw_if.exit(pdata);
+	ret = pdata->hw_if.exit(pdata);
+	if (ret) {
+		dev_err(dev, "software reset failed\n");
+		return ret;
+	}
 
 	/* Set default configuration data */
 	xgbe_default_config(pdata);
@@ -316,31 +323,15 @@ int xgbe_config_netdev(struct xgbe_prv_data *pdata)
 				pdata->tx_ring_count, pdata->rx_ring_count);
 	}
 
-	/* Set the number of queues */
-	ret = netif_set_real_num_tx_queues(netdev, pdata->tx_ring_count);
-	if (ret) {
-		dev_err(dev, "error setting real tx queue count\n");
-		return ret;
-	}
-
-	ret = netif_set_real_num_rx_queues(netdev, pdata->rx_ring_count);
-	if (ret) {
-		dev_err(dev, "error setting real rx queue count\n");
-		return ret;
-	}
-
-	/* Initialize RSS hash key and lookup table */
+	/* Initialize RSS hash key */
 	netdev_rss_key_fill(pdata->rss_key, sizeof(pdata->rss_key));
-
-	for (i = 0; i < XGBE_RSS_MAX_TABLE_SIZE; i++)
-		XGMAC_SET_BITS(pdata->rss_table[i], MAC_RSSDR, DMCH,
-			       i % pdata->rx_ring_count);
 
 	XGMAC_SET_BITS(pdata->rss_options, MAC_RSSCR, IP2TE, 1);
 	XGMAC_SET_BITS(pdata->rss_options, MAC_RSSCR, TCP4TE, 1);
 	XGMAC_SET_BITS(pdata->rss_options, MAC_RSSCR, UDP4TE, 1);
 
 	/* Call MDIO/PHY initialization routine */
+	pdata->debugfs_an_cdr_workaround = pdata->vdata->an_cdr_workaround;
 	ret = pdata->phy_if.phy_init(pdata);
 	if (ret)
 		return ret;
@@ -366,6 +357,28 @@ int xgbe_config_netdev(struct xgbe_prv_data *pdata)
 
 	if (pdata->hw_feat.rss)
 		netdev->hw_features |= NETIF_F_RXHASH;
+
+	if (pdata->hw_feat.vxn) {
+		netdev->hw_enc_features = NETIF_F_SG |
+					  NETIF_F_IP_CSUM |
+					  NETIF_F_IPV6_CSUM |
+					  NETIF_F_RXCSUM |
+					  NETIF_F_TSO |
+					  NETIF_F_TSO6 |
+					  NETIF_F_GRO |
+					  NETIF_F_GSO_UDP_TUNNEL |
+					  NETIF_F_GSO_UDP_TUNNEL_CSUM |
+					  NETIF_F_RX_UDP_TUNNEL_PORT;
+
+		netdev->hw_features |= NETIF_F_GSO_UDP_TUNNEL |
+				       NETIF_F_GSO_UDP_TUNNEL_CSUM |
+				       NETIF_F_RX_UDP_TUNNEL_PORT;
+
+		pdata->vxlan_offloads_set = 1;
+		pdata->vxlan_features = NETIF_F_GSO_UDP_TUNNEL |
+					NETIF_F_GSO_UDP_TUNNEL_CSUM |
+					NETIF_F_RX_UDP_TUNNEL_PORT;
+	}
 
 	netdev->vlan_features |= NETIF_F_SG |
 				 NETIF_F_IP_CSUM |
@@ -393,35 +406,6 @@ int xgbe_config_netdev(struct xgbe_prv_data *pdata)
 		return ret;
 	}
 
-	/* Create the PHY/ANEG name based on netdev name */
-	snprintf(pdata->an_name, sizeof(pdata->an_name) - 1, "%s-pcs",
-		 netdev_name(netdev));
-
-	/* Create the ECC name based on netdev name */
-	snprintf(pdata->ecc_name, sizeof(pdata->ecc_name) - 1, "%s-ecc",
-		 netdev_name(netdev));
-
-	/* Create the I2C name based on netdev name */
-	snprintf(pdata->i2c_name, sizeof(pdata->i2c_name) - 1, "%s-i2c",
-		 netdev_name(netdev));
-
-	/* Create workqueues */
-	pdata->dev_workqueue =
-		create_singlethread_workqueue(netdev_name(netdev));
-	if (!pdata->dev_workqueue) {
-		netdev_err(netdev, "device workqueue creation failed\n");
-		ret = -ENOMEM;
-		goto err_netdev;
-	}
-
-	pdata->an_workqueue =
-		create_singlethread_workqueue(pdata->an_name);
-	if (!pdata->an_workqueue) {
-		netdev_err(netdev, "phy workqueue creation failed\n");
-		ret = -ENOMEM;
-		goto err_wq;
-	}
-
 	if (IS_REACHABLE(CONFIG_PTP_1588_CLOCK))
 		xgbe_ptp_register(pdata);
 
@@ -433,14 +417,6 @@ int xgbe_config_netdev(struct xgbe_prv_data *pdata)
 		  pdata->rx_ring_count);
 
 	return 0;
-
-err_wq:
-	destroy_workqueue(pdata->dev_workqueue);
-
-err_netdev:
-	unregister_netdev(netdev);
-
-	return ret;
 }
 
 void xgbe_deconfig_netdev(struct xgbe_prv_data *pdata)
@@ -452,20 +428,44 @@ void xgbe_deconfig_netdev(struct xgbe_prv_data *pdata)
 	if (IS_REACHABLE(CONFIG_PTP_1588_CLOCK))
 		xgbe_ptp_unregister(pdata);
 
-	pdata->phy_if.phy_exit(pdata);
-
-	flush_workqueue(pdata->an_workqueue);
-	destroy_workqueue(pdata->an_workqueue);
-
-	flush_workqueue(pdata->dev_workqueue);
-	destroy_workqueue(pdata->dev_workqueue);
-
 	unregister_netdev(netdev);
+
+	pdata->phy_if.phy_exit(pdata);
 }
+
+static int xgbe_netdev_event(struct notifier_block *nb, unsigned long event,
+			     void *data)
+{
+	struct net_device *netdev = netdev_notifier_info_to_dev(data);
+	struct xgbe_prv_data *pdata = netdev_priv(netdev);
+
+	if (netdev->netdev_ops != xgbe_get_netdev_ops())
+		goto out;
+
+	switch (event) {
+	case NETDEV_CHANGENAME:
+		xgbe_debugfs_rename(pdata);
+		break;
+
+	default:
+		break;
+	}
+
+out:
+	return NOTIFY_DONE;
+}
+
+static struct notifier_block xgbe_netdev_notifier = {
+	.notifier_call = xgbe_netdev_event,
+};
 
 static int __init xgbe_mod_init(void)
 {
 	int ret;
+
+	ret = register_netdevice_notifier(&xgbe_netdev_notifier);
+	if (ret)
+		return ret;
 
 	ret = xgbe_platform_init();
 	if (ret)
@@ -483,6 +483,8 @@ static void __exit xgbe_mod_exit(void)
 	xgbe_pci_exit();
 
 	xgbe_platform_exit();
+
+	unregister_netdevice_notifier(&xgbe_netdev_notifier);
 }
 
 module_init(xgbe_mod_init);

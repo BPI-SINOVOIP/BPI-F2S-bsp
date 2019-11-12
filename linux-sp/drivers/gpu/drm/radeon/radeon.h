@@ -68,11 +68,11 @@
 #include <linux/hashtable.h>
 #include <linux/dma-fence.h>
 
-#include <ttm/ttm_bo_api.h>
-#include <ttm/ttm_bo_driver.h>
-#include <ttm/ttm_placement.h>
-#include <ttm/ttm_module.h>
-#include <ttm/ttm_execbuf_util.h>
+#include <drm/ttm/ttm_bo_api.h>
+#include <drm/ttm/ttm_bo_driver.h>
+#include <drm/ttm/ttm_placement.h>
+#include <drm/ttm/ttm_module.h>
+#include <drm/ttm/ttm_execbuf_util.h>
 
 #include <drm/drm_gem.h>
 
@@ -115,6 +115,8 @@ extern int radeon_auxch;
 extern int radeon_mst;
 extern int radeon_uvd;
 extern int radeon_vce;
+extern int radeon_si_support;
+extern int radeon_cik_support;
 
 /*
  * Copy from radeon_drv.h so we don't have to include both and have conflicting
@@ -375,7 +377,7 @@ struct radeon_fence {
 	unsigned		ring;
 	bool			is_vm_update;
 
-	wait_queue_t		fence_wake;
+	wait_queue_entry_t		fence_wake;
 };
 
 int radeon_fence_driver_start_ring(struct radeon_device *rdev, int ring);
@@ -462,7 +464,7 @@ struct radeon_bo_list {
 	struct radeon_bo		*robj;
 	struct ttm_validate_buffer	tv;
 	uint64_t			gpu_offset;
-	unsigned			prefered_domains;
+	unsigned			preferred_domains;
 	unsigned			allowed_domains;
 	uint32_t			tiling_flags;
 };
@@ -729,10 +731,6 @@ struct radeon_doorbell {
 
 int radeon_doorbell_get(struct radeon_device *rdev, u32 *page);
 void radeon_doorbell_free(struct radeon_device *rdev, u32 doorbell);
-void radeon_doorbell_get_kfd_info(struct radeon_device *rdev,
-				  phys_addr_t *aperture_base,
-				  size_t *aperture_size,
-				  size_t *start_offset);
 
 /*
  * IRQS.
@@ -767,24 +765,9 @@ struct r600_irq_stat_regs {
 };
 
 struct evergreen_irq_stat_regs {
-	u32 disp_int;
-	u32 disp_int_cont;
-	u32 disp_int_cont2;
-	u32 disp_int_cont3;
-	u32 disp_int_cont4;
-	u32 disp_int_cont5;
-	u32 d1grph_int;
-	u32 d2grph_int;
-	u32 d3grph_int;
-	u32 d4grph_int;
-	u32 d5grph_int;
-	u32 d6grph_int;
-	u32 afmt_status1;
-	u32 afmt_status2;
-	u32 afmt_status3;
-	u32 afmt_status4;
-	u32 afmt_status5;
-	u32 afmt_status6;
+	u32 disp_int[6];
+	u32 grph_int[6];
+	u32 afmt_status[6];
 };
 
 struct cik_irq_stat_regs {
@@ -937,7 +920,7 @@ struct radeon_vm_id {
 struct radeon_vm {
 	struct mutex		mutex;
 
-	struct rb_root		va;
+	struct rb_root_cached	va;
 
 	/* protecting invalidated and freed */
 	spinlock_t		status_lock;
@@ -1670,6 +1653,10 @@ struct radeon_pm {
 	struct radeon_dpm       dpm;
 };
 
+#define RADEON_PCIE_SPEED_25 1
+#define RADEON_PCIE_SPEED_50 2
+#define RADEON_PCIE_SPEED_80 4
+
 int radeon_pm_get_type_index(struct radeon_device *rdev,
 			     enum radeon_pm_state_type ps_type,
 			     int instance);
@@ -2340,7 +2327,7 @@ struct radeon_device {
 	uint8_t				*bios;
 	bool				is_atom_bios;
 	uint16_t			bios_header_start;
-	struct radeon_bo		*stollen_vga_memory;
+	struct radeon_bo		*stolen_vga_memory;
 	/* Register mmio */
 	resource_size_t			rmmio_base;
 	resource_size_t			rmmio_size;
@@ -2404,6 +2391,7 @@ struct radeon_device {
 	struct radeon_dummy_page	dummy_page;
 	bool				shutdown;
 	bool				need_dma32;
+	bool				need_swiotlb;
 	bool				accel_working;
 	bool				fastfb_working; /* IGP feature*/
 	bool				needs_reset, in_reset;
@@ -2455,8 +2443,6 @@ struct radeon_device {
 	struct radeon_atcs		atcs;
 	/* srbm instance registers */
 	struct mutex			srbm_mutex;
-	/* GRBM index mutex. Protects concurrents access to GRBM index */
-	struct mutex			grbm_idx_mutex;
 	/* clock, powergating flags */
 	u32 cg_flags;
 	u32 pg_flags;
@@ -2468,9 +2454,6 @@ struct radeon_device {
 	/* tracking pinned memory */
 	u64 vram_pin_size;
 	u64 gart_pin_size;
-
-	/* amdkfd interface */
-	struct kfd_dev		*kfd;
 
 	struct mutex	mn_lock;
 	DECLARE_HASHTABLE(mn_hash, 7);
@@ -2975,6 +2958,12 @@ int radeon_cs_packet_next_reloc(struct radeon_cs_parser *p,
 int r600_cs_common_vline_parse(struct radeon_cs_parser *p,
 			       uint32_t *vline_start_end,
 			       uint32_t *vline_status);
+
+/* interrupt control register helpers */
+void radeon_irq_kms_set_irq_n_enabled(struct radeon_device *rdev,
+				      u32 reg, u32 mask,
+				      bool enable, const char *name,
+				      unsigned n);
 
 #include "radeon_object.h"
 

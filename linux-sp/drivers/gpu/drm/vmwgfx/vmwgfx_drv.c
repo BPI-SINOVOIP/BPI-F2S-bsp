@@ -1,7 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0 OR MIT
 /**************************************************************************
  *
- * Copyright © 2009-2016 VMware, Inc., Palo Alto, CA., USA
- * All Rights Reserved.
+ * Copyright 2009-2016 VMware, Inc., Palo Alto, CA., USA
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the
@@ -36,7 +36,6 @@
 #include <drm/ttm/ttm_module.h>
 #include <linux/dma_remapping.h>
 
-#define VMWGFX_DRIVER_NAME "vmwgfx"
 #define VMWGFX_DRIVER_DESC "Linux drm driver for VMware graphics devices"
 #define VMWGFX_CHIP_SVGAII 0
 #define VMW_FB_RESERVATION 0
@@ -138,6 +137,12 @@
 #define DRM_IOCTL_VMW_CREATE_EXTENDED_CONTEXT			\
 	DRM_IOWR(DRM_COMMAND_BASE + DRM_VMW_CREATE_EXTENDED_CONTEXT,	\
 		struct drm_vmw_context_arg)
+#define DRM_IOCTL_VMW_GB_SURFACE_CREATE_EXT				\
+	DRM_IOWR(DRM_COMMAND_BASE + DRM_VMW_GB_SURFACE_CREATE_EXT,	\
+		union drm_vmw_gb_surface_create_ext_arg)
+#define DRM_IOCTL_VMW_GB_SURFACE_REF_EXT				\
+	DRM_IOWR(DRM_COMMAND_BASE + DRM_VMW_GB_SURFACE_REF_EXT,		\
+		union drm_vmw_gb_surface_reference_ext_arg)
 
 /**
  * The core DRM version of this macro doesn't account for
@@ -154,20 +159,20 @@
 static const struct drm_ioctl_desc vmw_ioctls[] = {
 	VMW_IOCTL_DEF(VMW_GET_PARAM, vmw_getparam_ioctl,
 		      DRM_AUTH | DRM_RENDER_ALLOW),
-	VMW_IOCTL_DEF(VMW_ALLOC_DMABUF, vmw_dmabuf_alloc_ioctl,
+	VMW_IOCTL_DEF(VMW_ALLOC_DMABUF, vmw_bo_alloc_ioctl,
 		      DRM_AUTH | DRM_RENDER_ALLOW),
-	VMW_IOCTL_DEF(VMW_UNREF_DMABUF, vmw_dmabuf_unref_ioctl,
+	VMW_IOCTL_DEF(VMW_UNREF_DMABUF, vmw_bo_unref_ioctl,
 		      DRM_RENDER_ALLOW),
 	VMW_IOCTL_DEF(VMW_CURSOR_BYPASS,
 		      vmw_kms_cursor_bypass_ioctl,
-		      DRM_MASTER | DRM_CONTROL_ALLOW),
+		      DRM_MASTER),
 
 	VMW_IOCTL_DEF(VMW_CONTROL_STREAM, vmw_overlay_ioctl,
-		      DRM_MASTER | DRM_CONTROL_ALLOW),
+		      DRM_MASTER),
 	VMW_IOCTL_DEF(VMW_CLAIM_STREAM, vmw_stream_claim_ioctl,
-		      DRM_MASTER | DRM_CONTROL_ALLOW),
+		      DRM_MASTER),
 	VMW_IOCTL_DEF(VMW_UNREF_STREAM, vmw_stream_unref_ioctl,
-		      DRM_MASTER | DRM_CONTROL_ALLOW),
+		      DRM_MASTER),
 
 	VMW_IOCTL_DEF(VMW_CREATE_CONTEXT, vmw_context_define_ioctl,
 		      DRM_AUTH | DRM_RENDER_ALLOW),
@@ -220,14 +225,20 @@ static const struct drm_ioctl_desc vmw_ioctls[] = {
 		      vmw_gb_surface_reference_ioctl,
 		      DRM_AUTH | DRM_RENDER_ALLOW),
 	VMW_IOCTL_DEF(VMW_SYNCCPU,
-		      vmw_user_dmabuf_synccpu_ioctl,
+		      vmw_user_bo_synccpu_ioctl,
 		      DRM_RENDER_ALLOW),
 	VMW_IOCTL_DEF(VMW_CREATE_EXTENDED_CONTEXT,
 		      vmw_extended_context_define_ioctl,
 		      DRM_AUTH | DRM_RENDER_ALLOW),
+	VMW_IOCTL_DEF(VMW_GB_SURFACE_CREATE_EXT,
+		      vmw_gb_surface_define_ext_ioctl,
+		      DRM_AUTH | DRM_RENDER_ALLOW),
+	VMW_IOCTL_DEF(VMW_GB_SURFACE_REF_EXT,
+		      vmw_gb_surface_reference_ext_ioctl,
+		      DRM_AUTH | DRM_RENDER_ALLOW),
 };
 
-static struct pci_device_id vmw_pci_id_list[] = {
+static const struct pci_device_id vmw_pci_id_list[] = {
 	{0x15ad, 0x0405, PCI_ANY_ID, PCI_ANY_ID, 0, 0, VMWGFX_CHIP_SVGAII},
 	{0, 0, 0}
 };
@@ -258,6 +269,15 @@ module_param_named(restrict_dma_mask, vmw_restrict_dma_mask, int, 0600);
 MODULE_PARM_DESC(assume_16bpp, "Assume 16-bpp when filtering modes");
 module_param_named(assume_16bpp, vmw_assume_16bpp, int, 0600);
 
+
+static void vmw_print_capabilities2(uint32_t capabilities2)
+{
+	DRM_INFO("Capabilities2:\n");
+	if (capabilities2 & SVGA_CAP2_GROW_OTABLE)
+		DRM_INFO("  Grow oTable.\n");
+	if (capabilities2 & SVGA_CAP2_INTRA_SURFACE_COPY)
+		DRM_INFO("  IntraSurface copy.\n");
+}
 
 static void vmw_print_capabilities(uint32_t capabilities)
 {
@@ -302,6 +322,8 @@ static void vmw_print_capabilities(uint32_t capabilities)
 		DRM_INFO("  Guest Backed Resources.\n");
 	if (capabilities & SVGA_CAP_DX)
 		DRM_INFO("  DX Features.\n");
+	if (capabilities & SVGA_CAP_HP_CMD_QUEUE)
+		DRM_INFO("  HP Command Queue.\n");
 }
 
 /**
@@ -320,7 +342,7 @@ static void vmw_print_capabilities(uint32_t capabilities)
 static int vmw_dummy_query_bo_create(struct vmw_private *dev_priv)
 {
 	int ret;
-	struct vmw_dma_buffer *vbo;
+	struct vmw_buffer_object *vbo;
 	struct ttm_bo_kmap_obj map;
 	volatile SVGA3dQueryResult *result;
 	bool dummy;
@@ -334,9 +356,9 @@ static int vmw_dummy_query_bo_create(struct vmw_private *dev_priv)
 	if (!vbo)
 		return -ENOMEM;
 
-	ret = vmw_dmabuf_init(dev_priv, vbo, PAGE_SIZE,
-			      &vmw_sys_ne_placement, false,
-			      &vmw_dmabuf_bo_free);
+	ret = vmw_bo_init(dev_priv, vbo, PAGE_SIZE,
+			  &vmw_sys_ne_placement, false,
+			  &vmw_bo_bo_free);
 	if (unlikely(ret != 0))
 		return ret;
 
@@ -357,7 +379,7 @@ static int vmw_dummy_query_bo_create(struct vmw_private *dev_priv)
 
 	if (unlikely(ret != 0)) {
 		DRM_ERROR("Dummy query buffer map failed.\n");
-		vmw_dmabuf_unreference(&vbo);
+		vmw_bo_unreference(&vbo);
 	} else
 		dev_priv->dummy_query_bo = vbo;
 
@@ -459,7 +481,7 @@ static void vmw_release_device_early(struct vmw_private *dev_priv)
 
 	BUG_ON(dev_priv->pinned_bo != NULL);
 
-	vmw_dmabuf_unreference(&dev_priv->dummy_query_bo);
+	vmw_bo_unreference(&dev_priv->dummy_query_bo);
 	if (dev_priv->cman)
 		vmw_cmdbuf_remove_pool(dev_priv->cman);
 
@@ -605,13 +627,16 @@ out_fixup:
 static int vmw_dma_masks(struct vmw_private *dev_priv)
 {
 	struct drm_device *dev = dev_priv->dev;
+	int ret = 0;
 
-	if (intel_iommu_enabled &&
+	ret = dma_set_mask_and_coherent(dev->dev, DMA_BIT_MASK(64));
+	if (dev_priv->map_mode != vmw_dma_phys &&
 	    (sizeof(unsigned long) == 4 || vmw_restrict_dma_mask)) {
 		DRM_INFO("Restricting DMA addresses to 44 bits.\n");
-		return dma_set_mask(dev->dev, DMA_BIT_MASK(44));
+		return dma_set_mask_and_coherent(dev->dev, DMA_BIT_MASK(44));
 	}
-	return 0;
+
+	return ret;
 }
 #else
 static int vmw_dma_masks(struct vmw_private *dev_priv)
@@ -630,7 +655,7 @@ static int vmw_driver_load(struct drm_device *dev, unsigned long chipset)
 	char host_log[100] = {0};
 
 	dev_priv = kzalloc(sizeof(*dev_priv), GFP_KERNEL);
-	if (unlikely(dev_priv == NULL)) {
+	if (unlikely(!dev_priv)) {
 		DRM_ERROR("Failed allocating a device private struct.\n");
 		return -ENOMEM;
 	}
@@ -643,6 +668,7 @@ static int vmw_driver_load(struct drm_device *dev, unsigned long chipset)
 	mutex_init(&dev_priv->cmdbuf_mutex);
 	mutex_init(&dev_priv->release_mutex);
 	mutex_init(&dev_priv->binding_mutex);
+	mutex_init(&dev_priv->requested_layout_mutex);
 	mutex_init(&dev_priv->global_kms_state_mutex);
 	rwlock_init(&dev_priv->resource_lock);
 	ttm_lock_init(&dev_priv->reservation_sem);
@@ -682,6 +708,12 @@ static int vmw_driver_load(struct drm_device *dev, unsigned long chipset)
 	}
 
 	dev_priv->capabilities = vmw_read(dev_priv, SVGA_REG_CAPABILITIES);
+
+	if (dev_priv->capabilities & SVGA_CAP_CAP2_REGISTER) {
+		dev_priv->capabilities2 = vmw_read(dev_priv, SVGA_REG_CAP2);
+	}
+
+
 	ret = vmw_dma_select_mode(dev_priv);
 	if (unlikely(ret != 0)) {
 		DRM_INFO("Restricting capabilities due to IOMMU setup.\n");
@@ -722,7 +754,7 @@ static int vmw_driver_load(struct drm_device *dev, unsigned long chipset)
 		 * allocation taken by fbdev
 		 */
 		if (!(dev_priv->capabilities & SVGA_CAP_3D))
-			mem_size *= 2;
+			mem_size *= 3;
 
 		dev_priv->max_mob_pages = mem_size * 1024 / PAGE_SIZE;
 		dev_priv->prim_bb_mem =
@@ -750,6 +782,8 @@ static int vmw_driver_load(struct drm_device *dev, unsigned long chipset)
 	}
 
 	vmw_print_capabilities(dev_priv->capabilities);
+	if (dev_priv->capabilities & SVGA_CAP_CAP2_REGISTER)
+		vmw_print_capabilities2(dev_priv->capabilities2);
 
 	ret = vmw_dma_masks(dev_priv);
 	if (unlikely(ret != 0))
@@ -825,7 +859,7 @@ static int vmw_driver_load(struct drm_device *dev, unsigned long chipset)
 	}
 
 	if (dev_priv->capabilities & SVGA_CAP_IRQMASK) {
-		ret = drm_irq_install(dev, dev->pdev->irq);
+		ret = vmw_irq_install(dev, dev->pdev->irq);
 		if (ret != 0) {
 			DRM_ERROR("Failed installing irq: %d\n", ret);
 			goto out_no_irq;
@@ -882,7 +916,7 @@ static int vmw_driver_load(struct drm_device *dev, unsigned long chipset)
 
 	if (dev_priv->has_mob) {
 		spin_lock(&dev_priv->cap_lock);
-		vmw_write(dev_priv, SVGA_REG_DEV_CAP, SVGA3D_DEVCAP_DX);
+		vmw_write(dev_priv, SVGA_REG_DEV_CAP, SVGA3D_DEVCAP_DXCONTEXT);
 		dev_priv->has_dx = !!vmw_read(dev_priv, SVGA_REG_DEV_CAP);
 		spin_unlock(&dev_priv->cap_lock);
 	}
@@ -897,9 +931,23 @@ static int vmw_driver_load(struct drm_device *dev, unsigned long chipset)
 	if (ret)
 		goto out_no_fifo;
 
+	if (dev_priv->has_dx) {
+		/*
+		 * SVGA_CAP2_DX2 (DefineGBSurface_v3) is needed for SM4_1
+		 * support
+		 */
+		if ((dev_priv->capabilities2 & SVGA_CAP2_DX2) != 0) {
+			vmw_write(dev_priv, SVGA_REG_DEV_CAP,
+					SVGA3D_DEVCAP_SM41);
+			dev_priv->has_sm4_1 = vmw_read(dev_priv,
+							SVGA_REG_DEV_CAP);
+		}
+	}
+
 	DRM_INFO("DX: %s\n", dev_priv->has_dx ? "yes." : "no.");
-	DRM_INFO("Atomic: %s\n",
-		 (dev->driver->driver_features & DRIVER_ATOMIC) ? "yes" : "no");
+	DRM_INFO("Atomic: %s\n", (dev->driver->driver_features & DRIVER_ATOMIC)
+		 ? "yes." : "no.");
+	DRM_INFO("SM4_1: %s\n", dev_priv->has_sm4_1 ? "yes." : "no.");
 
 	snprintf(host_log, sizeof(host_log), "vmwgfx: %s-%s",
 		VMWGFX_REPO, VMWGFX_GIT_VERSION);
@@ -937,7 +985,7 @@ out_no_bdev:
 	vmw_fence_manager_takedown(dev_priv->fman);
 out_no_fman:
 	if (dev_priv->capabilities & SVGA_CAP_IRQMASK)
-		drm_irq_uninstall(dev_priv->dev);
+		vmw_irq_uninstall(dev_priv->dev);
 out_no_irq:
 	if (dev_priv->stealth)
 		pci_release_region(dev->pdev, 2);
@@ -990,7 +1038,7 @@ static void vmw_driver_unload(struct drm_device *dev)
 	vmw_release_device_late(dev_priv);
 	vmw_fence_manager_takedown(dev_priv->fman);
 	if (dev_priv->capabilities & SVGA_CAP_IRQMASK)
-		drm_irq_uninstall(dev_priv->dev);
+		vmw_irq_uninstall(dev_priv->dev);
 	if (dev_priv->stealth)
 		pci_release_region(dev->pdev, 2);
 	else
@@ -1035,7 +1083,7 @@ static int vmw_driver_open(struct drm_device *dev, struct drm_file *file_priv)
 	int ret = -ENOMEM;
 
 	vmw_fp = kzalloc(sizeof(*vmw_fp), GFP_KERNEL);
-	if (unlikely(vmw_fp == NULL))
+	if (unlikely(!vmw_fp))
 		return ret;
 
 	vmw_fp->tfile = ttm_object_file_init(dev_priv->tdev, 10);
@@ -1196,7 +1244,7 @@ static int vmw_master_create(struct drm_device *dev,
 	struct vmw_master *vmaster;
 
 	vmaster = kzalloc(sizeof(*vmaster), GFP_KERNEL);
-	if (unlikely(vmaster == NULL))
+	if (unlikely(!vmaster))
 		return -ENOMEM;
 
 	vmw_master_init(vmaster);
@@ -1277,9 +1325,6 @@ static void vmw_master_drop(struct drm_device *dev,
 	dev_priv->active_master = &dev_priv->fbdev_master;
 	ttm_lock_set_kill(&dev_priv->fbdev_master.lock, false, SIGTERM);
 	ttm_vt_unlock(&dev_priv->fbdev_master.lock);
-
-	if (dev_priv->enable_fb)
-		vmw_fb_on(dev_priv);
 }
 
 /**
@@ -1338,6 +1383,19 @@ static void __vmw_svga_disable(struct vmw_private *dev_priv)
  */
 void vmw_svga_disable(struct vmw_private *dev_priv)
 {
+	/*
+	 * Disabling SVGA will turn off device modesetting capabilities, so
+	 * notify KMS about that so that it doesn't cache atomic state that
+	 * isn't valid anymore, for example crtcs turned on.
+	 * Strictly we'd want to do this under the SVGA lock (or an SVGA mutex),
+	 * but vmw_kms_lost_device() takes the reservation sem and thus we'll
+	 * end up with lock order reversal. Thus, a master may actually perform
+	 * a new modeset just after we call vmw_kms_lost_device() and race with
+	 * vmw_svga_disable(), but that should at worst cause atomic KMS state
+	 * to be inconsistent with the device, causing modesetting problems.
+	 *
+	 */
+	vmw_kms_lost_device(dev_priv->dev);
 	ttm_write_lock(&dev_priv->reservation_sem, false);
 	spin_lock(&dev_priv->svga_lock);
 	if (dev_priv->bdev.man[TTM_PL_VRAM].use_type) {
@@ -1369,28 +1427,23 @@ static int vmwgfx_pm_notifier(struct notifier_block *nb, unsigned long val,
 
 	switch (val) {
 	case PM_HIBERNATION_PREPARE:
-		if (dev_priv->enable_fb)
-			vmw_fb_off(dev_priv);
-		ttm_suspend_lock(&dev_priv->reservation_sem);
-
 		/*
-		 * This empties VRAM and unbinds all GMR bindings.
-		 * Buffer contents is moved to swappable memory.
+		 * Take the reservation sem in write mode, which will make sure
+		 * there are no other processes holding a buffer object
+		 * reservation, meaning we should be able to evict all buffer
+		 * objects if needed.
+		 * Once user-space processes have been frozen, we can release
+		 * the lock again.
 		 */
-		vmw_execbuf_release_pinned_bo(dev_priv);
-		vmw_resource_evict_all(dev_priv);
-		vmw_release_device_early(dev_priv);
-		ttm_bo_swapout_all(&dev_priv->bdev);
-		vmw_fence_fifo_down(dev_priv->fman);
+		ttm_suspend_lock(&dev_priv->reservation_sem);
+		dev_priv->suspend_locked = true;
 		break;
 	case PM_POST_HIBERNATION:
 	case PM_POST_RESTORE:
-		vmw_fence_fifo_up(dev_priv->fman);
-		ttm_suspend_unlock(&dev_priv->reservation_sem);
-		if (dev_priv->enable_fb)
-			vmw_fb_on(dev_priv);
-		break;
-	case PM_RESTORE_PREPARE:
+		if (READ_ONCE(dev_priv->suspend_locked)) {
+			dev_priv->suspend_locked = false;
+			ttm_suspend_unlock(&dev_priv->reservation_sem);
+		}
 		break;
 	default:
 		break;
@@ -1441,25 +1494,47 @@ static int vmw_pm_freeze(struct device *kdev)
 	struct pci_dev *pdev = to_pci_dev(kdev);
 	struct drm_device *dev = pci_get_drvdata(pdev);
 	struct vmw_private *dev_priv = vmw_priv(dev);
+	int ret;
 
-	dev_priv->suspended = true;
+	/*
+	 * Unlock for vmw_kms_suspend.
+	 * No user-space processes should be running now.
+	 */
+	ttm_suspend_unlock(&dev_priv->reservation_sem);
+	ret = vmw_kms_suspend(dev_priv->dev);
+	if (ret) {
+		ttm_suspend_lock(&dev_priv->reservation_sem);
+		DRM_ERROR("Failed to freeze modesetting.\n");
+		return ret;
+	}
+	if (dev_priv->enable_fb)
+		vmw_fb_off(dev_priv);
+
+	ttm_suspend_lock(&dev_priv->reservation_sem);
+	vmw_execbuf_release_pinned_bo(dev_priv);
+	vmw_resource_evict_all(dev_priv);
+	vmw_release_device_early(dev_priv);
+	ttm_bo_swapout_all(&dev_priv->bdev);
 	if (dev_priv->enable_fb)
 		vmw_fifo_resource_dec(dev_priv);
-
 	if (atomic_read(&dev_priv->num_fifo_resources) != 0) {
 		DRM_ERROR("Can't hibernate while 3D resources are active.\n");
 		if (dev_priv->enable_fb)
 			vmw_fifo_resource_inc(dev_priv);
 		WARN_ON(vmw_request_device_late(dev_priv));
-		dev_priv->suspended = false;
+		dev_priv->suspend_locked = false;
+		ttm_suspend_unlock(&dev_priv->reservation_sem);
+		if (dev_priv->suspend_state)
+			vmw_kms_resume(dev);
+		if (dev_priv->enable_fb)
+			vmw_fb_on(dev_priv);
 		return -EBUSY;
 	}
 
-	if (dev_priv->enable_fb)
-		__vmw_svga_disable(dev_priv);
+	vmw_fence_fifo_down(dev_priv->fman);
+	__vmw_svga_disable(dev_priv);
 	
 	vmw_release_device_late(dev_priv);
-
 	return 0;
 }
 
@@ -1483,7 +1558,14 @@ static int vmw_pm_restore(struct device *kdev)
 	if (dev_priv->enable_fb)
 		__vmw_svga_enable(dev_priv);
 
-	dev_priv->suspended = false;
+	vmw_fence_fifo_up(dev_priv->fman);
+	dev_priv->suspend_locked = false;
+	ttm_suspend_unlock(&dev_priv->reservation_sem);
+	if (dev_priv->suspend_state)
+		vmw_kms_resume(dev_priv->dev);
+
+	if (dev_priv->enable_fb)
+		vmw_fb_on(dev_priv);
 
 	return 0;
 }
@@ -1516,10 +1598,6 @@ static struct drm_driver driver = {
 	.load = vmw_driver_load,
 	.unload = vmw_driver_unload,
 	.lastclose = vmw_lastclose,
-	.irq_preinstall = vmw_irq_preinstall,
-	.irq_postinstall = vmw_irq_postinstall,
-	.irq_uninstall = vmw_irq_uninstall,
-	.irq_handler = vmw_irq_handler,
 	.get_vblank_counter = vmw_get_vblank_counter,
 	.enable_vblank = vmw_enable_vblank,
 	.disable_vblank = vmw_disable_vblank,
@@ -1531,7 +1609,6 @@ static struct drm_driver driver = {
 	.master_drop = vmw_master_drop,
 	.open = vmw_driver_open,
 	.postclose = vmw_postclose,
-	.set_busid = drm_pci_set_busid,
 
 	.dumb_create = vmw_dumb_create,
 	.dumb_map_offset = vmw_dumb_map_offset,
@@ -1571,7 +1648,7 @@ static int __init vmwgfx_init(void)
 	if (vgacon_text_force())
 		return -EINVAL;
 
-	ret = drm_pci_init(&driver, &vmw_pci_driver);
+	ret = pci_register_driver(&vmw_pci_driver);
 	if (ret)
 		DRM_ERROR("Failed initializing DRM.\n");
 	return ret;
@@ -1579,7 +1656,7 @@ static int __init vmwgfx_init(void)
 
 static void __exit vmwgfx_exit(void)
 {
-	drm_pci_exit(&driver, &vmw_pci_driver);
+	pci_unregister_driver(&vmw_pci_driver);
 }
 
 module_init(vmwgfx_init);

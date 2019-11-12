@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0
 comment "Processor Type"
 
 # Select CPU types depending on the architecture selected.  This selects
@@ -414,6 +415,7 @@ config CPU_V7
 	select CPU_CP15_MPU if !MMU
 	select CPU_HAS_ASID if MMU
 	select CPU_PABRT_V7
+	select CPU_SPECTRE if MMU
 	select CPU_THUMB_CAPABLE
 	select CPU_TLB_V7 if MMU
 
@@ -660,6 +662,7 @@ config ARM_LPAE
 	bool "Support for the Large Physical Address Extension"
 	depends on MMU && CPU_32v7 && !CPU_32v6 && !CPU_32v5 && \
 		!CPU_32v4 && !CPU_32v3
+	select PHYS_ADDR_T_64BIT
 	help
 	  Say Y if you have an ARMv7 processor supporting the LPAE page
 	  table format and you would like to access memory beyond the
@@ -672,14 +675,8 @@ config ARM_PV_FIXUP
 	def_bool y
 	depends on ARM_LPAE && ARM_PATCH_PHYS_VIRT && ARCH_KEYSTONE
 
-config ARCH_PHYS_ADDR_T_64BIT
-	def_bool ARM_LPAE
-
-config ARCH_DMA_ADDR_T_64BIT
-	bool
-
 config ARM_THUMB
-	bool "Support Thumb user binaries" if !CPU_THUMBONLY
+	bool "Support Thumb user binaries" if !CPU_THUMBONLY && EXPERT
 	depends on CPU_THUMB_CAPABLE
 	default y
 	help
@@ -689,6 +686,10 @@ config ARM_THUMB
 	  The Thumb instruction set is a compressed form of the standard ARM
 	  instruction set resulting in smaller binaries at the expense of
 	  slightly less efficient code.
+
+	  If this option is disabled, and you run userspace that switches to
+	  Thumb mode, signal handling will not work correctly, resulting in
+	  segmentation faults or illegal instruction aborts.
 
 	  If you don't know what this all is, saying Y is a safe choice.
 
@@ -701,7 +702,6 @@ config ARM_THUMBEE
 
 config ARM_VIRT_EXT
 	bool
-	depends on MMU
 	default y if CPU_V7
 	help
 	  Enable the kernel to make use of the ARM Virtualization
@@ -821,6 +821,28 @@ config CPU_BPREDICT_DISABLE
 	help
 	  Say Y here to disable branch prediction.  If unsure, say N.
 
+config CPU_SPECTRE
+	bool
+
+config HARDEN_BRANCH_PREDICTOR
+	bool "Harden the branch predictor against aliasing attacks" if EXPERT
+	depends on CPU_SPECTRE
+	default y
+	help
+	   Speculation attacks against some high-performance processors rely
+	   on being able to manipulate the branch predictor for a victim
+	   context by executing aliasing branches in the attacker context.
+	   Such attacks can be partially mitigated against by clearing
+	   internal branch predictor state and limiting the prediction
+	   logic in some situations.
+
+	   This config option will take CPU-specific actions to harden
+	   the branch predictor against aliasing attacks and may rely on
+	   specific instruction sequences or control bits being set by
+	   the system firmware.
+
+	   If unsure, say Y.
+
 config TLS_REG_EMUL
 	bool
 	select NEED_KUSER_HELPERS
@@ -903,6 +925,14 @@ config OUTER_CACHE_SYNC
 	help
 	  The outer cache has a outer_cache_fns.sync function pointer
 	  that can be used to drain the write buffer of the outer cache.
+
+config CACHE_B15_RAC
+	bool "Enable the Broadcom Brahma-B15 read-ahead cache controller"
+	depends on ARCH_BRCMSTB
+	default y
+	help
+	  This option enables the Broadcom Brahma-B15 read-ahead cache
+	  controller. If disabled, the read-ahead cache remains off.
 
 config CACHE_FEROCEON_L2
 	bool "Enable the Feroceon L2 cache controller"
@@ -1045,8 +1075,8 @@ config ARM_L1_CACHE_SHIFT
 	default 5
 
 config ARM_DMA_MEM_BUFFERABLE
-	bool "Use non-cacheable memory for DMA" if (CPU_V6 || CPU_V6K) && !CPU_V7
-	default y if CPU_V6 || CPU_V6K || CPU_V7
+	bool "Use non-cacheable memory for DMA" if (CPU_V6 || CPU_V6K || CPU_V7M) && !CPU_V7
+	default y if CPU_V6 || CPU_V6K || CPU_V7 || CPU_V7M
 	help
 	  Historically, the kernel has used strongly ordered mappings to
 	  provide DMA coherent memory.  With the advent of ARMv7, mapping
@@ -1060,6 +1090,10 @@ config ARM_DMA_MEM_BUFFERABLE
 	  However, drivers may be missing the necessary barriers for ARMv6,
 	  and therefore turning this on may result in unpredictable driver
 	  behaviour.  Therefore, we offer this as an option.
+
+	  On some of the beefier ARMv7-M machines (with DMA and write
+	  buffers) you likely want this enabled, while those that
+	  didn't need it until now also won't need it in the future.
 
 	  You are recommended say 'Y' here and debug any affected drivers.
 

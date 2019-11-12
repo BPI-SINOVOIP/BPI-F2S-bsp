@@ -41,9 +41,9 @@ static int init_state_node(struct cpuidle_state *idle_state,
 	/*
 	 * Since this is not a "coupled" state, it's safe to assume interrupts
 	 * won't be enabled when it exits allowing the tick to be frozen
-	 * safely. So enter() can be also enter_freeze() callback.
+	 * safely. So enter() can be also enter_s2idle() callback.
 	 */
-	idle_state->enter_freeze = match_id->data;
+	idle_state->enter_s2idle = match_id->data;
 
 	err = of_property_read_u32(state_node, "wakeup-latency-us",
 				   &idle_state->exit_latency);
@@ -53,16 +53,16 @@ static int init_state_node(struct cpuidle_state *idle_state,
 		err = of_property_read_u32(state_node, "entry-latency-us",
 					   &entry_latency);
 		if (err) {
-			pr_debug(" * %s missing entry-latency-us property\n",
-				 state_node->full_name);
+			pr_debug(" * %pOF missing entry-latency-us property\n",
+				 state_node);
 			return -EINVAL;
 		}
 
 		err = of_property_read_u32(state_node, "exit-latency-us",
 					   &exit_latency);
 		if (err) {
-			pr_debug(" * %s missing exit-latency-us property\n",
-				 state_node->full_name);
+			pr_debug(" * %pOF missing exit-latency-us property\n",
+				 state_node);
 			return -EINVAL;
 		}
 		/*
@@ -75,8 +75,8 @@ static int init_state_node(struct cpuidle_state *idle_state,
 	err = of_property_read_u32(state_node, "min-residency-us",
 				   &idle_state->target_residency);
 	if (err) {
-		pr_debug(" * %s missing min-residency-us property\n",
-			     state_node->full_name);
+		pr_debug(" * %pOF missing min-residency-us property\n",
+			     state_node);
 		return -EINVAL;
 	}
 
@@ -186,8 +186,8 @@ int dt_init_idle_driver(struct cpuidle_driver *drv,
 		}
 
 		if (!idle_state_valid(state_node, i, cpumask)) {
-			pr_warn("%s idle state not valid, bailing out\n",
-				state_node->full_name);
+			pr_warn("%pOF idle state not valid, bailing out\n",
+				state_node);
 			err = -EINVAL;
 			break;
 		}
@@ -200,20 +200,12 @@ int dt_init_idle_driver(struct cpuidle_driver *drv,
 		idle_state = &drv->states[state_idx++];
 		err = init_state_node(idle_state, matches, state_node);
 		if (err) {
-			pr_err("Parsing idle state node %s failed with err %d\n",
-			       state_node->full_name, err);
+			pr_err("Parsing idle state node %pOF failed with err %d\n",
+			       state_node, err);
 			err = -EINVAL;
 			break;
 		}
 		of_node_put(state_node);
-		
-    //temp solution due to of_parse_phandle(cpu_node, "cpu-idle-states", i); will  point to NULL when i=1
-		//need review later 20190313
-		if (state_idx == 2) {
-			i++;
-			pr_warn("State index reached static CPU idle driver states array size\n");
-			break;
-		}
 	}
 
 	of_node_put(state_node);

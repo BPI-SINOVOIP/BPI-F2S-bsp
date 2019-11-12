@@ -1,47 +1,13 @@
+/* SPDX-License-Identifier: BSD-3-Clause OR GPL-2.0 */
 /******************************************************************************
  *
  * Name: amlcode.h - Definitions for AML, as included in "definition blocks"
  *                   Declarations and definitions contained herein are derived
  *                   directly from the ACPI specification.
  *
+ * Copyright (C) 2000 - 2018, Intel Corp.
+ *
  *****************************************************************************/
-
-/*
- * Copyright (C) 2000 - 2017, Intel Corp.
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions, and the following disclaimer,
- *    without modification.
- * 2. Redistributions in binary form must reproduce at minimum a disclaimer
- *    substantially similar to the "NO WARRANTY" disclaimer below
- *    ("Disclaimer") and any redistribution must be conditioned upon
- *    including a substantially similar Disclaimer requirement for further
- *    binary redistribution.
- * 3. Neither the names of the above-listed copyright holders nor the names
- *    of any contributors may be used to endorse or promote products derived
- *    from this software without specific prior written permission.
- *
- * Alternatively, this software may be distributed under the terms of the
- * GNU General Public License ("GPL") version 2 as published by the Free
- * Software Foundation.
- *
- * NO WARRANTY
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTIBILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * HOLDERS OR CONTRIBUTORS BE LIABLE FOR SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
- * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
- * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
- * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
- * IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGES.
- */
 
 #ifndef __AMLCODE_H__
 #define __AMLCODE_H__
@@ -274,23 +240,9 @@
 #define ARGI_DEVICE_REF             0x0D
 #define ARGI_REFERENCE              0x0E
 #define ARGI_TARGETREF              0x0F	/* Target, subject to implicit conversion */
-#define ARGI_SIMPLE_TARGET          0x10	/* Name, Local, Arg -- no implicit conversion */
-#define ARGI_STORE_TARGET           0x11	/* Target for store is TARGETREF + package objects */
-/*
- * #define ARGI_FIXED_TARGET           0x10     Target, no implicit conversion
- *
- * Removed 10/2016. ARGI_FIXED_TARGET was used for these operators:
- *      from_BCD
- *      to_BCD
- *      to_decimal_string
- *      to_hex_string
- *      to_integer
- *      to_buffer
- * The purpose of this type was to disable "implicit result conversion",
- * but this was incorrect per the ACPI spec and other ACPI implementations.
- * These operators now have the target operand defined as a normal
- * ARGI_TARGETREF.
- */
+#define ARGI_FIXED_TARGET           0x10	/* Target, no implicit conversion */
+#define ARGI_SIMPLE_TARGET          0x11	/* Name, Local, Arg -- no implicit conversion */
+#define ARGI_STORE_TARGET           0x12	/* Target for store is TARGETREF + package objects */
 
 /* Multiple/complex types */
 
@@ -313,6 +265,11 @@
  *      #A is the number of required arguments
  *      #T is the number of target operands
  *      #R indicates whether there is a return value
+ *
+ * These types are used for the top-level dispatch of the AML
+ * opcode. They group similar operators that can share common
+ * front-end code before dispatch to the final code that implements
+ * the operator.
  */
 
 /*
@@ -353,42 +310,42 @@
  * The opcode Type is used in a dispatch table, do not change
  * or add anything new without updating the table.
  */
-#define AML_TYPE_EXEC_0A_0T_1R      0x00
-#define AML_TYPE_EXEC_1A_0T_0R      0x01	/* Monadic1  */
-#define AML_TYPE_EXEC_1A_0T_1R      0x02	/* Monadic2  */
-#define AML_TYPE_EXEC_1A_1T_0R      0x03
-#define AML_TYPE_EXEC_1A_1T_1R      0x04	/* monadic2_r */
-#define AML_TYPE_EXEC_2A_0T_0R      0x05	/* Dyadic1   */
-#define AML_TYPE_EXEC_2A_0T_1R      0x06	/* Dyadic2   */
-#define AML_TYPE_EXEC_2A_1T_1R      0x07	/* dyadic2_r  */
-#define AML_TYPE_EXEC_2A_2T_1R      0x08
-#define AML_TYPE_EXEC_3A_0T_0R      0x09
-#define AML_TYPE_EXEC_3A_1T_1R      0x0A
-#define AML_TYPE_EXEC_6A_0T_1R      0x0B
+#define AML_TYPE_EXEC_0A_0T_1R      0x00	/* 0 Args, 0 Target, 1 ret_val */
+#define AML_TYPE_EXEC_1A_0T_0R      0x01	/* 1 Args, 0 Target, 0 ret_val */
+#define AML_TYPE_EXEC_1A_0T_1R      0x02	/* 1 Args, 0 Target, 1 ret_val */
+#define AML_TYPE_EXEC_1A_1T_0R      0x03	/* 1 Args, 1 Target, 0 ret_val */
+#define AML_TYPE_EXEC_1A_1T_1R      0x04	/* 1 Args, 1 Target, 1 ret_val */
+#define AML_TYPE_EXEC_2A_0T_0R      0x05	/* 2 Args, 0 Target, 0 ret_val */
+#define AML_TYPE_EXEC_2A_0T_1R      0x06	/* 2 Args, 0 Target, 1 ret_val */
+#define AML_TYPE_EXEC_2A_1T_1R      0x07	/* 2 Args, 1 Target, 1 ret_val */
+#define AML_TYPE_EXEC_2A_2T_1R      0x08	/* 2 Args, 2 Target, 1 ret_val */
+#define AML_TYPE_EXEC_3A_0T_0R      0x09	/* 3 Args, 0 Target, 0 ret_val */
+#define AML_TYPE_EXEC_3A_1T_1R      0x0A	/* 3 Args, 1 Target, 1 ret_val */
+#define AML_TYPE_EXEC_6A_0T_1R      0x0B	/* 6 Args, 0 Target, 1 ret_val */
 /* End of types used in dispatch table */
 
-#define AML_TYPE_LITERAL            0x0B
-#define AML_TYPE_CONSTANT           0x0C
-#define AML_TYPE_METHOD_ARGUMENT    0x0D
-#define AML_TYPE_LOCAL_VARIABLE     0x0E
-#define AML_TYPE_DATA_TERM          0x0F
+#define AML_TYPE_LITERAL            0x0C
+#define AML_TYPE_CONSTANT           0x0D
+#define AML_TYPE_METHOD_ARGUMENT    0x0E
+#define AML_TYPE_LOCAL_VARIABLE     0x0F
+#define AML_TYPE_DATA_TERM          0x10
 
 /* Generic for an op that returns a value */
 
-#define AML_TYPE_METHOD_CALL        0x10
+#define AML_TYPE_METHOD_CALL        0x11
 
 /* Miscellaneous types */
 
-#define AML_TYPE_CREATE_FIELD       0x11
-#define AML_TYPE_CREATE_OBJECT      0x12
-#define AML_TYPE_CONTROL            0x13
-#define AML_TYPE_NAMED_NO_OBJ       0x14
-#define AML_TYPE_NAMED_FIELD        0x15
-#define AML_TYPE_NAMED_SIMPLE       0x16
-#define AML_TYPE_NAMED_COMPLEX      0x17
-#define AML_TYPE_RETURN             0x18
-#define AML_TYPE_UNDEFINED          0x19
-#define AML_TYPE_BOGUS              0x1A
+#define AML_TYPE_CREATE_FIELD       0x12
+#define AML_TYPE_CREATE_OBJECT      0x13
+#define AML_TYPE_CONTROL            0x14
+#define AML_TYPE_NAMED_NO_OBJ       0x15
+#define AML_TYPE_NAMED_FIELD        0x16
+#define AML_TYPE_NAMED_SIMPLE       0x17
+#define AML_TYPE_NAMED_COMPLEX      0x18
+#define AML_TYPE_RETURN             0x19
+#define AML_TYPE_UNDEFINED          0x1A
+#define AML_TYPE_BOGUS              0x1B
 
 /* AML Package Length encodings */
 

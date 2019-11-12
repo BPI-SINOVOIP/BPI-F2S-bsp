@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * drivers/usb/core/usb.c
  *
@@ -13,7 +14,6 @@
  * (C) Copyright Greg Kroah-Hartman 2002-2003
  *
  * Released under the GPLv2 only.
- * SPDX-License-Identifier: GPL-2.0
  *
  * NOTE! This is not actually a driver at all, rather this is
  * just a collection of helper routines that implement the
@@ -45,33 +45,8 @@
 #include <linux/scatterlist.h>
 #include <linux/mm.h>
 #include <linux/dma-mapping.h>
-#include <asm/uaccess.h>
-#include <linux/proc_fs.h>
-
 
 #include "usb.h"
-
-#ifdef CONFIG_USB_LOGO_TEST
-#include <linux/uaccess.h>
-#include <linux/proc_fs.h>
-#include <linux/usb/sp_usb.h>
-
-#define COMPARE_CHAR_NUMBER		3
-#define BASIC_VALUE			10
-#define LIMITS_OF_AUTHORITY		0666
-#define MAX_LENGTH			64
-#define DIRECTIORY_NAME			"usb_verify_test"
-#define TESET_FLAG_FILE_NAME		"specific_test_set"
-#define HUB_LEVLE_FILE_NAME		"hub_level_set"
-
-bool tid_test_flag = false;
-u8 max_topo_level = 6;
-static struct proc_dir_entry *dir_entry;
-static struct proc_dir_entry *test_flag_entry;
-static struct proc_dir_entry *hub_level_entry;
-EXPORT_SYMBOL_GPL(tid_test_flag);
-EXPORT_SYMBOL_GPL(max_topo_level);
-#endif
 
 
 const char *usbcore_name = "usbcore";
@@ -253,6 +228,8 @@ struct usb_host_interface *usb_find_alt_setting(
 	struct usb_interface_cache *intf_cache = NULL;
 	int i;
 
+	if (!config)
+		return NULL;
 	for (i = 0; i < config->desc.bNumInterfaces; i++) {
 		if (config->intf_cache[i]->altsetting[0].desc.bInterfaceNumber
 				== iface_num) {
@@ -441,8 +418,7 @@ static void usb_release_dev(struct device *dev)
 
 	usb_destroy_configuration(udev);
 	usb_release_bos_descriptor(udev);
-	if (udev->parent)
-		of_node_put(dev->of_node);
+	of_node_put(dev->of_node);
 	usb_put_hcd(hcd);
 	kfree(udev->product);
 	kfree(udev->manufacturer);
@@ -524,11 +500,9 @@ static const struct dev_pm_ops usb_device_pm_ops = {
 	.thaw =		usb_dev_thaw,
 	.poweroff =	usb_dev_poweroff,
 	.restore =	usb_dev_restore,
-#ifdef CONFIG_PM_RUNTIME_USB
 	.runtime_suspend =	usb_runtime_suspend,
 	.runtime_resume =	usb_runtime_resume,
 	.runtime_idle =		usb_runtime_idle,
-#endif	
 };
 
 #endif	/* CONFIG_PM */
@@ -622,9 +596,7 @@ struct usb_device *usb_alloc_dev(struct usb_device *parent,
 	dev->state = USB_STATE_ATTACHED;
 	dev->lpm_disable_count = 1;
 	atomic_set(&dev->urbnum, 0);
-#ifdef CONFIG_RETRY_TIMES
-	dev->reset_count = 5;
-#endif
+
 	INIT_LIST_HEAD(&dev->ep0.urb_list);
 	dev->ep0.desc.bLength = USB_DT_ENDPOINT_SIZE;
 	dev->ep0.desc.bDescriptorType = USB_DT_ENDPOINT;
@@ -645,6 +617,7 @@ struct usb_device *usb_alloc_dev(struct usb_device *parent,
 		dev->route = 0;
 
 		dev->dev.parent = bus->controller;
+		device_set_of_node_from_dev(&dev->dev, bus->sysdev);
 		dev_set_name(&dev->dev, "usb%d", bus->busnum);
 		root_hub = 1;
 	} else {
@@ -674,8 +647,7 @@ struct usb_device *usb_alloc_dev(struct usb_device *parent,
 			raw_port = usb_hcd_find_raw_port_number(usb_hcd,
 				port1);
 		}
-		dev->dev.of_node = usb_of_get_child_node(parent->dev.of_node,
-				raw_port);
+		dev->dev.of_node = usb_of_get_device_node(parent, raw_port);
 
 		/* hub driver sets up TT records */
 	}
@@ -860,14 +832,14 @@ EXPORT_SYMBOL_GPL(usb_get_current_frame_number);
  */
 
 int __usb_get_extra_descriptor(char *buffer, unsigned size,
-			       unsigned char type, void **ptr)
+			       unsigned char type, void **ptr, size_t minsize)
 {
 	struct usb_descriptor_header *header;
 
 	while (size >= sizeof(struct usb_descriptor_header)) {
 		header = (struct usb_descriptor_header *)buffer;
 
-		if (header->bLength < 2) {
+		if (header->bLength < 2 || header->bLength > size) {
 			printk(KERN_ERR
 				"%s: bogus descriptor, type %d length %d\n",
 				usbcore_name,
@@ -876,7 +848,7 @@ int __usb_get_extra_descriptor(char *buffer, unsigned size,
 			return -1;
 		}
 
-		if (header->bDescriptorType == type) {
+		if (header->bDescriptorType == type && header->bLength >= minsize) {
 			*ptr = header;
 			return 0;
 		}
@@ -1197,186 +1169,23 @@ static struct notifier_block usb_bus_nb = {
 struct dentry *usb_debug_root;
 EXPORT_SYMBOL_GPL(usb_debug_root);
 
-static struct dentry *usb_debug_devices;
-
-static int usb_debugfs_init(void)
+static void usb_debugfs_init(void)
 {
 	usb_debug_root = debugfs_create_dir("usb", NULL);
-	if (!usb_debug_root)
-		return -ENOENT;
-
-	usb_debug_devices = debugfs_create_file("devices", 0444,
-						usb_debug_root, NULL,
-						&usbfs_devices_fops);
-	if (!usb_debug_devices) {
-		debugfs_remove(usb_debug_root);
-		usb_debug_root = NULL;
-		return -ENOENT;
-	}
-
-	return 0;
+	debugfs_create_file("devices", 0444, usb_debug_root, NULL,
+			    &usbfs_devices_fops);
 }
 
 static void usb_debugfs_cleanup(void)
 {
-	debugfs_remove(usb_debug_devices);
-	debugfs_remove(usb_debug_root);
+	debugfs_remove_recursive(usb_debug_root);
 }
 
 /*
  * Init
  */
-
-
-#ifdef CONFIG_USB_LOGO_TEST
-static int usb_specific_test_set_show(struct seq_file *m, void *v)
-{
-	return 0;
-}
-
-static int usb_specific_test_set_write(struct file *file,
-				const char __user *buf, size_t count, loff_t *data)
-{
-	char verify_parameter[MAX_LENGTH];
-
-	if (count > MAX_LENGTH)
-		count = MAX_LENGTH;
-
-	printk(KERN_DEBUG "USB verify parameters set\n");
-	memset(verify_parameter, 0, MAX_LENGTH);
-	if (copy_from_user(verify_parameter, buf, count))
-		return -EFAULT;
-
-	if (strncmp(verify_parameter, "ORI", COMPARE_CHAR_NUMBER) == 0) {
-		printk(KERN_DEBUG "recover to origin set\n");
-		tid_test_flag = false;
-	} else if (strncmp(verify_parameter, "TID", COMPARE_CHAR_NUMBER) == 0) {
-		printk(KERN_DEBUG "comfs to comhs test set\n");
-		tid_test_flag = true;
-	} else if (strncmp(verify_parameter, "MFI", COMPARE_CHAR_NUMBER) == 0) {
-		printk(KERN_DEBUG "comfs to comhs test set\n");
-		tid_test_flag = true;
-	} else {
-		printk(KERN_DEBUG "now, not support value:%s\n",verify_parameter);
-	}
-
-	return count;
-}
-
-static int usb_specific_test_proc_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, usb_specific_test_set_show, NULL);
-}
-
-static const struct file_operations usb_specific_test_proc_fops = {
-	.owner		= THIS_MODULE,
-	.open		= usb_specific_test_proc_open,
-	.read		= seq_read,
-	.write		= usb_specific_test_set_write,
-	.release	= single_release,
-};
-
-static int usb_hub_level_set_show(struct seq_file *m, void *v)
-{
-	int len;
-	char verify_parameter[MAX_LENGTH];
-
-	printk(KERN_DEBUG "+%s\n", __FUNCTION__);
-	memset(verify_parameter, 0, sizeof(verify_parameter));
-	len = num_to_str(verify_parameter,MAX_LENGTH,max_topo_level);
-	if (!len)
-		printk(KERN_NOTICE "num_to_str error\n");
-	else
-		seq_printf(m, "%s\n", verify_parameter);
-
-	return 0;
-}
-
-static int usb_hub_level_set_write(struct file *file,
-				const char __user *buf, size_t count, loff_t *data)
-{
-	u64 value;
-	char verify_parameter[MAX_LENGTH];
-
-	if (count > MAX_LENGTH)
-		count = MAX_LENGTH;
-
-	printk(KERN_DEBUG "+%s\n", __FUNCTION__);
-	memset(verify_parameter, 0, MAX_LENGTH);
-	if (copy_from_user(verify_parameter, buf, count))
-		return -EFAULT;
-
-	value = simple_strtoull(verify_parameter, NULL, BASIC_VALUE);
-	max_topo_level = value;
-	printk(KERN_DEBUG "USB verify max hub level value:%d\n", max_topo_level);
-
-	return count;
-}
-
-static int usb_hub_level_proc_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, usb_hub_level_set_show, NULL);
-}
-
-static const struct file_operations hub_level_proc_fops = {
-	.owner		= THIS_MODULE,
-	.open		= usb_hub_level_proc_open,
-	.read		= seq_read,
-	.write		= usb_hub_level_set_write,
-	.release	= single_release,
-};
-
-static int proc_entry_add(void)
-{
-	dir_entry = proc_mkdir(DIRECTIORY_NAME, NULL);
-	if (!dir_entry) {
-		printk(KERN_NOTICE "can't create /proc/usb_verify_test\n");
-		return -ENOMEM;
-	}
-
-	test_flag_entry = proc_create(TESET_FLAG_FILE_NAME, LIMITS_OF_AUTHORITY,
-				      dir_entry, &usb_specific_test_proc_fops);
-	if (!test_flag_entry) {
-		printk(KERN_NOTICE
-		       "can't create /proc/usb_verify_test/specific_test_set\n");
-		remove_proc_entry(TESET_FLAG_FILE_NAME, dir_entry);
-		return -ENOMEM;
-	}
-
-	hub_level_entry = proc_create(HUB_LEVLE_FILE_NAME, LIMITS_OF_AUTHORITY,
-				      dir_entry, &hub_level_proc_fops);
-	if (!hub_level_entry) {
-		printk(KERN_NOTICE
-		       "can't create /proc/usb_verify_test/hub_level_set\n");
-		remove_proc_entry(HUB_LEVLE_FILE_NAME, dir_entry);
-		return -ENOMEM;
-	}
-
-	return 0;
-}
-
-static void proc_entry_remove(void)
-{
-	remove_proc_entry(TESET_FLAG_FILE_NAME, dir_entry);
-	remove_proc_entry(HUB_LEVLE_FILE_NAME, dir_entry);
-	remove_proc_entry(DIRECTIORY_NAME, NULL);
-}
-#endif
-
-static void sp_get_port_state(void)
-{
-#ifdef CONFIG_USB_PORT0
-	sp_port_enabled |= 0x01;
-#endif
-
-#ifdef CONFIG_USB_PORT1
-	sp_port_enabled |= 0x02;
-#endif
-}
-
 static int __init usb_init(void)
 {
-	int i;
 	int retval;
 	if (usb_disabled()) {
 		pr_info("%s: USB support disabled\n", usbcore_name);
@@ -1384,15 +1193,7 @@ static int __init usb_init(void)
 	}
 	usb_init_pool_max();
 
-#ifdef CONFIG_USB_LOGO_TEST
-	retval = proc_entry_add();
-	if (retval)
-		goto out;
-#endif
-
-	retval = usb_debugfs_init();
-	if (retval)
-		goto out;
+	usb_debugfs_init();
 
 	usb_acpi_register();
 	retval = bus_register(&usb_bus_type);
@@ -1414,20 +1215,8 @@ static int __init usb_init(void)
 	if (retval)
 		goto hub_init_failed;
 	retval = usb_register_device_driver(&usb_generic_driver, THIS_MODULE);
-	if (!retval){
-		for (i = 0; i < USB_PORT_NUM; i++) {
-			sema_init(&enum_rx_active_reset_sem[i], 0);
-		}
-#ifdef CONFIG_GADGET_USB0
-		accessory_port_id = USB_PORT0_ID;
-#else
-		accessory_port_id = USB_PORT1_ID;
-#endif
-		printk(KERN_NOTICE "usb acc config port= %d\n",accessory_port_id);
-		sp_get_port_state();
-
+	if (!retval)
 		goto out;
-	}
 
 	usb_hub_cleanup();
 hub_init_failed:
@@ -1456,9 +1245,7 @@ static void __exit usb_exit(void)
 	if (usb_disabled())
 		return;
 
-#ifdef CONFIG_USB_LOGO_TEST
-	proc_entry_remove();
-#endif
+	usb_release_quirk_list();
 	usb_deregister_device_driver(&usb_generic_driver);
 	usb_major_cleanup();
 	usb_deregister(&usbfs_driver);

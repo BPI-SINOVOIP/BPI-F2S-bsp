@@ -73,7 +73,7 @@ static int virtio_read(struct hwrng *rng, void *buf, size_t size, bool wait)
 
 	if (!vi->busy) {
 		vi->busy = true;
-		init_completion(&vi->have_data);
+		reinit_completion(&vi->have_data);
 		register_buffer(vi, buf, size);
 	}
 
@@ -184,7 +184,26 @@ static int virtrng_freeze(struct virtio_device *vdev)
 
 static int virtrng_restore(struct virtio_device *vdev)
 {
-	return probe_common(vdev);
+	int err;
+
+	err = probe_common(vdev);
+	if (!err) {
+		struct virtrng_info *vi = vdev->priv;
+
+		/*
+		 * Set hwrng_removed to ensure that virtio_read()
+		 * does not block waiting for data before the
+		 * registration is complete.
+		 */
+		vi->hwrng_removed = true;
+		err = hwrng_register(&vi->hwrng);
+		if (!err) {
+			vi->hwrng_register_done = true;
+			vi->hwrng_removed = false;
+		}
+	}
+
+	return err;
 }
 #endif
 

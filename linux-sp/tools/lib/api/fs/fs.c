@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 #include <ctype.h>
 #include <errno.h>
 #include <limits.h>
@@ -200,7 +201,7 @@ static void mem_toupper(char *f, size_t len)
 
 /*
  * Check for "NAME_PATH" environment variable to override fs location (for
- * testing). This matches the recommendation in Documentation/sysfs-rules.txt
+ * testing). This matches the recommendation in Documentation/admin-guide/sysfs-rules.rst
  * for SYSFS_PATH.
  */
 static bool fs__env_override(struct fs *fs)
@@ -314,12 +315,8 @@ int filename__read_int(const char *filename, int *value)
 	return err;
 }
 
-/*
- * Parses @value out of @filename with strtoull.
- * By using 0 for base, the strtoull detects the
- * base automatically (see man strtoull).
- */
-int filename__read_ull(const char *filename, unsigned long long *value)
+static int filename__read_ull_base(const char *filename,
+				   unsigned long long *value, int base)
 {
 	char line[64];
 	int fd = open(filename, O_RDONLY), err = -1;
@@ -328,13 +325,32 @@ int filename__read_ull(const char *filename, unsigned long long *value)
 		return -1;
 
 	if (read(fd, line, sizeof(line)) > 0) {
-		*value = strtoull(line, NULL, 0);
+		*value = strtoull(line, NULL, base);
 		if (*value != ULLONG_MAX)
 			err = 0;
 	}
 
 	close(fd);
 	return err;
+}
+
+/*
+ * Parses @value out of @filename with strtoull.
+ * By using 16 for base to treat the number as hex.
+ */
+int filename__read_xll(const char *filename, unsigned long long *value)
+{
+	return filename__read_ull_base(filename, value, 16);
+}
+
+/*
+ * Parses @value out of @filename with strtoull.
+ * By using 0 for base, the strtoull detects the
+ * base automatically (see man strtoull).
+ */
+int filename__read_ull(const char *filename, unsigned long long *value)
+{
+	return filename__read_ull_base(filename, value, 0);
 }
 
 #define STRERR_BUFSIZE  128     /* For the buffer size of strerror_r */
@@ -387,6 +403,22 @@ int filename__read_str(const char *filename, char **buf, size_t *sizep)
 	return err;
 }
 
+int filename__write_int(const char *filename, int value)
+{
+	int fd = open(filename, O_WRONLY), err = -1;
+	char buf[64];
+
+	if (fd < 0)
+		return err;
+
+	sprintf(buf, "%d", value);
+	if (write(fd, buf, sizeof(buf)) == sizeof(buf))
+		err = 0;
+
+	close(fd);
+	return err;
+}
+
 int procfs__read_str(const char *entry, char **buf, size_t *sizep)
 {
 	char path[PATH_MAX];
@@ -400,7 +432,8 @@ int procfs__read_str(const char *entry, char **buf, size_t *sizep)
 	return filename__read_str(path, buf, sizep);
 }
 
-int sysfs__read_ull(const char *entry, unsigned long long *value)
+static int sysfs__read_ull_base(const char *entry,
+				unsigned long long *value, int base)
 {
 	char path[PATH_MAX];
 	const char *sysfs = sysfs__mountpoint();
@@ -410,7 +443,17 @@ int sysfs__read_ull(const char *entry, unsigned long long *value)
 
 	snprintf(path, sizeof(path), "%s/%s", sysfs, entry);
 
-	return filename__read_ull(path, value);
+	return filename__read_ull_base(path, value, base);
+}
+
+int sysfs__read_xll(const char *entry, unsigned long long *value)
+{
+	return sysfs__read_ull_base(entry, value, 16);
+}
+
+int sysfs__read_ull(const char *entry, unsigned long long *value)
+{
+	return sysfs__read_ull_base(entry, value, 0);
 }
 
 int sysfs__read_int(const char *entry, int *value)
@@ -479,4 +522,18 @@ int sysctl__read_int(const char *sysctl, int *value)
 	snprintf(path, sizeof(path), "%s/sys/%s", procfs, sysctl);
 
 	return filename__read_int(path, value);
+}
+
+int sysfs__write_int(const char *entry, int value)
+{
+	char path[PATH_MAX];
+	const char *sysfs = sysfs__mountpoint();
+
+	if (!sysfs)
+		return -1;
+
+	if (snprintf(path, sizeof(path), "%s/%s", sysfs, entry) >= PATH_MAX)
+		return -1;
+
+	return filename__write_int(path, value);
 }

@@ -1,7 +1,7 @@
 /*
  * Qualcomm Technologies HIDMA DMA engine interface
  *
- * Copyright (c) 2015-2016, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2015-2017, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -50,6 +50,7 @@
 #include <linux/slab.h>
 #include <linux/spinlock.h>
 #include <linux/of_dma.h>
+#include <linux/of_device.h>
 #include <linux/property.h>
 #include <linux/delay.h>
 #include <linux/acpi.h>
@@ -104,6 +105,10 @@ static unsigned int nr_desc_prm;
 module_param(nr_desc_prm, uint, 0644);
 MODULE_PARM_DESC(nr_desc_prm, "number of descriptors (default: 0)");
 
+enum hidma_cap {
+	HIDMA_MSI_CAP = 1,
+	HIDMA_IDENTITY_CAP,
+};
 
 /* process completed descriptors */
 static void hidma_process_completed(struct hidma_chan *mchan)
@@ -133,24 +138,25 @@ static void hidma_process_completed(struct hidma_chan *mchan)
 		desc = &mdesc->desc;
 		last_cookie = desc->cookie;
 
+		llstat = hidma_ll_status(mdma->lldev, mdesc->tre_ch);
+
 		spin_lock_irqsave(&mchan->lock, irqflags);
+		if (llstat == DMA_COMPLETE) {
+			mchan->last_success = last_cookie;
+			result.result = DMA_TRANS_NOERROR;
+		} else {
+			result.result = DMA_TRANS_ABORTED;
+		}
+
 		dma_cookie_complete(desc);
 		spin_unlock_irqrestore(&mchan->lock, irqflags);
 
-		llstat = hidma_ll_status(mdma->lldev, mdesc->tre_ch);
 		dmaengine_desc_get_callback(desc, &cb);
 
 		dma_run_dependencies(desc);
 
 		spin_lock_irqsave(&mchan->lock, irqflags);
 		list_move(&mdesc->node, &mchan->free);
-
-		if (llstat == DMA_COMPLETE) {
-			mchan->last_success = last_cookie;
-			result.result = DMA_TRANS_NOERROR;
-		} else
-			result.result = DMA_TRANS_ABORTED;
-
 		spin_unlock_irqrestore(&mchan->lock, irqflags);
 
 		dmaengine_desc_callback_invoke(&cb, &result);
@@ -210,6 +216,7 @@ static int hidma_chan_init(struct hidma_dev *dmadev, u32 dma_sig)
 	INIT_LIST_HEAD(&mchan->prepared);
 	INIT_LIST_HEAD(&mchan->active);
 	INIT_LIST_HEAD(&mchan->completed);
+	INIT_LIST_HEAD(&mchan->queued);
 
 	spin_lock_init(&mchan->lock);
 	list_add_tail(&mchan->chan.device_node, &ddev->channels);
@@ -230,9 +237,15 @@ static void hidma_issue_pending(struct dma_chan *dmach)
 	struct hidma_chan *mchan = to_hidma_chan(dmach);
 	struct hidma_dev *dmadev = mchan->dmadev;
 	unsigned long flags;
+	struct hidma_desc *qdesc, *next;
 	int status;
 
 	spin_lock_irqsave(&mchan->lock, flags);
+	list_for_each_entry_safe(qdesc, next, &mchan->queued, node) {
+		hidma_ll_queue_request(dmadev->lldev, qdesc->tre_ch);
+		list_move_tail(&qdesc->node, &mchan->active);
+	}
+
 	if (!mchan->running) {
 		struct hidma_desc *desc = list_first_entry(&mchan->active,
 							   struct hidma_desc,
@@ -315,17 +328,18 @@ static dma_cookie_t hidma_tx_submit(struct dma_async_tx_descriptor *txd)
 		pm_runtime_put_autosuspend(dmadev->ddev.dev);
 		return -ENODEV;
 	}
+	pm_runtime_mark_last_busy(dmadev->ddev.dev);
+	pm_runtime_put_autosuspend(dmadev->ddev.dev);
 
 	mdesc = container_of(txd, struct hidma_desc, desc);
 	spin_lock_irqsave(&mchan->lock, irqflags);
 
-	/* Move descriptor to active */
-	list_move_tail(&mdesc->node, &mchan->active);
+	/* Move descriptor to queued */
+	list_move_tail(&mdesc->node, &mchan->queued);
 
 	/* Update cookie */
 	cookie = dma_cookie_assign(txd);
 
-	hidma_ll_queue_request(dmadev->lldev, mdesc->tre_ch);
 	spin_unlock_irqrestore(&mchan->lock, irqflags);
 
 	return cookie;
@@ -402,8 +416,43 @@ hidma_prep_dma_memcpy(struct dma_chan *dmach, dma_addr_t dest, dma_addr_t src,
 	if (!mdesc)
 		return NULL;
 
+	mdesc->desc.flags = flags;
 	hidma_ll_set_transfer_params(mdma->lldev, mdesc->tre_ch,
-				     src, dest, len, flags);
+				     src, dest, len, flags,
+				     HIDMA_TRE_MEMCPY);
+
+	/* Place descriptor in prepared list */
+	spin_lock_irqsave(&mchan->lock, irqflags);
+	list_add_tail(&mdesc->node, &mchan->prepared);
+	spin_unlock_irqrestore(&mchan->lock, irqflags);
+
+	return &mdesc->desc;
+}
+
+static struct dma_async_tx_descriptor *
+hidma_prep_dma_memset(struct dma_chan *dmach, dma_addr_t dest, int value,
+		size_t len, unsigned long flags)
+{
+	struct hidma_chan *mchan = to_hidma_chan(dmach);
+	struct hidma_desc *mdesc = NULL;
+	struct hidma_dev *mdma = mchan->dmadev;
+	unsigned long irqflags;
+
+	/* Get free descriptor */
+	spin_lock_irqsave(&mchan->lock, irqflags);
+	if (!list_empty(&mchan->free)) {
+		mdesc = list_first_entry(&mchan->free, struct hidma_desc, node);
+		list_del(&mdesc->node);
+	}
+	spin_unlock_irqrestore(&mchan->lock, irqflags);
+
+	if (!mdesc)
+		return NULL;
+
+	mdesc->desc.flags = flags;
+	hidma_ll_set_transfer_params(mdma->lldev, mdesc->tre_ch,
+				     value, dest, len, flags,
+				     HIDMA_TRE_MEMSET);
 
 	/* Place descriptor in prepared list */
 	spin_lock_irqsave(&mchan->lock, irqflags);
@@ -431,6 +480,7 @@ static int hidma_terminate_channel(struct dma_chan *chan)
 	list_splice_init(&mchan->active, &list);
 	list_splice_init(&mchan->prepared, &list);
 	list_splice_init(&mchan->completed, &list);
+	list_splice_init(&mchan->queued, &list);
 	spin_unlock_irqrestore(&mchan->lock, irqflags);
 
 	/* this suspends the existing transfer */
@@ -569,8 +619,7 @@ static irqreturn_t hidma_chirq_handler_msi(int chirq, void *arg)
 static ssize_t hidma_show_values(struct device *dev,
 				 struct device_attribute *attr, char *buf)
 {
-	struct platform_device *pdev = to_platform_device(dev);
-	struct hidma_dev *mdev = platform_get_drvdata(pdev);
+	struct hidma_dev *mdev = dev_get_drvdata(dev);
 
 	buf[0] = 0;
 
@@ -694,25 +743,12 @@ static int hidma_request_msi(struct hidma_dev *dmadev,
 #endif
 }
 
-static bool hidma_msi_capable(struct device *dev)
+static bool hidma_test_capability(struct device *dev, enum hidma_cap test_cap)
 {
-	struct acpi_device *adev = ACPI_COMPANION(dev);
-	const char *of_compat;
-	int ret = -EINVAL;
+	enum hidma_cap cap;
 
-	if (!adev || acpi_disabled) {
-		ret = device_property_read_string(dev, "compatible",
-						  &of_compat);
-		if (ret)
-			return false;
-
-		ret = strcmp(of_compat, "qcom,hidma-1.1");
-	} else {
-#ifdef CONFIG_ACPI
-		ret = strcmp(acpi_device_hid(adev), "QCOM8062");
-#endif
-	}
-	return ret == 0;
+	cap = (enum hidma_cap) device_get_match_data(dev);
+	return cap ? ((cap & test_cap) > 0) : 0;
 }
 
 static int hidma_probe(struct platform_device *pdev)
@@ -767,6 +803,7 @@ static int hidma_probe(struct platform_device *pdev)
 	pm_runtime_get_sync(dmadev->ddev.dev);
 
 	dma_cap_set(DMA_MEMCPY, dmadev->ddev.cap_mask);
+	dma_cap_set(DMA_MEMSET, dmadev->ddev.cap_mask);
 	if (WARN_ON(!pdev->dev.dma_mask)) {
 		rc = -ENXIO;
 		goto dmafree;
@@ -777,6 +814,7 @@ static int hidma_probe(struct platform_device *pdev)
 	dmadev->dev_trca = trca;
 	dmadev->trca_resource = trca_resource;
 	dmadev->ddev.device_prep_dma_memcpy = hidma_prep_dma_memcpy;
+	dmadev->ddev.device_prep_dma_memset = hidma_prep_dma_memset;
 	dmadev->ddev.device_alloc_chan_resources = hidma_alloc_chan_resources;
 	dmadev->ddev.device_free_chan_resources = hidma_free_chan_resources;
 	dmadev->ddev.device_tx_status = hidma_tx_status;
@@ -790,18 +828,23 @@ static int hidma_probe(struct platform_device *pdev)
 	 * Determine the MSI capability of the platform. Old HW doesn't
 	 * support MSI.
 	 */
-	msi = hidma_msi_capable(&pdev->dev);
-
+	msi = hidma_test_capability(&pdev->dev, HIDMA_MSI_CAP);
 	device_property_read_u32(&pdev->dev, "desc-count",
 				 &dmadev->nr_descriptors);
 
-	if (!dmadev->nr_descriptors && nr_desc_prm)
+	if (nr_desc_prm) {
+		dev_info(&pdev->dev, "overriding number of descriptors as %d\n",
+			 nr_desc_prm);
 		dmadev->nr_descriptors = nr_desc_prm;
+	}
 
 	if (!dmadev->nr_descriptors)
 		dmadev->nr_descriptors = HIDMA_NR_DEFAULT_DESC;
 
-	dmadev->chidx = readl(dmadev->dev_trca + 0x28);
+	if (hidma_test_capability(&pdev->dev, HIDMA_IDENTITY_CAP))
+		dmadev->chidx = readl(dmadev->dev_trca + 0x40);
+	else
+		dmadev->chidx = readl(dmadev->dev_trca + 0x28);
 
 	/* Set DMA mask to 64 bits. */
 	rc = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));
@@ -906,7 +949,8 @@ static int hidma_remove(struct platform_device *pdev)
 #if IS_ENABLED(CONFIG_ACPI)
 static const struct acpi_device_id hidma_acpi_ids[] = {
 	{"QCOM8061"},
-	{"QCOM8062"},
+	{"QCOM8062", HIDMA_MSI_CAP},
+	{"QCOM8063", (HIDMA_MSI_CAP | HIDMA_IDENTITY_CAP)},
 	{},
 };
 MODULE_DEVICE_TABLE(acpi, hidma_acpi_ids);
@@ -914,7 +958,9 @@ MODULE_DEVICE_TABLE(acpi, hidma_acpi_ids);
 
 static const struct of_device_id hidma_match[] = {
 	{.compatible = "qcom,hidma-1.0",},
-	{.compatible = "qcom,hidma-1.1",},
+	{.compatible = "qcom,hidma-1.1", .data = (void *)(HIDMA_MSI_CAP),},
+	{.compatible = "qcom,hidma-1.2",
+	 .data = (void *)(HIDMA_MSI_CAP | HIDMA_IDENTITY_CAP),},
 	{},
 };
 MODULE_DEVICE_TABLE(of, hidma_match);

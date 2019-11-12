@@ -589,8 +589,9 @@ jme_setup_tx_resources(struct jme_adapter *jme)
 	atomic_set(&txring->next_to_clean, 0);
 	atomic_set(&txring->nr_free, jme->tx_ring_size);
 
-	txring->bufinf		= kzalloc(sizeof(struct jme_buffer_info) *
-					jme->tx_ring_size, GFP_ATOMIC);
+	txring->bufinf		= kcalloc(jme->tx_ring_size,
+						sizeof(struct jme_buffer_info),
+						GFP_ATOMIC);
 	if (unlikely(!(txring->bufinf)))
 		goto err_free_txring;
 
@@ -688,17 +689,6 @@ jme_enable_tx_engine(struct jme_adapter *jme)
 	 * Start clock for TX MAC Processor
 	 */
 	jme_mac_txclk_on(jme);
-}
-
-static inline void
-jme_restart_tx_engine(struct jme_adapter *jme)
-{
-	/*
-	 * Restart TX Engine
-	 */
-	jwrite32(jme, JME_TXCS, jme->reg_txcs |
-				TXCS_SELECT_QUEUE0 |
-				TXCS_ENABLE);
 }
 
 static inline void
@@ -849,8 +839,9 @@ jme_setup_rx_resources(struct jme_adapter *jme)
 	rxring->next_to_use	= 0;
 	atomic_set(&rxring->next_to_clean, 0);
 
-	rxring->bufinf		= kzalloc(sizeof(struct jme_buffer_info) *
-					jme->rx_ring_size, GFP_ATOMIC);
+	rxring->bufinf		= kcalloc(jme->rx_ring_size,
+						sizeof(struct jme_buffer_info),
+						GFP_ATOMIC);
 	if (unlikely(!(rxring->bufinf)))
 		goto err_free_rxring;
 
@@ -1082,7 +1073,7 @@ static int
 jme_process_receive(struct jme_adapter *jme, int limit)
 {
 	struct jme_ring *rxring = &(jme->rxring[0]);
-	struct rxdesc *rxdesc = rxring->desc;
+	struct rxdesc *rxdesc;
 	int i, j, ccnt, desccnt, mask = jme->rx_ring_mask;
 
 	if (unlikely(!atomic_dec_and_test(&jme->rx_cleaning)))
@@ -1920,10 +1911,10 @@ jme_wait_link(struct jme_adapter *jme)
 {
 	u32 phylink, to = JME_WAIT_LINK_TIME;
 
-	mdelay(1000);
+	msleep(1000);
 	phylink = jme_linkstat_from_phy(jme);
 	while (!(phylink & PHY_LINK_UP) && (to -= 10) > 0) {
-		mdelay(10);
+		usleep_range(10000, 11000);
 		phylink = jme_linkstat_from_phy(jme);
 	}
 }
@@ -2382,37 +2373,6 @@ jme_tx_timeout(struct net_device *netdev)
 	jme_reset_link(jme);
 }
 
-static inline void jme_pause_rx(struct jme_adapter *jme)
-{
-	atomic_dec(&jme->link_changing);
-
-	jme_set_rx_pcc(jme, PCC_OFF);
-	if (test_bit(JME_FLAG_POLL, &jme->flags)) {
-		JME_NAPI_DISABLE(jme);
-	} else {
-		tasklet_disable(&jme->rxclean_task);
-		tasklet_disable(&jme->rxempty_task);
-	}
-}
-
-static inline void jme_resume_rx(struct jme_adapter *jme)
-{
-	struct dynpcc_info *dpi = &(jme->dpi);
-
-	if (test_bit(JME_FLAG_POLL, &jme->flags)) {
-		JME_NAPI_ENABLE(jme);
-	} else {
-		tasklet_enable(&jme->rxclean_task);
-		tasklet_enable(&jme->rxempty_task);
-	}
-	dpi->cur		= PCC_P1;
-	dpi->attempt		= PCC_P1;
-	dpi->cnt		= 0;
-	jme_set_rx_pcc(jme, PCC_P1);
-
-	atomic_inc(&jme->link_changing);
-}
-
 static void
 jme_get_drvinfo(struct net_device *netdev,
 		     struct ethtool_drvinfo *info)
@@ -2652,12 +2612,11 @@ jme_get_link_ksettings(struct net_device *netdev,
 		       struct ethtool_link_ksettings *cmd)
 {
 	struct jme_adapter *jme = netdev_priv(netdev);
-	int rc;
 
 	spin_lock_bh(&jme->phy_lock);
-	rc = mii_ethtool_get_link_ksettings(&jme->mii_if, cmd);
+	mii_ethtool_get_link_ksettings(&jme->mii_if, cmd);
 	spin_unlock_bh(&jme->phy_lock);
-	return rc;
+	return 0;
 }
 
 static int

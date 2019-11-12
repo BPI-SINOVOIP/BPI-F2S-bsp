@@ -117,14 +117,14 @@ static const struct rpc_pipe_ops gss_upcall_ops_v1;
 static inline struct gss_cl_ctx *
 gss_get_ctx(struct gss_cl_ctx *ctx)
 {
-	atomic_inc(&ctx->count);
+	refcount_inc(&ctx->count);
 	return ctx;
 }
 
 static inline void
 gss_put_ctx(struct gss_cl_ctx *ctx)
 {
-	if (atomic_dec_and_test(&ctx->count))
+	if (refcount_dec_and_test(&ctx->count))
 		gss_free_ctx(ctx);
 }
 
@@ -200,7 +200,7 @@ gss_alloc_context(void)
 		ctx->gc_proc = RPC_GSS_PROC_DATA;
 		ctx->gc_seq = 1;	/* NetApp 6.4R1 doesn't accept seq. no. 0 */
 		spin_lock_init(&ctx->gc_seq_lock);
-		atomic_set(&ctx->count,1);
+		refcount_set(&ctx->count,1);
 	}
 	return ctx;
 }
@@ -284,10 +284,15 @@ err:
 	return p;
 }
 
-#define UPCALL_BUF_LEN 128
+/* XXX: Need some documentation about why UPCALL_BUF_LEN is so small.
+ *	Is user space expecting no more than UPCALL_BUF_LEN bytes?
+ *	Note that there are now _two_ NI_MAXHOST sized data items
+ *	being passed in this string.
+ */
+#define UPCALL_BUF_LEN	256
 
 struct gss_upcall_msg {
-	atomic_t count;
+	refcount_t count;
 	kuid_t	uid;
 	struct rpc_pipe_msg msg;
 	struct list_head list;
@@ -328,7 +333,7 @@ static void
 gss_release_msg(struct gss_upcall_msg *gss_msg)
 {
 	struct net *net = gss_msg->auth->net;
-	if (!atomic_dec_and_test(&gss_msg->count))
+	if (!refcount_dec_and_test(&gss_msg->count))
 		return;
 	put_pipe_version(net);
 	BUG_ON(!list_empty(&gss_msg->list));
@@ -348,7 +353,7 @@ __gss_find_upcall(struct rpc_pipe *pipe, kuid_t uid, const struct gss_auth *auth
 			continue;
 		if (auth && pos->auth->service != auth->service)
 			continue;
-		atomic_inc(&pos->count);
+		refcount_inc(&pos->count);
 		dprintk("RPC:       %s found msg %p\n", __func__, pos);
 		return pos;
 	}
@@ -369,7 +374,7 @@ gss_add_msg(struct gss_upcall_msg *gss_msg)
 	spin_lock(&pipe->lock);
 	old = __gss_find_upcall(pipe, gss_msg->uid, gss_msg->auth);
 	if (old == NULL) {
-		atomic_inc(&gss_msg->count);
+		refcount_inc(&gss_msg->count);
 		list_add(&gss_msg->list, &pipe->in_downcall);
 	} else
 		gss_msg = old;
@@ -383,7 +388,7 @@ __gss_unhash_msg(struct gss_upcall_msg *gss_msg)
 	list_del_init(&gss_msg->list);
 	rpc_wake_up_status(&gss_msg->rpc_waitqueue, gss_msg->msg.errno);
 	wake_up_all(&gss_msg->waitqueue);
-	atomic_dec(&gss_msg->count);
+	refcount_dec(&gss_msg->count);
 }
 
 static void
@@ -456,18 +461,44 @@ static int gss_encode_v1_msg(struct gss_upcall_msg *gss_msg,
 	buflen -= len;
 	p += len;
 	gss_msg->msg.len = len;
+
+	/*
+	 * target= is a full service principal that names the remote
+	 * identity that we are authenticating to.
+	 */
 	if (target_name) {
 		len = scnprintf(p, buflen, "target=%s ", target_name);
 		buflen -= len;
 		p += len;
 		gss_msg->msg.len += len;
 	}
-	if (service_name != NULL) {
-		len = scnprintf(p, buflen, "service=%s ", service_name);
+
+	/*
+	 * gssd uses service= and srchost= to select a matching key from
+	 * the system's keytab to use as the source principal.
+	 *
+	 * service= is the service name part of the source principal,
+	 * or "*" (meaning choose any).
+	 *
+	 * srchost= is the hostname part of the source principal. When
+	 * not provided, gssd uses the local hostname.
+	 */
+	if (service_name) {
+		char *c = strchr(service_name, '@');
+
+		if (!c)
+			len = scnprintf(p, buflen, "service=%s ",
+					service_name);
+		else
+			len = scnprintf(p, buflen,
+					"service=%.*s srchost=%s ",
+					(int)(c - service_name),
+					service_name, c + 1);
 		buflen -= len;
 		p += len;
 		gss_msg->msg.len += len;
 	}
+
 	if (mech->gm_upcall_enctypes) {
 		len = scnprintf(p, buflen, "enctypes=%s ",
 				mech->gm_upcall_enctypes);
@@ -506,7 +537,7 @@ gss_alloc_msg(struct gss_auth *gss_auth,
 	INIT_LIST_HEAD(&gss_msg->list);
 	rpc_init_wait_queue(&gss_msg->rpc_waitqueue, "RPCSEC_GSS upcall waitq");
 	init_waitqueue_head(&gss_msg->waitqueue);
-	atomic_set(&gss_msg->count, 1);
+	refcount_set(&gss_msg->count, 1);
 	gss_msg->uid = uid;
 	gss_msg->auth = gss_auth;
 	switch (vers) {
@@ -517,7 +548,7 @@ gss_alloc_msg(struct gss_auth *gss_auth,
 		err = gss_encode_v1_msg(gss_msg, service_name, gss_auth->target_name);
 		if (err)
 			goto err_put_pipe_version;
-	};
+	}
 	kref_get(&gss_auth->kref);
 	return gss_msg;
 err_put_pipe_version:
@@ -542,11 +573,11 @@ gss_setup_upcall(struct gss_auth *gss_auth, struct rpc_cred *cred)
 	gss_msg = gss_add_msg(gss_new);
 	if (gss_msg == gss_new) {
 		int res;
-		atomic_inc(&gss_msg->count);
+		refcount_inc(&gss_msg->count);
 		res = rpc_queue_upcall(gss_new->pipe, &gss_new->msg);
 		if (res) {
 			gss_unhash_msg(gss_new);
-			atomic_dec(&gss_msg->count);
+			refcount_dec(&gss_msg->count);
 			gss_release_msg(gss_new);
 			gss_msg = ERR_PTR(res);
 		}
@@ -595,7 +626,7 @@ gss_refresh_upcall(struct rpc_task *task)
 		task->tk_timeout = 0;
 		gss_cred->gc_upcall = gss_msg;
 		/* gss_upcall_callback will release the reference to gss_upcall_msg */
-		atomic_inc(&gss_msg->count);
+		refcount_inc(&gss_msg->count);
 		rpc_sleep_on(&gss_msg->rpc_waitqueue, task, gss_upcall_callback);
 	} else {
 		gss_handle_downcall_result(gss_cred, gss_msg);
@@ -815,7 +846,7 @@ restart:
 		if (!list_empty(&gss_msg->msg.list))
 			continue;
 		gss_msg->msg.errno = -EPIPE;
-		atomic_inc(&gss_msg->count);
+		refcount_inc(&gss_msg->count);
 		__gss_unhash_msg(gss_msg);
 		spin_unlock(&pipe->lock);
 		gss_release_msg(gss_msg);
@@ -834,7 +865,7 @@ gss_pipe_destroy_msg(struct rpc_pipe_msg *msg)
 	if (msg->errno < 0) {
 		dprintk("RPC:       %s releasing msg %p\n",
 			__func__, gss_msg);
-		atomic_inc(&gss_msg->count);
+		refcount_inc(&gss_msg->count);
 		gss_unhash_msg(gss_msg);
 		if (msg->errno == -ETIMEDOUT)
 			warn_gssd();
@@ -985,7 +1016,7 @@ static void gss_pipe_free(struct gss_pipe *p)
  * parameters based on the input flavor (which must be a pseudoflavor)
  */
 static struct gss_auth *
-gss_create_new(struct rpc_auth_create_args *args, struct rpc_clnt *clnt)
+gss_create_new(const struct rpc_auth_create_args *args, struct rpc_clnt *clnt)
 {
 	rpc_authflavor_t flavor = args->pseudoflavor;
 	struct gss_auth *gss_auth;
@@ -1132,7 +1163,7 @@ gss_destroy(struct rpc_auth *auth)
  * (which is guaranteed to last as long as any of its descendants).
  */
 static struct gss_auth *
-gss_auth_find_or_add_hashed(struct rpc_auth_create_args *args,
+gss_auth_find_or_add_hashed(const struct rpc_auth_create_args *args,
 		struct rpc_clnt *clnt,
 		struct gss_auth *new)
 {
@@ -1169,7 +1200,8 @@ out:
 }
 
 static struct gss_auth *
-gss_create_hashed(struct rpc_auth_create_args *args, struct rpc_clnt *clnt)
+gss_create_hashed(const struct rpc_auth_create_args *args,
+		  struct rpc_clnt *clnt)
 {
 	struct gss_auth *gss_auth;
 	struct gss_auth *new;
@@ -1188,7 +1220,7 @@ out:
 }
 
 static struct rpc_auth *
-gss_create(struct rpc_auth_create_args *args, struct rpc_clnt *clnt)
+gss_create(const struct rpc_auth_create_args *args, struct rpc_clnt *clnt)
 {
 	struct gss_auth *gss_auth;
 	struct rpc_xprt_switch *xps = rcu_access_pointer(clnt->cl_xpi.xpi_xpswitch);
@@ -1571,7 +1603,7 @@ static int gss_cred_is_negative_entry(struct rpc_cred *cred)
 	if (test_bit(RPCAUTH_CRED_NEGATIVE, &cred->cr_flags)) {
 		unsigned long now = jiffies;
 		unsigned long begin, expire;
-		struct gss_cred *gss_cred; 
+		struct gss_cred *gss_cred;
 
 		gss_cred = container_of(cred, struct gss_cred, gc_base);
 		begin = gss_cred->gc_upcall_timestamp;
@@ -1736,6 +1768,7 @@ priv_release_snd_buf(struct rpc_rqst *rqstp)
 	for (i=0; i < rqstp->rq_enc_pages_num; i++)
 		__free_page(rqstp->rq_enc_pages[i]);
 	kfree(rqstp->rq_enc_pages);
+	rqstp->rq_release_snd_buf = NULL;
 }
 
 static int
@@ -1743,6 +1776,9 @@ alloc_enc_pages(struct rpc_rqst *rqstp)
 {
 	struct xdr_buf *snd_buf = &rqstp->rq_snd_buf;
 	int first, last, i;
+
+	if (rqstp->rq_release_snd_buf)
+		rqstp->rq_release_snd_buf(rqstp);
 
 	if (snd_buf->page_len == 0) {
 		rqstp->rq_enc_pages_num = 0;
@@ -1753,7 +1789,8 @@ alloc_enc_pages(struct rpc_rqst *rqstp)
 	last = (snd_buf->page_base + snd_buf->page_len - 1) >> PAGE_SHIFT;
 	rqstp->rq_enc_pages_num = last - first + 1 + 1;
 	rqstp->rq_enc_pages
-		= kmalloc(rqstp->rq_enc_pages_num * sizeof(struct page *),
+		= kmalloc_array(rqstp->rq_enc_pages_num,
+				sizeof(struct page *),
 				GFP_NOFS);
 	if (!rqstp->rq_enc_pages)
 		goto out;

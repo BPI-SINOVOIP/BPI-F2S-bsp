@@ -10,7 +10,6 @@
  */
 
 #include <linux/kernel.h>
-#include <linux/module.h>
 #include <linux/atomic.h>
 #include <linux/netdevice.h>
 #include <linux/ipv6.h>
@@ -26,18 +25,18 @@
 static atomic_t v6_worker_count;
 
 unsigned int
-nf_nat_masquerade_ipv6(struct sk_buff *skb, const struct nf_nat_range *range,
+nf_nat_masquerade_ipv6(struct sk_buff *skb, const struct nf_nat_range2 *range,
 		       const struct net_device *out)
 {
 	enum ip_conntrack_info ctinfo;
 	struct nf_conn_nat *nat;
 	struct in6_addr src;
 	struct nf_conn *ct;
-	struct nf_nat_range newrange;
+	struct nf_nat_range2 newrange;
 
 	ct = nf_ct_get(skb, &ctinfo);
-	NF_CT_ASSERT(ct && (ctinfo == IP_CT_NEW || ctinfo == IP_CT_RELATED ||
-			    ctinfo == IP_CT_RELATED_REPLY));
+	WARN_ON(!(ct && (ctinfo == IP_CT_NEW || ctinfo == IP_CT_RELATED ||
+			 ctinfo == IP_CT_RELATED_REPLY)));
 
 	if (ipv6_dev_get_saddr(nf_ct_net(ct), out,
 			       &ipv6_hdr(skb)->daddr, 0, &src) < 0)
@@ -75,8 +74,8 @@ static int masq_device_event(struct notifier_block *this,
 	struct net *net = dev_net(dev);
 
 	if (event == NETDEV_DOWN)
-		nf_ct_iterate_cleanup(net, device_cmp,
-				      (void *)(long)dev->ifindex, 0, 0);
+		nf_ct_iterate_cleanup_net(net, device_cmp,
+					  (void *)(long)dev->ifindex, 0, 0);
 
 	return NOTIFY_DONE;
 }
@@ -99,7 +98,7 @@ static void iterate_cleanup_work(struct work_struct *work)
 	w = container_of(work, struct masq_dev_work, work);
 
 	index = w->ifindex;
-	nf_ct_iterate_cleanup(w->net, device_cmp, (void *)index, 0, 0);
+	nf_ct_iterate_cleanup_net(w->net, device_cmp, (void *)index, 0, 0);
 
 	put_net(w->net);
 	kfree(w);
@@ -110,19 +109,19 @@ static void iterate_cleanup_work(struct work_struct *work)
 /* ipv6 inet notifier is an atomic notifier, i.e. we cannot
  * schedule.
  *
- * Unfortunately, nf_ct_iterate_cleanup can run for a long
+ * Unfortunately, nf_ct_iterate_cleanup_net can run for a long
  * time if there are lots of conntracks and the system
  * handles high softirq load, so it frequently calls cond_resched
  * while iterating the conntrack table.
  *
- * So we defer nf_ct_iterate_cleanup walk to the system workqueue.
+ * So we defer nf_ct_iterate_cleanup_net walk to the system workqueue.
  *
  * As we can have 'a lot' of inet_events (depending on amount
  * of ipv6 addresses being deleted), we also need to add an upper
  * limit to the number of queued work items.
  */
-static int masq_inet_event(struct notifier_block *this,
-			   unsigned long event, void *ptr)
+static int masq_inet6_event(struct notifier_block *this,
+			    unsigned long event, void *ptr)
 {
 	struct inet6_ifaddr *ifa = ptr;
 	const struct net_device *dev;
@@ -159,33 +158,53 @@ static int masq_inet_event(struct notifier_block *this,
 	return NOTIFY_DONE;
 }
 
-static struct notifier_block masq_inet_notifier = {
-	.notifier_call	= masq_inet_event,
+static struct notifier_block masq_inet6_notifier = {
+	.notifier_call	= masq_inet6_event,
 };
 
-static atomic_t masquerade_notifier_refcount = ATOMIC_INIT(0);
+static int masq_refcnt;
+static DEFINE_MUTEX(masq_mutex);
 
-void nf_nat_masquerade_ipv6_register_notifier(void)
+int nf_nat_masquerade_ipv6_register_notifier(void)
 {
-	/* check if the notifier is already set */
-	if (atomic_inc_return(&masquerade_notifier_refcount) > 1)
-		return;
+	int ret = 0;
 
-	register_netdevice_notifier(&masq_dev_notifier);
-	register_inet6addr_notifier(&masq_inet_notifier);
+	mutex_lock(&masq_mutex);
+	/* check if the notifier is already set */
+	if (++masq_refcnt > 1)
+		goto out_unlock;
+
+	ret = register_netdevice_notifier(&masq_dev_notifier);
+	if (ret)
+		goto err_dec;
+
+	ret = register_inet6addr_notifier(&masq_inet6_notifier);
+	if (ret)
+		goto err_unregister;
+
+	mutex_unlock(&masq_mutex);
+	return ret;
+
+err_unregister:
+	unregister_netdevice_notifier(&masq_dev_notifier);
+err_dec:
+	masq_refcnt--;
+out_unlock:
+	mutex_unlock(&masq_mutex);
+	return ret;
 }
 EXPORT_SYMBOL_GPL(nf_nat_masquerade_ipv6_register_notifier);
 
 void nf_nat_masquerade_ipv6_unregister_notifier(void)
 {
+	mutex_lock(&masq_mutex);
 	/* check if the notifier still has clients */
-	if (atomic_dec_return(&masquerade_notifier_refcount) > 0)
-		return;
+	if (--masq_refcnt > 0)
+		goto out_unlock;
 
-	unregister_inet6addr_notifier(&masq_inet_notifier);
+	unregister_inet6addr_notifier(&masq_inet6_notifier);
 	unregister_netdevice_notifier(&masq_dev_notifier);
+out_unlock:
+	mutex_unlock(&masq_mutex);
 }
 EXPORT_SYMBOL_GPL(nf_nat_masquerade_ipv6_unregister_notifier);
-
-MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Patrick McHardy <kaber@trash.net>");

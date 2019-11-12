@@ -158,7 +158,7 @@ static int ps3disk_submit_request_sg(struct ps3_storage_device *dev,
 	if (res) {
 		dev_err(&dev->sbd.core, "%s:%u: %s failed %d\n", __func__,
 			__LINE__, op, res);
-		__blk_end_request_all(req, -EIO);
+		__blk_end_request_all(req, BLK_STS_IOERR);
 		return 0;
 	}
 
@@ -180,7 +180,7 @@ static int ps3disk_submit_flush_request(struct ps3_storage_device *dev,
 	if (res) {
 		dev_err(&dev->sbd.core, "%s:%u: sync cache failed 0x%llx\n",
 			__func__, __LINE__, res);
-		__blk_end_request_all(req, -EIO);
+		__blk_end_request_all(req, BLK_STS_IOERR);
 		return 0;
 	}
 
@@ -208,7 +208,7 @@ static void ps3disk_do_request(struct ps3_storage_device *dev,
 			break;
 		default:
 			blk_dump_rq_flags(req, DEVICE_NAME " bad request");
-			__blk_end_request_all(req, -EIO);
+			__blk_end_request_all(req, BLK_STS_IOERR);
 		}
 	}
 }
@@ -231,7 +231,8 @@ static irqreturn_t ps3disk_interrupt(int irq, void *data)
 	struct ps3_storage_device *dev = data;
 	struct ps3disk_private *priv;
 	struct request *req;
-	int res, read, error;
+	int res, read;
+	blk_status_t error;
 	u64 tag, status;
 	const char *op;
 
@@ -269,7 +270,7 @@ static irqreturn_t ps3disk_interrupt(int irq, void *data)
 	if (status) {
 		dev_dbg(&dev->sbd.core, "%s:%u: %s failed 0x%llx\n", __func__,
 			__LINE__, op, status);
-		error = -EIO;
+		error = BLK_STS_IOERR;
 	} else {
 		dev_dbg(&dev->sbd.core, "%s:%u: %s completed\n", __func__,
 			__LINE__, op);
@@ -463,8 +464,6 @@ static int ps3disk_probe(struct ps3_system_bus_device *_dev)
 
 	priv->queue = queue;
 	queue->queuedata = dev;
-
-	blk_queue_bounce_limit(queue, BLK_BOUNCE_HIGH);
 
 	blk_queue_max_hw_sectors(queue, dev->bounce_size >> 9);
 	blk_queue_segment_boundary(queue, -1UL);

@@ -124,6 +124,18 @@ int hsr_create_self_node(struct list_head *self_node_db,
 	return 0;
 }
 
+void hsr_del_node(struct list_head *self_node_db)
+{
+	struct hsr_node *node;
+
+	rcu_read_lock();
+	node = list_first_or_null_rcu(self_node_db, struct hsr_node, mac_list);
+	rcu_read_unlock();
+	if (node) {
+		list_del_rcu(&node->mac_list);
+		kfree(node);
+	}
+}
 
 /* Allocate an hsr_node and add it to node_db. 'addr' is the node's AddressA;
  * seq_out is used to initialize filtering of outgoing duplicate frames
@@ -365,15 +377,13 @@ static struct hsr_port *get_late_port(struct hsr_priv *hsr,
 /* Remove stale sequence_nr records. Called by timer every
  * HSR_LIFE_CHECK_INTERVAL (two seconds or so).
  */
-void hsr_prune_nodes(unsigned long data)
+void hsr_prune_nodes(struct timer_list *t)
 {
-	struct hsr_priv *hsr;
+	struct hsr_priv *hsr = from_timer(hsr, t, prune_timer);
 	struct hsr_node *node;
 	struct hsr_port *port;
 	unsigned long timestamp;
 	unsigned long time_a, time_b;
-
-	hsr = (struct hsr_priv *) data;
 
 	rcu_read_lock();
 	list_for_each_entry_rcu(node, &hsr->node_db, mac_list) {

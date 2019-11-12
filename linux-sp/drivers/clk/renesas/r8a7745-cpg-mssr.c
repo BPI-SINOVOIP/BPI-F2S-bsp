@@ -51,7 +51,6 @@ static const struct cpg_core_clk r8a7745_core_clks[] __initconst = {
 	DEF_FIXED(".pll1_div2",	CLK_PLL1_DIV2, CLK_PLL1, 2, 1),
 
 	/* Core Clock Outputs */
-	DEF_BASE("lb",   R8A7745_CLK_LB,   CLK_TYPE_GEN2_LB,	CLK_PLL1),
 	DEF_BASE("sdh",  R8A7745_CLK_SDH,  CLK_TYPE_GEN2_SDH,	CLK_PLL1),
 	DEF_BASE("sd0",  R8A7745_CLK_SD0,  CLK_TYPE_GEN2_SD0,	CLK_PLL1),
 	DEF_BASE("qspi", R8A7745_CLK_QSPI, CLK_TYPE_GEN2_QSPI,	CLK_PLL1_DIV2),
@@ -63,6 +62,7 @@ static const struct cpg_core_clk r8a7745_core_clks[] __initconst = {
 	DEF_FIXED("zs",    R8A7745_CLK_ZS,	CLK_PLL1,	    6, 1),
 	DEF_FIXED("hp",    R8A7745_CLK_HP,	CLK_PLL1,	   12, 1),
 	DEF_FIXED("b",     R8A7745_CLK_B,	CLK_PLL1,	   12, 1),
+	DEF_FIXED("lb",    R8A7745_CLK_LB,	CLK_PLL1,	   24, 1),
 	DEF_FIXED("p",     R8A7745_CLK_P,	CLK_PLL1,	   24, 1),
 	DEF_FIXED("cl",    R8A7745_CLK_CL,	CLK_PLL1,	   48, 1),
 	DEF_FIXED("cp",    R8A7745_CLK_CP,	CLK_PLL1,	   48, 1),
@@ -114,6 +114,7 @@ static const struct mssr_mod_clk r8a7745_mod_clks[] __initconst = {
 	DEF_MOD("cmt1",			 329,	R8A7745_CLK_R),
 	DEF_MOD("usbhs-dmac0",		 330,	R8A7745_CLK_HP),
 	DEF_MOD("usbhs-dmac1",		 331,	R8A7745_CLK_HP),
+	DEF_MOD("rwdt",			 402,	R8A7745_CLK_R),
 	DEF_MOD("irqc",			 407,	R8A7745_CLK_CP),
 	DEF_MOD("intc-sys",		 408,	R8A7745_CLK_ZS),
 	DEF_MOD("audio-dmac0",		 502,	R8A7745_CLK_HP),
@@ -129,6 +130,7 @@ static const struct mssr_mod_clk r8a7745_mod_clks[] __initconst = {
 	DEF_MOD("scif2",		 719,	R8A7745_CLK_P),
 	DEF_MOD("scif1",		 720,	R8A7745_CLK_P),
 	DEF_MOD("scif0",		 721,	R8A7745_CLK_P),
+	DEF_MOD("du1",			 723,	R8A7745_CLK_ZX),
 	DEF_MOD("du0",			 724,	R8A7745_CLK_ZX),
 	DEF_MOD("ipmmu-sgx",		 800,	R8A7745_CLK_ZX),
 	DEF_MOD("vin1",			 810,	R8A7745_CLK_ZG),
@@ -167,22 +169,19 @@ static const struct mssr_mod_clk r8a7745_mod_clks[] __initconst = {
 	DEF_MOD("scu-dvc0",		1019,	MOD_CLK_ID(1017)),
 	DEF_MOD("scu-ctu1-mix1",	1020,	MOD_CLK_ID(1017)),
 	DEF_MOD("scu-ctu0-mix0",	1021,	MOD_CLK_ID(1017)),
-	DEF_MOD("scu-src9",		1022,	MOD_CLK_ID(1017)),
-	DEF_MOD("scu-src8",		1023,	MOD_CLK_ID(1017)),
-	DEF_MOD("scu-src7",		1024,	MOD_CLK_ID(1017)),
 	DEF_MOD("scu-src6",		1025,	MOD_CLK_ID(1017)),
 	DEF_MOD("scu-src5",		1026,	MOD_CLK_ID(1017)),
 	DEF_MOD("scu-src4",		1027,	MOD_CLK_ID(1017)),
 	DEF_MOD("scu-src3",		1028,	MOD_CLK_ID(1017)),
 	DEF_MOD("scu-src2",		1029,	MOD_CLK_ID(1017)),
 	DEF_MOD("scu-src1",		1030,	MOD_CLK_ID(1017)),
-	DEF_MOD("scu-src0",		1031,	MOD_CLK_ID(1017)),
 	DEF_MOD("scifa3",		1106,	R8A7745_CLK_MP),
 	DEF_MOD("scifa4",		1107,	R8A7745_CLK_MP),
 	DEF_MOD("scifa5",		1108,	R8A7745_CLK_MP),
 };
 
 static const unsigned int r8a7745_crit_mod_clks[] __initconst = {
+	MOD_CLK_ID(402),	/* RWDT */
 	MOD_CLK_ID(408),	/* INTC-SYS (GIC) */
 };
 
@@ -194,31 +193,22 @@ static const unsigned int r8a7745_crit_mod_clks[] __initconst = {
  *    MD	EXTAL		PLL0	PLL1	PLL3
  * 14 13 19	(MHz)		*1	*2
  *---------------------------------------------------
- * 0  0  0	15		x200/3	x208/2	x106
  * 0  0  1	15		x200/3	x208/2	x88
- * 0  1  0	20		x150/3	x156/2	x80
  * 0  1  1	20		x150/3	x156/2	x66
- * 1  0  0	26 / 2		x230/3	x240/2	x122
  * 1  0  1	26 / 2		x230/3	x240/2	x102
- * 1  1  0	30 / 2		x200/3	x208/2	x106
  * 1  1  1	30 / 2		x200/3	x208/2	x88
  *
  * *1 :	Table 7.5b indicates VCO output (PLL0 = VCO/3)
  * *2 :	Table 7.5b indicates VCO output (PLL1 = VCO/2)
  */
-#define CPG_PLL_CONFIG_INDEX(md)	((((md) & BIT(14)) >> 12) | \
-					 (((md) & BIT(13)) >> 12) | \
-					 (((md) & BIT(19)) >> 19))
+#define CPG_PLL_CONFIG_INDEX(md)	((((md) & BIT(14)) >> 13) | \
+					 (((md) & BIT(13)) >> 13))
 
 static const struct rcar_gen2_cpg_pll_config cpg_pll_configs[8] __initconst = {
 	/* EXTAL div	PLL1 mult	PLL3 mult	PLL0 mult */
-	{ 1,		208,		106,		200	},
 	{ 1,		208,		88,		200	},
-	{ 1,		156,		80,		150	},
 	{ 1,		156,		66,		150	},
-	{ 2,		240,		122,		230	},
 	{ 2,		240,		102,		230	},
-	{ 2,		208,		106,		200	},
 	{ 2,		208,		88,		200	},
 };
 

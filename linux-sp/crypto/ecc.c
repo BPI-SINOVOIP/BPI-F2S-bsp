@@ -29,6 +29,7 @@
 #include <linux/swab.h>
 #include <linux/fips.h>
 #include <crypto/ecdh.h>
+#include <crypto/rng.h>
 
 #include "ecc.h"
 #include "ecc_curve_defs.h"
@@ -514,7 +515,7 @@ static void vli_mmod_fast_256(u64 *result, const u64 *product,
 static bool vli_mmod_fast(u64 *result, u64 *product,
 			  const u64 *curve_prime, unsigned int ndigits)
 {
-	u64 tmp[2 * ndigits];
+	u64 tmp[2 * ECC_MAX_DIGITS];
 
 	switch (ndigits) {
 	case 3:
@@ -535,7 +536,7 @@ static bool vli_mmod_fast(u64 *result, u64 *product,
 static void vli_mod_mult_fast(u64 *result, const u64 *left, const u64 *right,
 			      const u64 *curve_prime, unsigned int ndigits)
 {
-	u64 product[2 * ndigits];
+	u64 product[2 * ECC_MAX_DIGITS];
 
 	vli_mult(product, left, right, ndigits);
 	vli_mmod_fast(result, product, curve_prime, ndigits);
@@ -545,7 +546,7 @@ static void vli_mod_mult_fast(u64 *result, const u64 *left, const u64 *right,
 static void vli_mod_square_fast(u64 *result, const u64 *left,
 				const u64 *curve_prime, unsigned int ndigits)
 {
-	u64 product[2 * ndigits];
+	u64 product[2 * ECC_MAX_DIGITS];
 
 	vli_square(product, left, ndigits);
 	vli_mmod_fast(result, product, curve_prime, ndigits);
@@ -559,8 +560,8 @@ static void vli_mod_square_fast(u64 *result, const u64 *left,
 static void vli_mod_inv(u64 *result, const u64 *input, const u64 *mod,
 			unsigned int ndigits)
 {
-	u64 a[ndigits], b[ndigits];
-	u64 u[ndigits], v[ndigits];
+	u64 a[ECC_MAX_DIGITS], b[ECC_MAX_DIGITS];
+	u64 u[ECC_MAX_DIGITS], v[ECC_MAX_DIGITS];
 	u64 carry;
 	int cmp_result;
 
@@ -648,8 +649,8 @@ static void ecc_point_double_jacobian(u64 *x1, u64 *y1, u64 *z1,
 				      u64 *curve_prime, unsigned int ndigits)
 {
 	/* t1 = x, t2 = y, t3 = z */
-	u64 t4[ndigits];
-	u64 t5[ndigits];
+	u64 t4[ECC_MAX_DIGITS];
+	u64 t5[ECC_MAX_DIGITS];
 
 	if (vli_is_zero(z1, ndigits))
 		return;
@@ -710,7 +711,7 @@ static void ecc_point_double_jacobian(u64 *x1, u64 *y1, u64 *z1,
 static void apply_z(u64 *x1, u64 *y1, u64 *z, u64 *curve_prime,
 		    unsigned int ndigits)
 {
-	u64 t1[ndigits];
+	u64 t1[ECC_MAX_DIGITS];
 
 	vli_mod_square_fast(t1, z, curve_prime, ndigits);    /* z^2 */
 	vli_mod_mult_fast(x1, x1, t1, curve_prime, ndigits); /* x1 * z^2 */
@@ -723,7 +724,7 @@ static void xycz_initial_double(u64 *x1, u64 *y1, u64 *x2, u64 *y2,
 				u64 *p_initial_z, u64 *curve_prime,
 				unsigned int ndigits)
 {
-	u64 z[ndigits];
+	u64 z[ECC_MAX_DIGITS];
 
 	vli_set(x2, x1, ndigits);
 	vli_set(y2, y1, ndigits);
@@ -749,7 +750,7 @@ static void xycz_add(u64 *x1, u64 *y1, u64 *x2, u64 *y2, u64 *curve_prime,
 		     unsigned int ndigits)
 {
 	/* t1 = X1, t2 = Y1, t3 = X2, t4 = Y2 */
-	u64 t5[ndigits];
+	u64 t5[ECC_MAX_DIGITS];
 
 	/* t5 = x2 - x1 */
 	vli_mod_sub(t5, x2, x1, curve_prime, ndigits);
@@ -790,9 +791,9 @@ static void xycz_add_c(u64 *x1, u64 *y1, u64 *x2, u64 *y2, u64 *curve_prime,
 		       unsigned int ndigits)
 {
 	/* t1 = X1, t2 = Y1, t3 = X2, t4 = Y2 */
-	u64 t5[ndigits];
-	u64 t6[ndigits];
-	u64 t7[ndigits];
+	u64 t5[ECC_MAX_DIGITS];
+	u64 t6[ECC_MAX_DIGITS];
+	u64 t7[ECC_MAX_DIGITS];
 
 	/* t5 = x2 - x1 */
 	vli_mod_sub(t5, x2, x1, curve_prime, ndigits);
@@ -841,15 +842,23 @@ static void xycz_add_c(u64 *x1, u64 *y1, u64 *x2, u64 *y2, u64 *curve_prime,
 
 static void ecc_point_mult(struct ecc_point *result,
 			   const struct ecc_point *point, const u64 *scalar,
-			   u64 *initial_z, u64 *curve_prime,
+			   u64 *initial_z, const struct ecc_curve *curve,
 			   unsigned int ndigits)
 {
 	/* R0 and R1 */
-	u64 rx[2][ndigits];
-	u64 ry[2][ndigits];
-	u64 z[ndigits];
+	u64 rx[2][ECC_MAX_DIGITS];
+	u64 ry[2][ECC_MAX_DIGITS];
+	u64 z[ECC_MAX_DIGITS];
+	u64 sk[2][ECC_MAX_DIGITS];
+	u64 *curve_prime = curve->p;
 	int i, nb;
-	int num_bits = vli_num_bits(scalar, ndigits);
+	int num_bits;
+	int carry;
+
+	carry = vli_add(sk[0], scalar, curve->n, ndigits);
+	vli_add(sk[1], sk[0], curve->n, ndigits);
+	scalar = sk[!carry];
+	num_bits = sizeof(u64) * ndigits * 8 + 1;
 
 	vli_set(rx[1], point->x, ndigits);
 	vli_set(ry[1], point->y, ndigits);
@@ -904,7 +913,7 @@ static inline void ecc_swap_digits(const u64 *in, u64 *out,
 }
 
 int ecc_is_key_valid(unsigned int curve_id, unsigned int ndigits,
-		     const u8 *private_key, unsigned int private_key_len)
+		     const u64 *private_key, unsigned int private_key_len)
 {
 	int nbytes;
 	const struct ecc_curve *curve = ecc_get_curve(curve_id);
@@ -917,32 +926,85 @@ int ecc_is_key_valid(unsigned int curve_id, unsigned int ndigits,
 	if (private_key_len != nbytes)
 		return -EINVAL;
 
-	if (vli_is_zero((const u64 *)&private_key[0], ndigits))
+	if (vli_is_zero(private_key, ndigits))
 		return -EINVAL;
 
 	/* Make sure the private key is in the range [1, n-1]. */
-	if (vli_cmp(curve->n, (const u64 *)&private_key[0], ndigits) != 1)
+	if (vli_cmp(curve->n, private_key, ndigits) != 1)
 		return -EINVAL;
 
 	return 0;
 }
 
-int ecdh_make_pub_key(unsigned int curve_id, unsigned int ndigits,
-		      const u8 *private_key, unsigned int private_key_len,
-		      u8 *public_key, unsigned int public_key_len)
+/*
+ * ECC private keys are generated using the method of extra random bits,
+ * equivalent to that described in FIPS 186-4, Appendix B.4.1.
+ *
+ * d = (c mod(n–1)) + 1    where c is a string of random bits, 64 bits longer
+ *                         than requested
+ * 0 <= c mod(n-1) <= n-2  and implies that
+ * 1 <= d <= n-1
+ *
+ * This method generates a private key uniformly distributed in the range
+ * [1, n-1].
+ */
+int ecc_gen_privkey(unsigned int curve_id, unsigned int ndigits, u64 *privkey)
+{
+	const struct ecc_curve *curve = ecc_get_curve(curve_id);
+	u64 priv[ECC_MAX_DIGITS];
+	unsigned int nbytes = ndigits << ECC_DIGITS_TO_BYTES_SHIFT;
+	unsigned int nbits = vli_num_bits(curve->n, ndigits);
+	int err;
+
+	/* Check that N is included in Table 1 of FIPS 186-4, section 6.1.1 */
+	if (nbits < 160 || ndigits > ARRAY_SIZE(priv))
+		return -EINVAL;
+
+	/*
+	 * FIPS 186-4 recommends that the private key should be obtained from a
+	 * RBG with a security strength equal to or greater than the security
+	 * strength associated with N.
+	 *
+	 * The maximum security strength identified by NIST SP800-57pt1r4 for
+	 * ECC is 256 (N >= 512).
+	 *
+	 * This condition is met by the default RNG because it selects a favored
+	 * DRBG with a security strength of 256.
+	 */
+	if (crypto_get_default_rng())
+		return -EFAULT;
+
+	err = crypto_rng_get_bytes(crypto_default_rng, (u8 *)priv, nbytes);
+	crypto_put_default_rng();
+	if (err)
+		return err;
+
+	if (vli_is_zero(priv, ndigits))
+		return -EINVAL;
+
+	/* Make sure the private key is in the range [1, n-1]. */
+	if (vli_cmp(curve->n, priv, ndigits) != 1)
+		return -EINVAL;
+
+	ecc_swap_digits(priv, privkey, ndigits);
+
+	return 0;
+}
+
+int ecc_make_pub_key(unsigned int curve_id, unsigned int ndigits,
+		     const u64 *private_key, u64 *public_key)
 {
 	int ret = 0;
 	struct ecc_point *pk;
-	u64 priv[ndigits];
-	unsigned int nbytes;
+	u64 priv[ECC_MAX_DIGITS];
 	const struct ecc_curve *curve = ecc_get_curve(curve_id);
 
-	if (!private_key || !curve) {
+	if (!private_key || !curve || ndigits > ARRAY_SIZE(priv)) {
 		ret = -EINVAL;
 		goto out;
 	}
 
-	ecc_swap_digits((const u64 *)private_key, priv, ndigits);
+	ecc_swap_digits(private_key, priv, ndigits);
 
 	pk = ecc_alloc_point(ndigits);
 	if (!pk) {
@@ -950,15 +1012,14 @@ int ecdh_make_pub_key(unsigned int curve_id, unsigned int ndigits,
 		goto out;
 	}
 
-	ecc_point_mult(pk, &curve->g, priv, NULL, curve->p, ndigits);
+	ecc_point_mult(pk, &curve->g, priv, NULL, curve, ndigits);
 	if (ecc_point_is_zero(pk)) {
 		ret = -EAGAIN;
 		goto err_free_point;
 	}
 
-	nbytes = ndigits << ECC_DIGITS_TO_BYTES_SHIFT;
-	ecc_swap_digits(pk->x, (u64 *)public_key, ndigits);
-	ecc_swap_digits(pk->y, (u64 *)&public_key[nbytes], ndigits);
+	ecc_swap_digits(pk->x, public_key, ndigits);
+	ecc_swap_digits(pk->y, &public_key[ndigits], ndigits);
 
 err_free_point:
 	ecc_free_point(pk);
@@ -966,19 +1027,49 @@ out:
 	return ret;
 }
 
+/* SP800-56A section 5.6.2.3.4 partial verification: ephemeral keys only */
+static int ecc_is_pubkey_valid_partial(const struct ecc_curve *curve,
+				       struct ecc_point *pk)
+{
+	u64 yy[ECC_MAX_DIGITS], xxx[ECC_MAX_DIGITS], w[ECC_MAX_DIGITS];
+
+	/* Check 1: Verify key is not the zero point. */
+	if (ecc_point_is_zero(pk))
+		return -EINVAL;
+
+	/* Check 2: Verify key is in the range [1, p-1]. */
+	if (vli_cmp(curve->p, pk->x, pk->ndigits) != 1)
+		return -EINVAL;
+	if (vli_cmp(curve->p, pk->y, pk->ndigits) != 1)
+		return -EINVAL;
+
+	/* Check 3: Verify that y^2 == (x^3 + a·x + b) mod p */
+	vli_mod_square_fast(yy, pk->y, curve->p, pk->ndigits); /* y^2 */
+	vli_mod_square_fast(xxx, pk->x, curve->p, pk->ndigits); /* x^2 */
+	vli_mod_mult_fast(xxx, xxx, pk->x, curve->p, pk->ndigits); /* x^3 */
+	vli_mod_mult_fast(w, curve->a, pk->x, curve->p, pk->ndigits); /* a·x */
+	vli_mod_add(w, w, curve->b, curve->p, pk->ndigits); /* a·x + b */
+	vli_mod_add(w, w, xxx, curve->p, pk->ndigits); /* x^3 + a·x + b */
+	if (vli_cmp(yy, w, pk->ndigits) != 0) /* Equation */
+		return -EINVAL;
+
+	return 0;
+
+}
+
 int crypto_ecdh_shared_secret(unsigned int curve_id, unsigned int ndigits,
-		       const u8 *private_key, unsigned int private_key_len,
-		       const u8 *public_key, unsigned int public_key_len,
-		       u8 *secret, unsigned int secret_len)
+			      const u64 *private_key, const u64 *public_key,
+			      u64 *secret)
 {
 	int ret = 0;
 	struct ecc_point *product, *pk;
-	u64 priv[ndigits];
-	u64 rand_z[ndigits];
+	u64 priv[ECC_MAX_DIGITS];
+	u64 rand_z[ECC_MAX_DIGITS];
 	unsigned int nbytes;
 	const struct ecc_curve *curve = ecc_get_curve(curve_id);
 
-	if (!private_key || !public_key || !curve) {
+	if (!private_key || !public_key || !curve ||
+	    ndigits > ARRAY_SIZE(priv) || ndigits > ARRAY_SIZE(rand_z)) {
 		ret = -EINVAL;
 		goto out;
 	}
@@ -993,19 +1084,23 @@ int crypto_ecdh_shared_secret(unsigned int curve_id, unsigned int ndigits,
 		goto out;
 	}
 
+	ecc_swap_digits(public_key, pk->x, ndigits);
+	ecc_swap_digits(&public_key[ndigits], pk->y, ndigits);
+	ret = ecc_is_pubkey_valid_partial(curve, pk);
+	if (ret)
+		goto err_alloc_product;
+
+	ecc_swap_digits(private_key, priv, ndigits);
+
 	product = ecc_alloc_point(ndigits);
 	if (!product) {
 		ret = -ENOMEM;
 		goto err_alloc_product;
 	}
 
-	ecc_swap_digits((const u64 *)public_key, pk->x, ndigits);
-	ecc_swap_digits((const u64 *)&public_key[nbytes], pk->y, ndigits);
-	ecc_swap_digits((const u64 *)private_key, priv, ndigits);
+	ecc_point_mult(product, pk, priv, rand_z, curve, ndigits);
 
-	ecc_point_mult(product, pk, priv, rand_z, curve->p, ndigits);
-
-	ecc_swap_digits(product->x, (u64 *)secret, ndigits);
+	ecc_swap_digits(product->x, secret, ndigits);
 
 	if (ecc_point_is_zero(product))
 		ret = -EFAULT;

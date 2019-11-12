@@ -194,14 +194,13 @@ static int int3403_cdev_add(struct int3403_priv *priv)
 		return -EFAULT;
 	}
 
+	priv->priv = obj;
 	obj->max_state = p->package.count - 1;
 	obj->cdev =
 		thermal_cooling_device_register(acpi_device_bid(priv->adev),
 				priv, &int3403_cooling_ops);
 	if (IS_ERR(obj->cdev))
 		result = PTR_ERR(obj->cdev);
-
-	priv->priv = obj;
 
 	kfree(buf.pointer);
 	/* TODO: add ACPI notification support */
@@ -238,8 +237,16 @@ static int int3403_add(struct platform_device *pdev)
 	status = acpi_evaluate_integer(priv->adev->handle, "PTYP",
 				       NULL, &priv->type);
 	if (ACPI_FAILURE(status)) {
-		result = -EINVAL;
-		goto err;
+		unsigned long long tmp;
+
+		status = acpi_evaluate_integer(priv->adev->handle, "_TMP",
+					       NULL, &tmp);
+		if (ACPI_FAILURE(status)) {
+			result = -EINVAL;
+			goto err;
+		} else {
+			priv->type = INT3403_TYPE_SENSOR;
+		}
 	}
 
 	platform_set_drvdata(pdev, priv);

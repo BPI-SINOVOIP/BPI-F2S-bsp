@@ -23,7 +23,7 @@
 */
 
 #include <linux/i2c.h>
-#include "dvb_frontend.h"
+#include <media/dvb_frontend.h>
 #include "au8522_priv.h"
 
 static int debug;
@@ -234,6 +234,7 @@ int au8522_init(struct dvb_frontend *fe)
 	   chip, so that when it gets powered back up it won't think
 	   that it is already tuned */
 	state->current_frequency = 0;
+	state->current_modulation = VSB_8;
 
 	au8522_writereg(state, 0xa4, 1 << 5);
 

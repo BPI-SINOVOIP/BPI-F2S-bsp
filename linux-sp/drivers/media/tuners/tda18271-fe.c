@@ -960,7 +960,7 @@ static int tda18271_set_params(struct dvb_frontend *fe)
 		break;
 	case SYS_DVBC_ANNEX_B:
 		bw = 6000000;
-		/* falltrough */
+		/* fall through */
 	case SYS_DVBC_ANNEX_A:
 	case SYS_DVBC_ANNEX_C:
 		if (bw <= 6000000) {
@@ -1240,9 +1240,9 @@ static int tda18271_set_config(struct dvb_frontend *fe, void *priv_cfg)
 static const struct dvb_tuner_ops tda18271_tuner_ops = {
 	.info = {
 		.name = "NXP TDA18271HD",
-		.frequency_min  =  45000000,
-		.frequency_max  = 864000000,
-		.frequency_step =     62500
+		.frequency_min_hz  =  45 * MHz,
+		.frequency_max_hz  = 864 * MHz,
+		.frequency_step_hz = 62500
 	},
 	.init              = tda18271_init,
 	.sleep             = tda18271_sleep,

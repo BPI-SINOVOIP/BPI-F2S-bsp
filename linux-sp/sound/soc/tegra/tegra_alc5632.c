@@ -124,18 +124,6 @@ static int tegra_alc5632_asoc_init(struct snd_soc_pcm_runtime *rtd)
 	return 0;
 }
 
-static int tegra_alc5632_card_remove(struct snd_soc_card *card)
-{
-	struct tegra_alc5632 *machine = snd_soc_card_get_drvdata(card);
-
-	if (gpio_is_valid(machine->gpio_hp_det)) {
-		snd_soc_jack_free_gpios(&tegra_alc5632_hs_jack, 1,
-					&tegra_alc5632_hp_jack_gpio);
-	}
-
-	return 0;
-}
-
 static struct snd_soc_dai_link tegra_alc5632_dai = {
 	.name = "ALC5632",
 	.stream_name = "ALC5632 PCM",
@@ -150,7 +138,6 @@ static struct snd_soc_dai_link tegra_alc5632_dai = {
 static struct snd_soc_card snd_soc_tegra_alc5632 = {
 	.name = "tegra-alc5632",
 	.owner = THIS_MODULE,
-	.remove = tegra_alc5632_card_remove,
 	.dai_link = &tegra_alc5632_dai,
 	.num_links = 1,
 	.controls = tegra_alc5632_controls,
@@ -173,7 +160,6 @@ static int tegra_alc5632_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	card->dev = &pdev->dev;
-	platform_set_drvdata(pdev, card);
 	snd_soc_card_set_drvdata(card, alc5632);
 
 	alc5632->gpio_hp_det = of_get_named_gpio(np, "nvidia,hp-det-gpios", 0);
@@ -204,14 +190,14 @@ static int tegra_alc5632_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev,
 			"Property 'nvidia,i2s-controller' missing or invalid\n");
 		ret = -EINVAL;
-		goto err;
+		goto err_put_codec_of_node;
 	}
 
 	tegra_alc5632_dai.platform_of_node = tegra_alc5632_dai.cpu_of_node;
 
 	ret = tegra_asoc_utils_init(&alc5632->util_data, &pdev->dev);
 	if (ret)
-		goto err;
+		goto err_put_cpu_of_node;
 
 	ret = snd_soc_register_card(card);
 	if (ret) {
@@ -224,6 +210,13 @@ static int tegra_alc5632_probe(struct platform_device *pdev)
 
 err_fini_utils:
 	tegra_asoc_utils_fini(&alc5632->util_data);
+err_put_cpu_of_node:
+	of_node_put(tegra_alc5632_dai.cpu_of_node);
+	tegra_alc5632_dai.cpu_of_node = NULL;
+	tegra_alc5632_dai.platform_of_node = NULL;
+err_put_codec_of_node:
+	of_node_put(tegra_alc5632_dai.codec_of_node);
+	tegra_alc5632_dai.codec_of_node = NULL;
 err:
 	return ret;
 }
@@ -236,6 +229,12 @@ static int tegra_alc5632_remove(struct platform_device *pdev)
 	snd_soc_unregister_card(card);
 
 	tegra_asoc_utils_fini(&machine->util_data);
+
+	of_node_put(tegra_alc5632_dai.cpu_of_node);
+	tegra_alc5632_dai.cpu_of_node = NULL;
+	tegra_alc5632_dai.platform_of_node = NULL;
+	of_node_put(tegra_alc5632_dai.codec_of_node);
+	tegra_alc5632_dai.codec_of_node = NULL;
 
 	return 0;
 }

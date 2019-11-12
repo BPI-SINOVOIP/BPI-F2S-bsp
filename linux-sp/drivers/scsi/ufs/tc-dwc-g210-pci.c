@@ -51,7 +51,7 @@ static int tc_dwc_g210_pci_runtime_idle(struct device *dev)
 	return ufshcd_runtime_idle(dev_get_drvdata(dev));
 }
 
-/**
+/*
  * struct ufs_hba_dwc_vops - UFS DWC specific variant operations
  */
 static struct ufs_hba_variant_ops tc_dwc_g210_pci_hba_vops = {
@@ -71,7 +71,7 @@ static void tc_dwc_g210_pci_shutdown(struct pci_dev *pdev)
 /**
  * tc_dwc_g210_pci_remove - de-allocate PCI/SCSI host and host memory space
  *		data structure memory
- * @pdev - pointer to PCI handle
+ * @pdev: pointer to PCI handle
  */
 static void tc_dwc_g210_pci_remove(struct pci_dev *pdev)
 {
@@ -129,8 +129,6 @@ tc_dwc_g210_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		dev_err(&pdev->dev, "Allocation failed\n");
 		return err;
 	}
-
-	INIT_LIST_HEAD(&hba->clk_list_head);
 
 	hba->vops = &tc_dwc_g210_pci_hba_vops;
 

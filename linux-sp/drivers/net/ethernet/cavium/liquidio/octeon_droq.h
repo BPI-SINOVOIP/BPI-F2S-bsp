@@ -51,11 +51,11 @@ struct octeon_droq_desc {
  *  about the packet.
  */
 struct octeon_droq_info {
-	/** The Output Receive Header. */
-	union octeon_rh rh;
-
 	/** The Length of the packet. */
 	u64 length;
+
+	/** The Output Receive Header. */
+	union octeon_rh rh;
 };
 
 #define OCT_DROQ_INFO_SIZE   (sizeof(struct octeon_droq_info))
@@ -122,11 +122,6 @@ struct oct_droq_stats {
 	u64 rx_alloc_failure;
 
 };
-
-#define POLL_EVENT_INTR_ARRIVED  1
-#define POLL_EVENT_PROCESS_PKTS  2
-#define POLL_EVENT_PENDING_PKTS  3
-#define POLL_EVENT_ENABLE_INTR   4
 
 /* The maximum number of buffers that can be dispatched from the
  * output/dma queue. Set to 64 assuming 1K buffers in DROQ and the fact that
@@ -294,9 +289,6 @@ struct octeon_droq {
 	 */
 	u32 max_empty_descs;
 
-	/** The 8B aligned info ptrs begin from this address. */
-	struct octeon_droq_info *info_list;
-
 	/** The receive buffer list. This list has the virtual addresses of the
 	 * buffers.
 	 */
@@ -324,15 +316,6 @@ struct octeon_droq {
 	/** DMA mapped address of the DROQ descriptor ring. */
 	size_t desc_ring_dma;
 
-	/** Info ptr list are allocated at this virtual address. */
-	void *info_base_addr;
-
-	/** DMA mapped address of the info list */
-	dma_addr_t info_list_dma;
-
-	/** Allocated size of info list. */
-	u32 info_alloc_size;
-
 	/** application context */
 	void *app_ctx;
 
@@ -340,7 +323,7 @@ struct octeon_droq {
 
 	u32 cpu_id;
 
-	struct call_single_data csd;
+	call_single_data_t csd;
 };
 
 #define OCT_DROQ_SIZE   (sizeof(struct octeon_droq))
@@ -412,6 +395,9 @@ int octeon_register_dispatch_fn(struct octeon_device *oct,
 				u16 subcode,
 				octeon_dispatch_fn_t fn, void *fn_arg);
 
+void *octeon_get_dispatch_arg(struct octeon_device *oct,
+			      u16 opcode, u16 subcode);
+
 void octeon_droq_print_stats(void);
 
 u32 octeon_droq_check_hw_for_pkts(struct octeon_droq *droq);
@@ -423,8 +409,10 @@ int octeon_droq_process_packets(struct octeon_device *oct,
 				struct octeon_droq *droq,
 				u32 budget);
 
-int octeon_process_droq_poll_cmd(struct octeon_device *oct, u32 q_no,
-				 int cmd, u32 arg);
+int octeon_droq_process_poll_pkts(struct octeon_device *oct,
+				  struct octeon_droq *droq, u32 budget);
+
+int octeon_enable_irq(struct octeon_device *oct, u32 q_no);
 
 void octeon_droq_check_oom(struct octeon_droq *droq);
 

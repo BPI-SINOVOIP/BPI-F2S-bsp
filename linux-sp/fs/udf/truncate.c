@@ -48,7 +48,7 @@ static void extent_trunc(struct inode *inode, struct extent_position *epos,
 
 	if (elen != nelen) {
 		udf_write_aext(inode, epos, &neloc, nelen, 0);
-		if (last_block - first_block > 0) {
+		if (last_block > first_block) {
 			if (etype == (EXT_RECORDED_ALLOCATED >> 30))
 				mark_inode_dirty(inode);
 
@@ -260,6 +260,9 @@ void udf_truncate_extents(struct inode *inode)
 			epos.block = eloc;
 			epos.bh = udf_tread(sb,
 					udf_get_lb_pblock(sb, &eloc, 0));
+			/* Error reading indirect block? */
+			if (!epos.bh)
+				return;
 			if (elen)
 				indirect_ext_len =
 					(elen + sb->s_blocksize - 1) >>

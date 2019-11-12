@@ -16,7 +16,7 @@
 #include <linux/threads.h>
 
 #include <asm/ppc-opcode.h>
-#include <asm/cpu_has_feature.h>
+#include <asm/feature-fixups.h>
 
 #define PPC_DBELL_MSG_BRDCAST	(0x04000000)
 #define PPC_DBELL_TYPE(x)	(((x) & 0xf) << (63-36))
@@ -54,6 +54,19 @@ static inline void ppc_msgsync(void)
 	/* sync is not required when taking messages from the same core */
 	__asm__ __volatile__ (ASM_FTR_IFSET(PPC_MSGSYNC " ; lwsync", "", %0)
 				: : "i" (CPU_FTR_HVMODE|CPU_FTR_ARCH_300));
+}
+
+static inline void _ppc_msgclr(u32 msg)
+{
+	__asm__ __volatile__ (ASM_FTR_IFSET(PPC_MSGCLR(%1), PPC_MSGCLRP(%1), %0)
+				: : "i" (CPU_FTR_HVMODE), "r" (msg));
+}
+
+static inline void ppc_msgclr(enum ppc_dbell type)
+{
+	u32 msg = PPC_DBELL_TYPE(type);
+
+	_ppc_msgclr(msg);
 }
 
 #else /* CONFIG_PPC_BOOK3S */

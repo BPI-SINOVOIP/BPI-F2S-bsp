@@ -501,8 +501,9 @@ static int mvebu_pinctrl_build_functions(struct platform_device *pdev,
 
 	/* we allocate functions for number of pins and hope
 	 * there are fewer unique functions than pins available */
-	funcs = devm_kzalloc(&pdev->dev, funcsize *
-			     sizeof(struct mvebu_pinctrl_function), GFP_KERNEL);
+	funcs = devm_kcalloc(&pdev->dev,
+			     funcsize, sizeof(struct mvebu_pinctrl_function),
+			     GFP_KERNEL);
 	if (!funcs)
 		return -ENOMEM;
 
@@ -549,8 +550,9 @@ static int mvebu_pinctrl_build_functions(struct platform_device *pdev,
 
 			/* allocate group name array if not done already */
 			if (!f->groups) {
-				f->groups = devm_kzalloc(&pdev->dev,
-						 f->num_groups * sizeof(char *),
+				f->groups = devm_kcalloc(&pdev->dev,
+						 f->num_groups,
+						 sizeof(char *),
 						 GFP_KERNEL);
 				if (!f->groups)
 					return -ENOMEM;
@@ -622,8 +624,10 @@ int mvebu_pinctrl_probe(struct platform_device *pdev)
 		}
 	}
 
-	pdesc = devm_kzalloc(&pdev->dev, pctl->desc.npins *
-			     sizeof(struct pinctrl_pin_desc), GFP_KERNEL);
+	pdesc = devm_kcalloc(&pdev->dev,
+			     pctl->desc.npins,
+			     sizeof(struct pinctrl_pin_desc),
+			     GFP_KERNEL);
 	if (!pdesc)
 		return -ENOMEM;
 
@@ -636,10 +640,9 @@ int mvebu_pinctrl_probe(struct platform_device *pdev)
 	 */
 	size = pctl->num_groups * sizeof(*pctl->groups) + noname * 8;
 	p = devm_kzalloc(&pdev->dev, size, GFP_KERNEL);
-	if (!p) {
-		dev_err(&pdev->dev, "failed to alloc group data\n");
+	if (!p)
 		return -ENOMEM;
-	}
+
 	pctl->groups = p;
 	noname_buf = p + pctl->num_groups * sizeof(*pctl->groups);
 
@@ -810,20 +813,16 @@ int mvebu_regmap_mpp_ctrl_set(struct mvebu_mpp_ctrl_data *data,
 }
 
 int mvebu_pinctrl_simple_regmap_probe(struct platform_device *pdev,
-				      struct device *syscon_dev)
+				      struct device *syscon_dev, u32 offset)
 {
 	struct mvebu_pinctrl_soc_info *soc = dev_get_platdata(&pdev->dev);
 	struct mvebu_mpp_ctrl_data *mpp_data;
 	struct regmap *regmap;
-	u32 offset;
 	int i;
 
 	regmap = syscon_node_to_regmap(syscon_dev->of_node);
 	if (IS_ERR(regmap))
 		return PTR_ERR(regmap);
-
-	if (of_property_read_u32(pdev->dev.of_node, "offset", &offset))
-		return -EINVAL;
 
 	mpp_data = devm_kcalloc(&pdev->dev, soc->ncontrols, sizeof(*mpp_data),
 				GFP_KERNEL);

@@ -73,7 +73,7 @@
 
 #define ETHERCAT_MASTER_ID	0x14
 
-static struct pci_device_id ids[] = {
+static const struct pci_device_id ids[] = {
 	{ PCI_DEVICE(0x15ec, 0x5000), },
 	{ 0, }
 };
@@ -223,7 +223,7 @@ static void ec_bhf_process_rx(struct ec_bhf_priv *priv)
 
 		skb = netdev_alloc_skb_ip_align(priv->net_dev, pkt_size);
 		if (skb) {
-			memcpy(skb_put(skb, pkt_size), data, pkt_size);
+			skb_put_data(skb, data, pkt_size);
 			skb->protocol = eth_type_trans(skb, priv->net_dev);
 			priv->stat_rx_bytes += pkt_size;
 
@@ -602,7 +602,7 @@ static struct pci_driver pci_driver = {
 };
 module_pci_driver(pci_driver);
 
-module_param(polling_frequency, long, S_IRUGO);
+module_param(polling_frequency, long, 0444);
 MODULE_PARM_DESC(polling_frequency, "Polling timer frequency in ns");
 
 MODULE_LICENSE("GPL");

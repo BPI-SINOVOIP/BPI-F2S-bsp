@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright IBM Corp. 2016
  * Author(s): Martin Schwidefsky <schwidefsky@de.ibm.com>
@@ -13,7 +14,6 @@
 #include <asm/facility.h>
 
 #include "ap_bus.h"
-#include "ap_asm.h"
 
 /**
  * ap_queue_enable_interruption(): Enable interruption on an AP queue.
@@ -27,8 +27,11 @@
 static int ap_queue_enable_interruption(struct ap_queue *aq, void *ind)
 {
 	struct ap_queue_status status;
+	struct ap_qirq_ctrl qirqctrl = { 0 };
 
-	status = ap_aqic(aq->qid, ind);
+	qirqctrl.ir = 1;
+	qirqctrl.isc = AP_ISC;
+	status = ap_aqic(aq->qid, qirqctrl, ind);
 	switch (status.response_code) {
 	case AP_RESPONSE_NORMAL:
 	case AP_RESPONSE_OTHERWISE_CHANGED:
@@ -362,7 +365,7 @@ static enum ap_wait ap_sm_setirq_wait(struct ap_queue *aq)
 		/* Get the status with TAPQ */
 		status = ap_tapq(aq->qid, NULL);
 
-	if (status.int_enabled == 1) {
+	if (status.irq_enabled == 1) {
 		/* Irqs are now enabled */
 		aq->interrupt = AP_INTR_ENABLED;
 		aq->state = (aq->queue_count > 0) ?
@@ -459,9 +462,9 @@ EXPORT_SYMBOL(ap_queue_resume);
 /*
  * AP queue related attributes.
  */
-static ssize_t ap_req_count_show(struct device *dev,
-				 struct device_attribute *attr,
-				 char *buf)
+static ssize_t request_count_show(struct device *dev,
+				  struct device_attribute *attr,
+				  char *buf)
 {
 	struct ap_queue *aq = to_ap_queue(dev);
 	unsigned int req_cnt;
@@ -472,9 +475,9 @@ static ssize_t ap_req_count_show(struct device *dev,
 	return snprintf(buf, PAGE_SIZE, "%d\n", req_cnt);
 }
 
-static ssize_t ap_req_count_store(struct device *dev,
-				  struct device_attribute *attr,
-				  const char *buf, size_t count)
+static ssize_t request_count_store(struct device *dev,
+				   struct device_attribute *attr,
+				   const char *buf, size_t count)
 {
 	struct ap_queue *aq = to_ap_queue(dev);
 
@@ -485,10 +488,10 @@ static ssize_t ap_req_count_store(struct device *dev,
 	return count;
 }
 
-static DEVICE_ATTR(request_count, 0644, ap_req_count_show, ap_req_count_store);
+static DEVICE_ATTR_RW(request_count);
 
-static ssize_t ap_requestq_count_show(struct device *dev,
-				      struct device_attribute *attr, char *buf)
+static ssize_t requestq_count_show(struct device *dev,
+				   struct device_attribute *attr, char *buf)
 {
 	struct ap_queue *aq = to_ap_queue(dev);
 	unsigned int reqq_cnt = 0;
@@ -499,10 +502,10 @@ static ssize_t ap_requestq_count_show(struct device *dev,
 	return snprintf(buf, PAGE_SIZE, "%d\n", reqq_cnt);
 }
 
-static DEVICE_ATTR(requestq_count, 0444, ap_requestq_count_show, NULL);
+static DEVICE_ATTR_RO(requestq_count);
 
-static ssize_t ap_pendingq_count_show(struct device *dev,
-				      struct device_attribute *attr, char *buf)
+static ssize_t pendingq_count_show(struct device *dev,
+				   struct device_attribute *attr, char *buf)
 {
 	struct ap_queue *aq = to_ap_queue(dev);
 	unsigned int penq_cnt = 0;
@@ -513,10 +516,10 @@ static ssize_t ap_pendingq_count_show(struct device *dev,
 	return snprintf(buf, PAGE_SIZE, "%d\n", penq_cnt);
 }
 
-static DEVICE_ATTR(pendingq_count, 0444, ap_pendingq_count_show, NULL);
+static DEVICE_ATTR_RO(pendingq_count);
 
-static ssize_t ap_reset_show(struct device *dev,
-				      struct device_attribute *attr, char *buf)
+static ssize_t reset_show(struct device *dev,
+			  struct device_attribute *attr, char *buf)
 {
 	struct ap_queue *aq = to_ap_queue(dev);
 	int rc = 0;
@@ -538,10 +541,10 @@ static ssize_t ap_reset_show(struct device *dev,
 	return rc;
 }
 
-static DEVICE_ATTR(reset, 0444, ap_reset_show, NULL);
+static DEVICE_ATTR_RO(reset);
 
-static ssize_t ap_interrupt_show(struct device *dev,
-				 struct device_attribute *attr, char *buf)
+static ssize_t interrupt_show(struct device *dev,
+			      struct device_attribute *attr, char *buf)
 {
 	struct ap_queue *aq = to_ap_queue(dev);
 	int rc = 0;
@@ -557,7 +560,7 @@ static ssize_t ap_interrupt_show(struct device *dev,
 	return rc;
 }
 
-static DEVICE_ATTR(interrupt, 0444, ap_interrupt_show, NULL);
+static DEVICE_ATTR_RO(interrupt);
 
 static struct attribute *ap_queue_dev_attrs[] = {
 	&dev_attr_request_count.attr,
@@ -604,16 +607,14 @@ struct ap_queue *ap_queue_create(ap_qid_t qid, int device_type)
 	aq->ap_dev.device.release = ap_queue_device_release;
 	aq->ap_dev.device.type = &ap_queue_type;
 	aq->ap_dev.device_type = device_type;
-	/* CEX6 toleration: map to CEX5 */
-	if (device_type == AP_DEVICE_TYPE_CEX6)
-		aq->ap_dev.device_type = AP_DEVICE_TYPE_CEX5;
 	aq->qid = qid;
 	aq->state = AP_STATE_RESET_START;
 	aq->interrupt = AP_INTR_DISABLED;
 	spin_lock_init(&aq->lock);
+	INIT_LIST_HEAD(&aq->list);
 	INIT_LIST_HEAD(&aq->pendingq);
 	INIT_LIST_HEAD(&aq->requestq);
-	setup_timer(&aq->timeout, ap_request_timeout, (unsigned long) aq);
+	timer_setup(&aq->timeout, ap_request_timeout, 0);
 
 	return aq;
 }

@@ -1,12 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Functions for dealing with DT resolution
  *
  * Copyright (C) 2012 Pantelis Antoniou <panto@antoniou-consulting.com>
  * Copyright (C) 2012 Texas Instruments Inc.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * version 2 as published by the Free Software Foundation.
  */
 
 #define pr_fmt(fmt)	"OF: resolver: " fmt
@@ -20,34 +17,7 @@
 #include <linux/errno.h>
 #include <linux/slab.h>
 
-/* illegal phandle value (set when unresolved) */
-#define OF_PHANDLE_ILLEGAL	0xdeadbeef
-
-/**
- * Find a node with the give full name by recursively following any of
- * the child node links.
- */
-static struct device_node *find_node_by_full_name(struct device_node *node,
-		const char *full_name)
-{
-	struct device_node *child, *found;
-
-	if (!node)
-		return NULL;
-
-	if (!of_node_cmp(node->full_name, full_name))
-		return of_node_get(node);
-
-	for_each_child_of_node(node, child) {
-		found = find_node_by_full_name(child, full_name);
-		if (found != NULL) {
-			of_node_put(child);
-			return found;
-		}
-	}
-
-	return NULL;
-}
+#include "of_private.h"
 
 static phandle live_tree_max_phandle(void)
 {
@@ -108,10 +78,9 @@ static int update_usages_of_a_phandle_reference(struct device_node *overlay,
 	int offset, len;
 	int err = 0;
 
-	value = kmalloc(prop_fixup->length, GFP_KERNEL);
+	value = kmemdup(prop_fixup->value, prop_fixup->length, GFP_KERNEL);
 	if (!value)
 		return -ENOMEM;
-	memcpy(value, prop_fixup->value, prop_fixup->length);
 
 	/* prop_fixup contains a list of tuples of path:property_name:offset */
 	end = value + prop_fixup->length;
@@ -138,7 +107,7 @@ static int update_usages_of_a_phandle_reference(struct device_node *overlay,
 		if (err)
 			goto err_fail;
 
-		refnode = find_node_by_full_name(overlay, node_path);
+		refnode = __of_find_node_by_full_path(of_node_get(overlay), node_path);
 		if (!refnode)
 			continue;
 
@@ -150,6 +119,11 @@ static int update_usages_of_a_phandle_reference(struct device_node *overlay,
 
 		if (!prop) {
 			err = -ENOENT;
+			goto err_fail;
+		}
+
+		if (offset < 0 || offset + sizeof(__be32) > prop->length) {
+			err = -EINVAL;
 			goto err_fail;
 		}
 
@@ -165,8 +139,8 @@ err_fail:
 static int node_name_cmp(const struct device_node *dn1,
 		const struct device_node *dn2)
 {
-	const char *n1 = strrchr(dn1->full_name, '/') ? : "/";
-	const char *n2 = strrchr(dn2->full_name, '/') ? : "/";
+	const char *n1 = kbasename(dn1->full_name);
+	const char *n2 = kbasename(dn2->full_name);
 
 	return of_node_cmp(n1, n2);
 }
@@ -189,7 +163,6 @@ static int adjust_local_phandle_references(struct device_node *local_fixups,
 	struct property *prop_fix, *prop;
 	int err, i, count;
 	unsigned int off;
-	phandle phandle;
 
 	if (!local_fixups)
 		return 0;
@@ -219,9 +192,7 @@ static int adjust_local_phandle_references(struct device_node *local_fixups,
 			if ((off + 4) > prop->length)
 				return -EINVAL;
 
-			phandle = be32_to_cpu(*(__be32 *)(prop->value + off));
-			phandle += phandle_delta;
-			*(__be32 *)(prop->value + off) = cpu_to_be32(phandle);
+			be32_add_cpu(prop->value + off, phandle_delta);
 		}
 	}
 
@@ -299,6 +270,7 @@ int of_resolve_phandles(struct device_node *overlay)
 		err = -EINVAL;
 		goto out;
 	}
+
 	if (!of_node_check_flag(overlay, OF_DETACHED)) {
 		pr_err("overlay not detached\n");
 		err = -EINVAL;

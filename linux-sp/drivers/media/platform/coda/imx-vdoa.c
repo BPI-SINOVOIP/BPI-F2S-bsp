@@ -18,6 +18,7 @@
 #include <linux/device.h>
 #include <linux/interrupt.h>
 #include <linux/module.h>
+#include <linux/mod_devicetable.h>
 #include <linux/dma-mapping.h>
 #include <linux/platform_device.h>
 #include <linux/videodev2.h>
@@ -86,7 +87,6 @@ struct vdoa_data {
 	struct device		*dev;
 	struct clk		*vdoa_clk;
 	void __iomem		*regs;
-	int			irq;
 };
 
 struct vdoa_q_data {
@@ -101,6 +101,8 @@ struct vdoa_ctx {
 	struct vdoa_data	*vdoa;
 	struct completion	completion;
 	struct vdoa_q_data	q_data[2];
+	unsigned int		submitted_job;
+	unsigned int		completed_job;
 };
 
 static irqreturn_t vdoa_irq_handler(int irq, void *data)
@@ -114,7 +116,7 @@ static irqreturn_t vdoa_irq_handler(int irq, void *data)
 
 	curr_ctx = vdoa->curr_ctx;
 	if (!curr_ctx) {
-		dev_dbg(vdoa->dev,
+		dev_warn(vdoa->dev,
 			"Instance released before the end of transaction\n");
 		return IRQ_HANDLED;
 	}
@@ -127,10 +129,29 @@ static irqreturn_t vdoa_irq_handler(int irq, void *data)
 	} else if (!(val & VDOAIST_EOT)) {
 		dev_warn(vdoa->dev, "Spurious interrupt\n");
 	}
+	curr_ctx->completed_job++;
 	complete(&curr_ctx->completion);
 
 	return IRQ_HANDLED;
 }
+
+int vdoa_wait_for_completion(struct vdoa_ctx *ctx)
+{
+	struct vdoa_data *vdoa = ctx->vdoa;
+
+	if (ctx->submitted_job == ctx->completed_job)
+		return 0;
+
+	if (!wait_for_completion_timeout(&ctx->completion,
+					 msecs_to_jiffies(300))) {
+		dev_err(vdoa->dev,
+			"Timeout waiting for transfer result\n");
+		return -ETIMEDOUT;
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL(vdoa_wait_for_completion);
 
 void vdoa_device_run(struct vdoa_ctx *ctx, dma_addr_t dst, dma_addr_t src)
 {
@@ -138,7 +159,13 @@ void vdoa_device_run(struct vdoa_ctx *ctx, dma_addr_t dst, dma_addr_t src)
 	struct vdoa_data *vdoa = ctx->vdoa;
 	u32 val;
 
+	if (vdoa->curr_ctx)
+		vdoa_wait_for_completion(vdoa->curr_ctx);
+
 	vdoa->curr_ctx = ctx;
+
+	reinit_completion(&ctx->completion);
+	ctx->submitted_job++;
 
 	src_q_data = &ctx->q_data[V4L2_M2M_SRC];
 	dst_q_data = &ctx->q_data[V4L2_M2M_DST];
@@ -177,21 +204,6 @@ void vdoa_device_run(struct vdoa_ctx *ctx, dma_addr_t dst, dma_addr_t src)
 }
 EXPORT_SYMBOL(vdoa_device_run);
 
-int vdoa_wait_for_completion(struct vdoa_ctx *ctx)
-{
-	struct vdoa_data *vdoa = ctx->vdoa;
-
-	if (!wait_for_completion_timeout(&ctx->completion,
-					 msecs_to_jiffies(300))) {
-		dev_err(vdoa->dev,
-			"Timeout waiting for transfer result\n");
-		return -ETIMEDOUT;
-	}
-
-	return 0;
-}
-EXPORT_SYMBOL(vdoa_wait_for_completion);
-
 struct vdoa_ctx *vdoa_context_create(struct vdoa_data *vdoa)
 {
 	struct vdoa_ctx *ctx;
@@ -217,6 +229,11 @@ EXPORT_SYMBOL(vdoa_context_create);
 void vdoa_context_destroy(struct vdoa_ctx *ctx)
 {
 	struct vdoa_data *vdoa = ctx->vdoa;
+
+	if (vdoa->curr_ctx == ctx) {
+		vdoa_wait_for_completion(vdoa->curr_ctx);
+		vdoa->curr_ctx = NULL;
+	}
 
 	clk_disable_unprepare(vdoa->vdoa_clk);
 	kfree(ctx);
@@ -276,6 +293,7 @@ static int vdoa_probe(struct platform_device *pdev)
 {
 	struct vdoa_data *vdoa;
 	struct resource *res;
+	int ret;
 
 	dma_set_coherent_mask(&pdev->dev, DMA_BIT_MASK(32));
 
@@ -297,12 +315,14 @@ static int vdoa_probe(struct platform_device *pdev)
 		return PTR_ERR(vdoa->regs);
 
 	res = platform_get_resource(pdev, IORESOURCE_IRQ, 0);
-	vdoa->irq = devm_request_threaded_irq(&pdev->dev, res->start, NULL,
+	if (!res)
+		return -EINVAL;
+	ret = devm_request_threaded_irq(&pdev->dev, res->start, NULL,
 					vdoa_irq_handler, IRQF_ONESHOT,
 					"vdoa", vdoa);
-	if (vdoa->irq < 0) {
+	if (ret < 0) {
 		dev_err(vdoa->dev, "Failed to get irq\n");
-		return vdoa->irq;
+		return ret;
 	}
 
 	platform_set_drvdata(pdev, vdoa);

@@ -10,6 +10,7 @@
  * qla24xx_calc_iocbs() - Determine number of Command Type 3 and
  * Continuation Type 1 IOCBs to allocate.
  *
+ * @vha: HA context
  * @dsds: number of data segment decriptors needed
  *
  * Returns the number of IOCB entries needed to store @dsds.
@@ -57,14 +58,12 @@ qla2x00_debounce_register(volatile uint16_t __iomem *addr)
 static inline void
 qla2x00_poll(struct rsp_que *rsp)
 {
-	unsigned long flags;
 	struct qla_hw_data *ha = rsp->hw;
-	local_irq_save(flags);
+
 	if (IS_P3P_TYPE(ha))
 		qla82xx_poll(0, rsp);
 	else
 		ha->isp_ops->intr_handler(0, rsp);
-	local_irq_restore(flags);
 }
 
 static inline uint8_t *
@@ -203,6 +202,12 @@ qla2x00_reset_active(scsi_qla_host_t *vha)
 	    test_bit(ABORT_ISP_ACTIVE, &vha->dpc_flags);
 }
 
+static inline int
+qla2x00_chip_is_down(scsi_qla_host_t *vha)
+{
+	return (qla2x00_reset_active(vha) || !vha->hw->flags.fw_started);
+}
+
 static inline srb_t *
 qla2xxx_get_qpair_sp(struct qla_qpair *qpair, fc_port_t *fcport, gfp_t flag)
 {
@@ -221,6 +226,8 @@ qla2xxx_get_qpair_sp(struct qla_qpair *qpair, fc_port_t *fcport, gfp_t flag)
 	sp->fcport = fcport;
 	sp->iocbs = 1;
 	sp->vha = qpair->vha;
+	INIT_LIST_HEAD(&sp->elem);
+
 done:
 	if (!sp)
 		QLA_QPAIR_MARK_NOT_BUSY(qpair);
@@ -250,6 +257,7 @@ qla2x00_get_sp(scsi_qla_host_t *vha, fc_port_t *fcport, gfp_t flag)
 
 	memset(sp, 0, sizeof(*sp));
 	sp->fcport = fcport;
+	sp->cmd_type = TYPE_SRB;
 	sp->iocbs = 1;
 	sp->vha = vha;
 done:
@@ -268,16 +276,13 @@ qla2x00_rel_sp(srb_t *sp)
 static inline void
 qla2x00_init_timer(srb_t *sp, unsigned long tmo)
 {
-	init_timer(&sp->u.iocb_cmd.timer);
+	timer_setup(&sp->u.iocb_cmd.timer, qla2x00_sp_timeout, 0);
 	sp->u.iocb_cmd.timer.expires = jiffies + tmo * HZ;
-	sp->u.iocb_cmd.timer.data = (unsigned long)sp;
-	sp->u.iocb_cmd.timer.function = qla2x00_sp_timeout;
-	add_timer(&sp->u.iocb_cmd.timer);
 	sp->free = qla2x00_sp_free;
+	init_completion(&sp->comp);
 	if (IS_QLAFX00(sp->vha->hw) && (sp->type == SRB_FXIOCB_DCMD))
 		init_completion(&sp->u.iocb_cmd.u.fxiocb.fxiocb_comp);
-	if (sp->type == SRB_ELS_DCMD)
-		init_completion(&sp->u.iocb_cmd.u.els_logo.comp);
+	add_timer(&sp->u.iocb_cmd.timer);
 }
 
 static inline int
@@ -306,4 +311,63 @@ qla2x00_set_retry_delay_timestamp(fc_port_t *fcport, uint16_t retry_delay)
 	if (retry_delay)
 		fcport->retry_delay_timestamp = jiffies +
 		    (retry_delay * HZ / 10);
+}
+
+static inline bool
+qla_is_exch_offld_enabled(struct scsi_qla_host *vha)
+{
+	if (qla_ini_mode_enabled(vha) &&
+	    (ql2xiniexchg > FW_DEF_EXCHANGES_CNT))
+		return true;
+	else if (qla_tgt_mode_enabled(vha) &&
+	    (ql2xexchoffld > FW_DEF_EXCHANGES_CNT))
+		return true;
+	else if (qla_dual_mode_enabled(vha) &&
+	    ((ql2xiniexchg + ql2xexchoffld) > FW_DEF_EXCHANGES_CNT))
+		return true;
+	else
+		return false;
+}
+
+static inline void
+qla_cpu_update(struct qla_qpair *qpair, uint16_t cpuid)
+{
+	qpair->cpuid = cpuid;
+
+	if (!list_empty(&qpair->hints_list)) {
+		struct qla_qpair_hint *h;
+
+		list_for_each_entry(h, &qpair->hints_list, hint_elem)
+			h->cpuid = qpair->cpuid;
+	}
+}
+
+static inline struct qla_qpair_hint *
+qla_qpair_to_hint(struct qla_tgt *tgt, struct qla_qpair *qpair)
+{
+	struct qla_qpair_hint *h;
+	u16 i;
+
+	for (i = 0; i < tgt->ha->max_qpairs + 1; i++) {
+		h = &tgt->qphints[i];
+		if (h->qpair == qpair)
+			return h;
+	}
+
+	return NULL;
+}
+
+static inline void
+qla_83xx_start_iocbs(struct qla_qpair *qpair)
+{
+	struct req_que *req = qpair->req;
+
+	req->ring_index++;
+	if (req->ring_index == req->length) {
+		req->ring_index = 0;
+		req->ring_ptr = req->ring;
+	} else
+		req->ring_ptr++;
+
+	WRT_REG_DWORD(req->req_q_in, req->ring_index);
 }

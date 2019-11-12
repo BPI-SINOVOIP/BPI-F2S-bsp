@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 #ifndef _LINUX_ELEVATOR_H
 #define _LINUX_ELEVATOR_H
 
@@ -104,8 +105,9 @@ struct elevator_mq_ops {
 	int (*request_merge)(struct request_queue *q, struct request **, struct bio *);
 	void (*request_merged)(struct request_queue *, struct request *, enum elv_merge);
 	void (*requests_merged)(struct request_queue *, struct request *, struct request *);
-	struct request *(*get_request)(struct request_queue *, unsigned int, struct blk_mq_alloc_data *);
-	void (*put_request)(struct request *);
+	void (*limit_depth)(unsigned int, struct blk_mq_alloc_data *);
+	void (*prepare_request)(struct request *, struct bio *bio);
+	void (*finish_request)(struct request *);
 	void (*insert_requests)(struct blk_mq_hw_ctx *, struct list_head *, bool);
 	struct request *(*dispatch_request)(struct blk_mq_hw_ctx *);
 	bool (*has_work)(struct blk_mq_hw_ctx *);
@@ -114,8 +116,6 @@ struct elevator_mq_ops {
 	void (*requeue_request)(struct request *);
 	struct request *(*former_request)(struct request_queue *, struct request *);
 	struct request *(*next_request)(struct request_queue *, struct request *);
-	int (*get_rq_priv)(struct request_queue *, struct request *, struct bio *);
-	void (*put_rq_priv)(struct request_queue *, struct request *);
 	void (*init_icq)(struct io_cq *);
 	void (*exit_icq)(struct io_cq *);
 };
@@ -145,6 +145,7 @@ struct elevator_type
 	size_t icq_align;	/* ditto */
 	struct elv_fs_entry *elevator_attrs;
 	char elevator_name[ELV_NAME_MAX];
+	const char *elevator_alias;
 	struct module *elevator_owner;
 	bool uses_mq;
 #ifdef CONFIG_BLK_DEBUG_FS
@@ -197,8 +198,6 @@ extern bool elv_attempt_insert_merge(struct request_queue *, struct request *);
 extern void elv_requeue_request(struct request_queue *, struct request *);
 extern struct request *elv_former_request(struct request_queue *, struct request *);
 extern struct request *elv_latter_request(struct request_queue *, struct request *);
-extern int elv_register_queue(struct request_queue *q);
-extern void elv_unregister_queue(struct request_queue *q);
 extern int elv_may_queue(struct request_queue *, unsigned int);
 extern void elv_completed_request(struct request_queue *, struct request *);
 extern int elv_set_request(struct request_queue *q, struct request *rq,
@@ -219,8 +218,6 @@ extern void elv_unregister(struct elevator_type *);
 extern ssize_t elv_iosched_show(struct request_queue *, char *);
 extern ssize_t elv_iosched_store(struct request_queue *, const char *, size_t);
 
-extern int elevator_init(struct request_queue *, char *);
-extern void elevator_exit(struct request_queue *, struct elevator_queue *);
 extern bool elv_bio_merge_ok(struct request *, struct bio *);
 extern struct elevator_queue *elevator_alloc(struct request_queue *,
 					struct elevator_type *);

@@ -103,6 +103,7 @@ struct meson_pwm_channel {
 
 struct meson_pwm_data {
 	const char * const *parent_names;
+	unsigned int num_parents;
 };
 
 struct meson_pwm {
@@ -162,7 +163,8 @@ static int meson_pwm_calc(struct meson_pwm *meson,
 			  unsigned int duty, unsigned int period)
 {
 	unsigned int pre_div, cnt, duty_cnt;
-	unsigned long fin_freq = -1, fin_ns;
+	unsigned long fin_freq = -1;
+	u64 fin_ps;
 
 	if (~(meson->inverter_mask >> id) & 0x1)
 		duty = period - duty;
@@ -178,13 +180,15 @@ static int meson_pwm_calc(struct meson_pwm *meson,
 	}
 
 	dev_dbg(meson->chip.dev, "fin_freq: %lu Hz\n", fin_freq);
-	fin_ns = NSEC_PER_SEC / fin_freq;
+	fin_ps = (u64)NSEC_PER_SEC * 1000;
+	do_div(fin_ps, fin_freq);
 
 	/* Calc pre_div with the period */
 	for (pre_div = 0; pre_div < MISC_CLK_DIV_MASK; pre_div++) {
-		cnt = DIV_ROUND_CLOSEST(period, fin_ns * (pre_div + 1));
-		dev_dbg(meson->chip.dev, "fin_ns=%lu pre_div=%u cnt=%u\n",
-			fin_ns, pre_div, cnt);
+		cnt = DIV_ROUND_CLOSEST_ULL((u64)period * 1000,
+					    fin_ps * (pre_div + 1));
+		dev_dbg(meson->chip.dev, "fin_ps=%llu pre_div=%u cnt=%u\n",
+			fin_ps, pre_div, cnt);
 		if (cnt <= 0xffff)
 			break;
 	}
@@ -207,7 +211,8 @@ static int meson_pwm_calc(struct meson_pwm *meson,
 		channel->lo = cnt;
 	} else {
 		/* Then check is we can have the duty with the same pre_div */
-		duty_cnt = DIV_ROUND_CLOSEST(duty, fin_ns * (pre_div + 1));
+		duty_cnt = DIV_ROUND_CLOSEST_ULL((u64)duty * 1000,
+						 fin_ps * (pre_div + 1));
 		if (duty_cnt > 0xffff) {
 			dev_err(meson->chip.dev, "unable to get duty cycle\n");
 			return -EINVAL;
@@ -381,6 +386,7 @@ static const char * const pwm_meson8b_parent_names[] = {
 
 static const struct meson_pwm_data pwm_meson8b_data = {
 	.parent_names = pwm_meson8b_parent_names,
+	.num_parents = ARRAY_SIZE(pwm_meson8b_parent_names),
 };
 
 static const char * const pwm_gxbb_parent_names[] = {
@@ -389,11 +395,61 @@ static const char * const pwm_gxbb_parent_names[] = {
 
 static const struct meson_pwm_data pwm_gxbb_data = {
 	.parent_names = pwm_gxbb_parent_names,
+	.num_parents = ARRAY_SIZE(pwm_gxbb_parent_names),
+};
+
+/*
+ * Only the 2 first inputs of the GXBB AO PWMs are valid
+ * The last 2 are grounded
+ */
+static const char * const pwm_gxbb_ao_parent_names[] = {
+	"xtal", "clk81"
+};
+
+static const struct meson_pwm_data pwm_gxbb_ao_data = {
+	.parent_names = pwm_gxbb_ao_parent_names,
+	.num_parents = ARRAY_SIZE(pwm_gxbb_ao_parent_names),
+};
+
+static const char * const pwm_axg_ee_parent_names[] = {
+	"xtal", "fclk_div5", "fclk_div4", "fclk_div3"
+};
+
+static const struct meson_pwm_data pwm_axg_ee_data = {
+	.parent_names = pwm_axg_ee_parent_names,
+	.num_parents = ARRAY_SIZE(pwm_axg_ee_parent_names),
+};
+
+static const char * const pwm_axg_ao_parent_names[] = {
+	"aoclk81", "xtal", "fclk_div4", "fclk_div5"
+};
+
+static const struct meson_pwm_data pwm_axg_ao_data = {
+	.parent_names = pwm_axg_ao_parent_names,
+	.num_parents = ARRAY_SIZE(pwm_axg_ao_parent_names),
 };
 
 static const struct of_device_id meson_pwm_matches[] = {
-	{ .compatible = "amlogic,meson8b-pwm", .data = &pwm_meson8b_data },
-	{ .compatible = "amlogic,meson-gxbb-pwm", .data = &pwm_gxbb_data },
+	{
+		.compatible = "amlogic,meson8b-pwm",
+		.data = &pwm_meson8b_data
+	},
+	{
+		.compatible = "amlogic,meson-gxbb-pwm",
+		.data = &pwm_gxbb_data
+	},
+	{
+		.compatible = "amlogic,meson-gxbb-ao-pwm",
+		.data = &pwm_gxbb_ao_data
+	},
+	{
+		.compatible = "amlogic,meson-axg-ee-pwm",
+		.data = &pwm_axg_ee_data
+	},
+	{
+		.compatible = "amlogic,meson-axg-ao-pwm",
+		.data = &pwm_axg_ao_data
+	},
 	{},
 };
 MODULE_DEVICE_TABLE(of, meson_pwm_matches);
@@ -402,7 +458,6 @@ static int meson_pwm_init_channels(struct meson_pwm *meson,
 				   struct meson_pwm_channel *channels)
 {
 	struct device *dev = meson->chip.dev;
-	struct device_node *np = dev->of_node;
 	struct clk_init_data init;
 	unsigned int i;
 	char name[255];
@@ -411,13 +466,13 @@ static int meson_pwm_init_channels(struct meson_pwm *meson,
 	for (i = 0; i < meson->chip.npwm; i++) {
 		struct meson_pwm_channel *channel = &channels[i];
 
-		snprintf(name, sizeof(name), "%s#mux%u", np->full_name, i);
+		snprintf(name, sizeof(name), "%s#mux%u", dev_name(dev), i);
 
 		init.name = name;
 		init.ops = &clk_mux_ops;
 		init.flags = CLK_IS_BASIC;
 		init.parent_names = meson->data->parent_names;
-		init.num_parents = 1 << MISC_CLK_SEL_WIDTH;
+		init.num_parents = meson->data->num_parents;
 
 		channel->mux.reg = meson->base + REG_MISC_AB;
 		channel->mux.shift = mux_reg_shifts[i];
@@ -485,8 +540,8 @@ static int meson_pwm_probe(struct platform_device *pdev)
 	meson->data = of_device_get_match_data(&pdev->dev);
 	meson->inverter_mask = BIT(meson->chip.npwm) - 1;
 
-	channels = devm_kcalloc(&pdev->dev, meson->chip.npwm, sizeof(*meson),
-				GFP_KERNEL);
+	channels = devm_kcalloc(&pdev->dev, meson->chip.npwm,
+				sizeof(*channels), GFP_KERNEL);
 	if (!channels)
 		return -ENOMEM;
 

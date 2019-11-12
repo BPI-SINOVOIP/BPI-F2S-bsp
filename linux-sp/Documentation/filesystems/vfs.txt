@@ -386,7 +386,7 @@ struct inode_operations {
 	ssize_t (*listxattr) (struct dentry *, char *, size_t);
 	void (*update_time)(struct inode *, struct timespec *, int);
 	int (*atomic_open)(struct inode *, struct dentry *, struct file *,
-			unsigned open_flag, umode_t create_mode, int *opened);
+			unsigned open_flag, umode_t create_mode);
 	int (*tmpfile) (struct inode *, struct dentry *, umode_t);
 };
 
@@ -496,13 +496,15 @@ otherwise noted.
 
   atomic_open: called on the last component of an open.  Using this optional
   	method the filesystem can look up, possibly create and open the file in
-  	one atomic operation.  If it cannot perform this (e.g. the file type
-  	turned out to be wrong) it may signal this by returning 1 instead of
-	usual 0 or -ve .  This method is only called if the last component is
-	negative or needs lookup.  Cached positive dentries are still handled by
-	f_op->open().  If the file was created, the FILE_CREATED flag should be
-	set in "opened".  In case of O_EXCL the method must only succeed if the
-	file didn't exist and hence FILE_CREATED shall always be set on success.
+	one atomic operation.  If it wants to leave actual opening to the
+	caller (e.g. if the file turned out to be a symlink, device, or just
+	something filesystem won't do atomic open for), it may signal this by
+	returning finish_no_open(file, dentry).  This method is only called if
+	the last component is negative or needs lookup.  Cached positive dentries
+	are still handled by f_op->open().  If the file was created,
+	FMODE_CREATED flag should be set in file->f_mode.  In case of O_EXCL
+	the method must only succeed if the file didn't exist and hence FMODE_CREATED
+	shall always be set on success.
 
   tmpfile: called in the end of O_TMPFILE open().  Optional, equivalent to
 	atomically creating, opening and unlinking a file in given directory.
@@ -576,7 +578,43 @@ should clear PG_Dirty and set PG_Writeback.  It can be actually
 written at any point after PG_Dirty is clear.  Once it is known to be
 safe, PG_Writeback is cleared.
 
-Writeback makes use of a writeback_control structure...
+Writeback makes use of a writeback_control structure to direct the
+operations.  This gives the the writepage and writepages operations some
+information about the nature of and reason for the writeback request,
+and the constraints under which it is being done.  It is also used to
+return information back to the caller about the result of a writepage or
+writepages request.
+
+Handling errors during writeback
+--------------------------------
+Most applications that do buffered I/O will periodically call a file
+synchronization call (fsync, fdatasync, msync or sync_file_range) to
+ensure that data written has made it to the backing store.  When there
+is an error during writeback, they expect that error to be reported when
+a file sync request is made.  After an error has been reported on one
+request, subsequent requests on the same file descriptor should return
+0, unless further writeback errors have occurred since the previous file
+syncronization.
+
+Ideally, the kernel would report errors only on file descriptions on
+which writes were done that subsequently failed to be written back.  The
+generic pagecache infrastructure does not track the file descriptions
+that have dirtied each individual page however, so determining which
+file descriptors should get back an error is not possible.
+
+Instead, the generic writeback error tracking infrastructure in the
+kernel settles for reporting errors to fsync on all file descriptions
+that were open at the time that the error occurred.  In a situation with
+multiple writers, all of them will get back an error on a subsequent fsync,
+even if all of the writes done through that particular file descriptor
+succeeded (or even if there were no writes on that file descriptor at all).
+
+Filesystems that wish to use this infrastructure should call
+mapping_set_error to record the error in the address_space when it
+occurs.  Then, after writing back data from the pagecache in their
+file->fsync operation, they should call file_check_and_advance_wb_err to
+ensure that the struct file's error cursor has advanced to the correct
+point in the stream of errors emitted by the backing device(s).
 
 struct address_space_operations
 -------------------------------
@@ -793,9 +831,7 @@ struct address_space_operations {
   swap_activate: Called when swapon is used on a file to allocate
 	space if necessary and pin the block lookup information in
 	memory. A return value of zero indicates success,
-	in which case this file can be used to back swapspace. The
-	swapspace operations will be proxied to this address space's
-	->swap_{out,in} methods.
+	in which case this file can be used to back swapspace.
 
   swap_deactivate: Called during swapoff on files where swap_activate
 	was successful.
@@ -804,14 +840,15 @@ struct address_space_operations {
 The File Object
 ===============
 
-A file object represents a file opened by a process.
+A file object represents a file opened by a process. This is also known
+as an "open file description" in POSIX parlance.
 
 
 struct file_operations
 ----------------------
 
 This describes how the VFS can manipulate an open file. As of kernel
-4.1, the following members are defined:
+4.18, the following members are defined:
 
 struct file_operations {
 	struct module *owner;
@@ -821,11 +858,11 @@ struct file_operations {
 	ssize_t (*read_iter) (struct kiocb *, struct iov_iter *);
 	ssize_t (*write_iter) (struct kiocb *, struct iov_iter *);
 	int (*iterate) (struct file *, struct dir_context *);
-	unsigned int (*poll) (struct file *, struct poll_table_struct *);
+	int (*iterate_shared) (struct file *, struct dir_context *);
+	__poll_t (*poll) (struct file *, struct poll_table_struct *);
 	long (*unlocked_ioctl) (struct file *, unsigned int, unsigned long);
 	long (*compat_ioctl) (struct file *, unsigned int, unsigned long);
 	int (*mmap) (struct file *, struct vm_area_struct *);
-	int (*mremap)(struct file *, struct vm_area_struct *);
 	int (*open) (struct inode *, struct file *);
 	int (*flush) (struct file *, fl_owner_t id);
 	int (*release) (struct inode *, struct file *);
@@ -845,6 +882,10 @@ struct file_operations {
 #ifndef CONFIG_MMU
 	unsigned (*mmap_capabilities)(struct file *);
 #endif
+	ssize_t (*copy_file_range)(struct file *, loff_t, struct file *, loff_t, size_t, unsigned int);
+	int (*clone_file_range)(struct file *, loff_t, struct file *, loff_t, u64);
+	int (*dedupe_file_range)(struct file *, loff_t, struct file *, loff_t, u64);
+	int (*fadvise)(struct file *, loff_t, loff_t, int);
 };
 
 Again, all methods are called without any locks being held, unless
@@ -861,6 +902,9 @@ otherwise noted.
   write_iter: possibly asynchronous write with iov_iter as source
 
   iterate: called when the VFS needs to read the directory contents
+
+  iterate_shared: called when the VFS needs to read the directory contents
+	when filesystem supports concurrent dir iterators
 
   poll: called by the VFS when a process wants to check if there is
 	activity on this file and (optionally) go to sleep until there
@@ -887,7 +931,8 @@ otherwise noted.
 
   release: called when the last reference to an open file is closed
 
-  fsync: called by the fsync(2) system call
+  fsync: called by the fsync(2) system call. Also see the section above
+	 entitled "Handling errors during writeback".
 
   fasync: called by the fcntl(2) system call when asynchronous
 	(non-blocking) mode is enabled for a file
@@ -912,6 +957,16 @@ otherwise noted.
 	    the lease in the inode after setting it.
 
   fallocate: called by the VFS to preallocate blocks or punch a hole.
+
+  copy_file_range: called by the copy_file_range(2) system call.
+
+  clone_file_range: called by the ioctl(2) system call for FICLONERANGE and
+	FICLONE commands.
+
+  dedupe_file_range: called by the ioctl(2) system call for FIDEDUPERANGE
+	command.
+
+  fadvise: possibly called by the fadvise64() system call.
 
 Note that the file operations are implemented by the specific
 filesystem in which the inode resides. When opening a device node
@@ -951,8 +1006,7 @@ struct dentry_operations {
 	char *(*d_dname)(struct dentry *, char *, int);
 	struct vfsmount *(*d_automount)(struct path *);
 	int (*d_manage)(const struct path *, bool);
-	struct dentry *(*d_real)(struct dentry *, const struct inode *,
-				 unsigned int);
+	struct dentry *(*d_real)(struct dentry *, const struct inode *);
 };
 
   d_revalidate: called when the VFS needs to revalidate a dentry. This
@@ -1086,22 +1140,15 @@ struct dentry_operations {
 	dentry being transited from.
 
   d_real: overlay/union type filesystems implement this method to return one of
-	the underlying dentries hidden by the overlay.  It is used in three
+	the underlying dentries hidden by the overlay.  It is used in two
 	different modes:
-
-	Called from open it may need to copy-up the file depending on the
-	supplied open flags.  This mode is selected with a non-zero flags
-	argument.  In this mode the d_real method can return an error.
 
 	Called from file_dentry() it returns the real dentry matching the inode
 	argument.  The real dentry may be from a lower layer already copied up,
 	but still referenced from the file.  This mode is selected with a
-	non-NULL inode argument.  This will always succeed.
+	non-NULL inode argument.
 
-	With NULL inode and zero flags the topmost real underlying dentry is
-	returned.  This will always succeed.
-
-	This method is never called with both non-NULL inode and non-zero flags.
+	With NULL inode the topmost real underlying dentry is returned.
 
 Each dentry has a pointer to its parent dentry, as well as a hash list
 of child dentries. Child dentries are basically like files in a
@@ -1186,12 +1233,6 @@ from the above rules.
 The underlying reason for the above rules is to make sure, that a
 mount can be accurately replicated (e.g. umounting and mounting again)
 based on the information found in /proc/mounts.
-
-A simple method of saving options at mount/remount time and showing
-them is provided with the save_mount_options() and
-generic_show_options() helper functions.  Please note, that using
-these may have drawbacks.  For more info see header comments for these
-functions in fs/namespace.c.
 
 Resources
 =========

@@ -1,17 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * FB driver for Two KS0108 LCD controllers in AGM1264K-FL display
  *
  * Copyright (C) 2014 ololoshka2871
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #include <linux/module.h>
@@ -282,10 +273,10 @@ static void iterate_diffusion_matrix(u32 xres, u32 yres, int x,
 				continue;
 			write_pos = &convert_buf[(y + j) * xres + x + i];
 			coeff = diffusing_matrix[i][j];
-			if (-1 == coeff)
+			if (-1 == coeff) {
 				/* pixel itself */
 				*write_pos = pixel;
-			else {
+			} else {
 				signed short p = *write_pos + error * coeff;
 
 				if (p > WHITE)

@@ -87,8 +87,7 @@ static long kvmppc_realmode_mc_power7(struct kvm_vcpu *vcpu)
 				   DSISR_MC_SLB_PARITY | DSISR_MC_DERAT_MULTI);
 		}
 		if (dsisr & DSISR_MC_TLB_MULTI) {
-			if (cur_cpu_spec && cur_cpu_spec->flush_tlb)
-				cur_cpu_spec->flush_tlb(TLB_INVAL_SCOPE_LPID);
+			tlbiel_all_lpid(vcpu->kvm->arch.radix);
 			dsisr &= ~DSISR_MC_TLB_MULTI;
 		}
 		/* Any other errors we don't understand? */
@@ -105,8 +104,7 @@ static long kvmppc_realmode_mc_power7(struct kvm_vcpu *vcpu)
 		reload_slb(vcpu);
 		break;
 	case SRR1_MC_IFETCH_TLBMULTI:
-		if (cur_cpu_spec && cur_cpu_spec->flush_tlb)
-			cur_cpu_spec->flush_tlb(TLB_INVAL_SCOPE_LPID);
+		tlbiel_all_lpid(vcpu->kvm->arch.radix);
 		break;
 	default:
 		handled = 0;
@@ -130,12 +128,28 @@ static long kvmppc_realmode_mc_power7(struct kvm_vcpu *vcpu)
 
 out:
 	/*
+	 * For guest that supports FWNMI capability, hook the MCE event into
+	 * vcpu structure. We are going to exit the guest with KVM_EXIT_NMI
+	 * exit reason. On our way to exit we will pull this event from vcpu
+	 * structure and print it from thread 0 of the core/subcore.
+	 *
+	 * For guest that does not support FWNMI capability (old QEMU):
 	 * We are now going enter guest either through machine check
 	 * interrupt (for unhandled errors) or will continue from
 	 * current HSRR0 (for handled errors) in guest. Hence
 	 * queue up the event so that we can log it from host console later.
 	 */
-	machine_check_queue_event();
+	if (vcpu->kvm->arch.fwnmi_enabled) {
+		/*
+		 * Hook up the mce event on to vcpu structure.
+		 * First clear the old event.
+		 */
+		memset(&vcpu->arch.mce_evt, 0, sizeof(vcpu->arch.mce_evt));
+		if (get_mce_event(&mce_evt, MCE_EVENT_RELEASE)) {
+			vcpu->arch.mce_evt = mce_evt;
+		}
+	} else
+		machine_check_queue_event();
 
 	return handled;
 }
@@ -252,16 +266,18 @@ static void kvmppc_tb_resync_done(void)
  *   secondary threads to proceed.
  * - All secondary threads will eventually call opal hmi handler on
  *   their exit path.
+ *
+ * Returns 1 if the timebase offset should be applied, 0 if not.
  */
 
 long kvmppc_realmode_hmi_handler(void)
 {
-	int ptid = local_paca->kvm_hstate.ptid;
 	bool resync_req;
 
-	/* This is only called on primary thread. */
-	BUG_ON(ptid != 0);
 	__this_cpu_inc(irq_stat.hmi_exceptions);
+
+	if (hmi_handle_debugtrig(NULL) >= 0)
+		return 1;
 
 	/*
 	 * By now primary thread has already completed guest->host

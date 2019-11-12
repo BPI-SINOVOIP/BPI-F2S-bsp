@@ -74,7 +74,6 @@ static const char version[] =
 #include <linux/skbuff.h>
 
 #include <linux/dmaengine.h>
-#include <linux/dma/pxa-dma.h>
 
 #include <asm/io.h>
 
@@ -1450,7 +1449,7 @@ smc911x_ethtool_get_link_ksettings(struct net_device *dev,
 				   struct ethtool_link_ksettings *cmd)
 {
 	struct smc911x_local *lp = netdev_priv(dev);
-	int ret, status;
+	int status;
 	unsigned long flags;
 	u32 supported;
 
@@ -1458,7 +1457,7 @@ smc911x_ethtool_get_link_ksettings(struct net_device *dev,
 
 	if (lp->phy_type != 0) {
 		spin_lock_irqsave(&lp->lock, flags);
-		ret = mii_ethtool_get_link_ksettings(&lp->mii, cmd);
+		mii_ethtool_get_link_ksettings(&lp->mii, cmd);
 		spin_unlock_irqrestore(&lp->lock, flags);
 	} else {
 		supported = SUPPORTED_10baseT_Half |
@@ -1480,10 +1479,9 @@ smc911x_ethtool_get_link_ksettings(struct net_device *dev,
 		ethtool_convert_legacy_u32_to_link_mode(
 			cmd->link_modes.supported, supported);
 
-		ret = 0;
 	}
 
-	return ret;
+	return 0;
 }
 
 static int
@@ -1796,7 +1794,6 @@ static int smc911x_probe(struct net_device *dev)
 #ifdef SMC_USE_DMA
 	struct dma_slave_config	config;
 	dma_cap_mask_t mask;
-	struct pxad_param param;
 #endif
 
 	DBG(SMC_DEBUG_FUNC, dev, "--> %s\n", __func__);
@@ -1972,15 +1969,8 @@ static int smc911x_probe(struct net_device *dev)
 
 	dma_cap_zero(mask);
 	dma_cap_set(DMA_SLAVE, mask);
-	param.prio = PXAD_PRIO_LOWEST;
-	param.drcmr = -1UL;
-
-	lp->rxdma =
-		dma_request_slave_channel_compat(mask, pxad_filter_fn,
-						 &param, &dev->dev, "rx");
-	lp->txdma =
-		dma_request_slave_channel_compat(mask, pxad_filter_fn,
-						 &param, &dev->dev, "tx");
+	lp->rxdma = dma_request_channel(mask, NULL, NULL);
+	lp->txdma = dma_request_channel(mask, NULL, NULL);
 	lp->rxdma_active = 0;
 	lp->txdma_active = 0;
 

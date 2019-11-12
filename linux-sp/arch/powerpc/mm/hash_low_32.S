@@ -27,6 +27,7 @@
 #include <asm/thread_info.h>
 #include <asm/asm-offsets.h>
 #include <asm/export.h>
+#include <asm/feature-fixups.h>
 
 #ifdef CONFIG_SMP
 	.section .bss
@@ -575,7 +576,6 @@ _GLOBAL(flush_hash_pages)
 	rlwinm	r8,r8,0,31,29		/* clear HASHPTE bit */
 	stwcx.	r8,0,r5			/* update the pte */
 	bne-	33b
-EXPORT_SYMBOL(flush_hash_pages)
 
 	/* Get the address of the primary PTE group in the hash table (r3) */
 _GLOBAL(flush_hash_patch_A)
@@ -634,6 +634,7 @@ _GLOBAL(flush_hash_patch_B)
 	SYNC_601
 	isync
 	blr
+EXPORT_SYMBOL(flush_hash_pages)
 
 /*
  * Flush an entry from the TLB

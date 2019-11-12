@@ -50,10 +50,8 @@ static int run_lwt_bpf(struct sk_buff *skb, struct bpf_lwt_prog *lwt,
 	 * mixing with BH RCU lock doesn't work.
 	 */
 	preempt_disable();
-	rcu_read_lock();
-	bpf_compute_data_end(skb);
+	bpf_compute_data_pointers(skb);
 	ret = bpf_prog_run_save_cb(lwt->prog, skb);
-	rcu_read_unlock();
 
 	switch (ret) {
 	case BPF_OK:
@@ -65,6 +63,7 @@ static int run_lwt_bpf(struct sk_buff *skb, struct bpf_lwt_prog *lwt,
 				     lwt->name ? : "<unknown>");
 			ret = BPF_OK;
 		} else {
+			skb_reset_mac_header(skb);
 			ret = skb_do_redirect(skb);
 			if (ret == 0)
 				ret = BPF_REDIRECT;
@@ -217,7 +216,7 @@ static int bpf_parse_prog(struct nlattr *attr, struct bpf_lwt_prog *prog,
 	if (!tb[LWT_BPF_PROG_FD] || !tb[LWT_BPF_PROG_NAME])
 		return -EINVAL;
 
-	prog->name = nla_memdup(tb[LWT_BPF_PROG_NAME], GFP_KERNEL);
+	prog->name = nla_memdup(tb[LWT_BPF_PROG_NAME], GFP_ATOMIC);
 	if (!prog->name)
 		return -ENOMEM;
 
@@ -240,7 +239,8 @@ static const struct nla_policy bpf_nl_policy[LWT_BPF_MAX + 1] = {
 
 static int bpf_build_state(struct nlattr *nla,
 			   unsigned int family, const void *cfg,
-			   struct lwtunnel_state **ts)
+			   struct lwtunnel_state **ts,
+			   struct netlink_ext_ack *extack)
 {
 	struct nlattr *tb[LWT_BPF_MAX + 1];
 	struct lwtunnel_state *newts;
@@ -250,7 +250,7 @@ static int bpf_build_state(struct nlattr *nla,
 	if (family != AF_INET && family != AF_INET6)
 		return -EAFNOSUPPORT;
 
-	ret = nla_parse_nested(tb, LWT_BPF_MAX, nla, bpf_nl_policy, NULL);
+	ret = nla_parse_nested(tb, LWT_BPF_MAX, nla, bpf_nl_policy, extack);
 	if (ret < 0)
 		return ret;
 

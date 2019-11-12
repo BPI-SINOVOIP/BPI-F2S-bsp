@@ -40,7 +40,7 @@
 #define ST33ZP24_OK					0x5A
 #define ST33ZP24_UNDEFINED_ERR				0x80
 #define ST33ZP24_BADLOCALITY				0x81
-#define ST33ZP24_TISREGISTER_UKNOWN			0x82
+#define ST33ZP24_TISREGISTER_UNKNOWN			0x82
 #define ST33ZP24_LOCALITY_NOT_ACTIVATED			0x83
 #define ST33ZP24_HASH_END_BEFORE_HASH_START		0x84
 #define ST33ZP24_BAD_COMMAND_ORDER			0x85
@@ -84,7 +84,7 @@ static int st33zp24_status_to_errno(u8 code)
 		return 0;
 	case ST33ZP24_UNDEFINED_ERR:
 	case ST33ZP24_BADLOCALITY:
-	case ST33ZP24_TISREGISTER_UKNOWN:
+	case ST33ZP24_TISREGISTER_UNKNOWN:
 	case ST33ZP24_LOCALITY_NOT_ACTIVATED:
 	case ST33ZP24_HASH_END_BEFORE_HASH_START:
 	case ST33ZP24_BAD_COMMAND_ORDER:
@@ -246,7 +246,7 @@ static int st33zp24_spi_acpi_request_resources(struct spi_device *spi_dev)
 	struct device *dev = &spi_dev->dev;
 	int ret;
 
-	ret = acpi_dev_add_driver_gpios(ACPI_COMPANION(dev), acpi_st33zp24_gpios);
+	ret = devm_acpi_dev_add_driver_gpios(dev, acpi_st33zp24_gpios);
 	if (ret)
 		return ret;
 
@@ -402,7 +402,6 @@ static int st33zp24_spi_remove(struct spi_device *dev)
 	if (ret)
 		return ret;
 
-	acpi_dev_remove_driver_gpios(ACPI_COMPANION(&dev->dev));
 	return 0;
 }
 

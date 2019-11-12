@@ -1,11 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * This file is based on code from OCTEON SDK by Cavium Networks.
  *
  * Copyright (c) 2003-2010 Cavium Networks
- *
- * This file is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License, Version 2, as
- * published by the Free Software Foundation.
  */
 
 #include <linux/module.h>
@@ -251,8 +248,7 @@ int cvm_oct_xmit(struct sk_buff *skb, struct net_device *dev)
 
 				if ((skb_tail_pointer(skb) + add_bytes) <=
 				    skb_end_pointer(skb))
-					memset(__skb_put(skb, add_bytes), 0,
-					       add_bytes);
+					__skb_put_zero(skb, add_bytes);
 			}
 		}
 	}

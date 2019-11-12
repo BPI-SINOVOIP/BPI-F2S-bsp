@@ -49,6 +49,9 @@
 #define POST_STAGE_BE_RESET		0x3 /* Host wants to reset chip */
 #define POST_STAGE_ARMFW_RDY		0xc000	/* FW is done with POST */
 #define POST_STAGE_RECOVERABLE_ERR	0xE000	/* Recoverable err detected */
+/* FW has detected a UE and is dumping FAT log data */
+#define POST_STAGE_FAT_LOG_START       0x0D00
+#define POST_STAGE_ARMFW_UE            0xF000  /*FW has asserted an UE*/
 
 /* Lancer SLIPORT registers */
 #define SLIPORT_STATUS_OFFSET		0x404
@@ -258,6 +261,7 @@ struct be_eth_hdr_wrb {
 #define LANCER_TX_COMP_HSW_DROP_MAC_ERR		0x3
 #define LANCER_TX_COMP_HSW_DROP_VLAN_ERR	0x5
 #define LANCER_TX_COMP_QINQ_ERR			0x7
+#define LANCER_TX_COMP_SGE_ERR			0x9
 #define LANCER_TX_COMP_PARITY_ERR		0xb
 #define LANCER_TX_COMP_DMA_ERR			0xd
 

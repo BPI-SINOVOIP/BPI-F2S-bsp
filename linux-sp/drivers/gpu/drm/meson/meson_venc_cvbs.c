@@ -118,7 +118,6 @@ static int meson_cvbs_connector_mode_valid(struct drm_connector *connector,
 }
 
 static const struct drm_connector_funcs meson_cvbs_connector_funcs = {
-	.dpms			= drm_atomic_helper_connector_dpms,
 	.detect			= meson_cvbs_connector_detect,
 	.fill_modes		= drm_helper_probe_single_connector_modes,
 	.destroy		= meson_cvbs_connector_destroy,
@@ -283,7 +282,7 @@ int meson_venc_cvbs_create(struct meson_drm *priv)
 
 	encoder->possible_crtcs = BIT(0);
 
-	drm_mode_connector_attach_encoder(connector, encoder);
+	drm_connector_attach_encoder(connector, encoder);
 
 	return 0;
 }
