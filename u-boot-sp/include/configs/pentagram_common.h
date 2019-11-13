@@ -169,6 +169,11 @@
  * But now sp_go DO verify magic/hcrc/dcrc in the quick sunplus uIamge header.
  * So the address passed for sp_go must have header in it.
  */
+#undef CONFIG_BOOTCOMMAND
+/*
+#define CONFIG_BOOTCOMMAND "run distro_bootcmd"
+*/
+#define CONFIG_BOOTCOMMAND "run boot_normal"
 #undef CONFIG_BOOTCOMMAND2
 #define CONFIG_BOOTCOMMAND2 \
 "echo [scr] bootcmd started; " \
@@ -259,7 +264,7 @@
    "bootenv=uEnv.txt\0" \
    "checksd=fatinfo ${device} 1:1\0" \
    "loadbootenv=fatload ${device} ${partition} ${scriptaddr} ${bpi}/${board}/${service}/${bootenv} || fatload ${device} ${partition} ${scriptaddr} ${bootenv}\0" \
-   "boot_normal=if run checksd; then echo Boot from ${device} ; setenv partition 1:1; else echo Boot from eMMC ; setenv partition 0:1 ; fi; if run loadbootenv; then echo Loaded environment from ${bootenv}; env import -t ${scriptaddr} ${filesize}; fi; run uenvcmd; fatload mmc 1:1 ${loadaddr} ${bpi}/${board}/${service}/${kernel}; bootr\0" \
+   "boot_normal=if run checksd; then echo Boot from ${device} ; setenv partition 1:1; else echo Boot from eMMC ; setenv partition 0:1 ; fi; if run loadbootenv; then echo Loaded environment from ${bootenv}; env import -t ${scriptaddr} ${filesize}; fi; run uenvcmd; run distro_bootcmd; fatload mmc 1:1 ${loadaddr} ${bpi}/${board}/${service}/${kernel}; bootr\0" \
    "boot_user=echo Boot from USB ; usb start ; setenv device usb ; setenv partition 0:1 ; fi; if run loadbootenv; then echo Loaded environment from ${bootenv}; env import -t ${scriptaddr} ${filesize}; fi; run usercmd; fatload mmc 1:1 ${loadaddr} ${bpi}/${board}/${service}/${kernel}; bootr\0" \
 "bootinfo_base="		__stringify(SP_BOOTINFO_BASE) "\0" \
 "addr_src_kernel="		__stringify(CONFIG_SRCADDR_KERNEL) "\0" \
