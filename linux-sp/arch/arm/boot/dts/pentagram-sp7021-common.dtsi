@@ -790,7 +790,7 @@
 			pinctrl-0 = <&mmc1_mux>;
 			bus-width = <4>;
 			max-frequency = <52000000>;
-			cd-gpio = <&pctl 71 GPIO_ACTIVE_LOW>;
+			cd-gpio = <&pctl 91 GPIO_ACTIVE_LOW>;
 			broken-cd;
 			disable-wp;
 			cap-sd-highspeed;
@@ -1011,7 +1011,7 @@
 			mmc1_mux: mmc1_mux {
 				sppctl,groups = "SD_CARD";
 				sppctl,function = "SD_CARD";
-				sppctl,pins = < SP7021_IOPAD(71,SP7021_PCTL_G_GPIO,0,0) >;
+				sppctl,pins = < SP7021_IOPAD(91,SP7021_PCTL_G_GPIO,0,0) >;
 			};
 #if 0
 			pins_uart1: pins_uart1 {
