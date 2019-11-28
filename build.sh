@@ -64,12 +64,12 @@ R="${SD}/BPI-ROOT"
 	#
 	## create files for bpi-tools & bpi-migrate
 	#
-	(cd $B ; tar czvf $SD/BPI-BOOT-${board}.tgz .)
-	(cd $R ; tar czvf $SD/${kernel}-net.tgz lib/modules/${kernel}/kernel/net)
+	(cd $B ; tar cJvf $SD/BPI-BOOT-${board}.tgz .)
+	(cd $R ; tar cJvf $SD/${kernel}-net.tgz lib/modules/${kernel}/kernel/net)
 	(cd $R ; mv lib/modules/${kernel}/kernel/net $R/net)
-	(cd $R ; tar czvf $SD/${kernel}.tgz boot lib/modules)
+	(cd $R ; tar cJvf $SD/${kernel}.tgz boot lib/modules)
 	(cd $R ; mv $R/net lib/modules/${kernel}/kernel/net)
-	(cd $R ; tar czvf $SD/BOOTLOADER-${board}.tgz usr/lib/u-boot/bananapi)
+	(cd $R ; tar cJvf $SD/BOOTLOADER-${board}.tgz usr/lib/u-boot/bananapi)
 
 	return #SKIP
 }
