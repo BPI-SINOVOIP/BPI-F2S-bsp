@@ -21,8 +21,10 @@ rootfs_loadaddr=0x02200000
 #root=/dev/ram
 # SD / eMMC
 #root=/dev/mmcblk0p2 rw rootfstype=ext4 rootwait 
-root=/dev/mmcblk1p2 rw rootfstype=ext4 rootwait 
+#root=/dev/mmcblk1p2 rw rootfstype=ext4 rootwait 
 #root=/dev/mmcblk2p2 rw rootfstype=ext4 rootwait 
+#root setenv by uboot (SD:/dev/mmcblk1p2 emmc:/dev/mmcblk0p2)
+rootopt=rw rootfstype=ext4 rootwait 
 # USB / SATA
 #root=/dev/sda2 rw rootfstype=ext4 rootwait 
 #
@@ -31,7 +33,7 @@ bootopts=loglevel=8 debug=8 initcall_debug=0 user_debug=255
 #
 ##
 #
-abootargs=setenv bootargs board=${board} console=${console} root=${root} service=${service} sdmmc_on=${sdmmc_on} ${bootopts} 
+abootargs=setenv bootargs board=${board} console=${console} root=${root} ${rootopt} service=${service} sdmmc_on=${sdmmc_on} ${bootopts} 
 #
 ##
 #
