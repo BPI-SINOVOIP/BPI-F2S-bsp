@@ -1,0 +1,114 @@
+/dts-v1/;
+
+#include "pentagram-sp7021-achip.dtsi"
+
+#include <dt-bindings/interrupt-controller/arm-gic.h>
+
+/ {
+	model = "Sunplus SP7021 EMU (CA7)";
+	compatible = "sunplus,sp7021-achip";
+
+	chosen {
+		bootargs = "console=ttyS0,115200 root=/dev/ram rw loglevel=8 user_debug=255 earlyprintk";
+	};
+
+	memory {
+		reg = <0x00000000 0x20000000>; /* 512MB */
+	};
+
+	soc@B {
+		mmc1: mmc@sdcard {
+			cd-gpio = <&pctl 91 GPIO_ACTIVE_LOW>;
+		};
+
+		sp_display: display@0x9c005c80 {
+			ui_width = <1280>;
+			ui_height = <720>;
+
+			/* 0x2 = 8bpp (ARGB)
+			* 0x4 = YUY2
+			* 0x8 = RGB565
+			* 0x9 = ARGB1555
+			* 0xa = RGBA4444
+			* 0xb = ARGB4444
+			* 0xd = RGBA8888
+			* 0xe = ARGB8888
+			*/
+			ui_format = <0x8>;
+		};
+	};
+};
+
+&i2cm0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&i2cm0_pins>;
+	status = "disabled";
+};
+
+&i2cm1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&i2cm1_tpm_pins>;
+	#address-cells = <1>;
+	#size-cells = <0>;
+	st33htpi: st33htpi@0{
+		compatible = "st,st33htpm-i2c";
+		reg = <0x2e>;
+		status="okay";
+	};
+};
+
+&spi_controller0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&spim0_pins>;
+	status = "disabled";
+};
+
+&uart4 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart4_pins>;
+	status = "disabled";
+};
+
+&pctl {
+
+	i2cm0_pins: i2cm0_pins {                                   
+		sppctl,pins = <                                            
+			SP7021_IOPAD(14,SP7021_PCTL_G_PMUX,MUXF_I2CM0_CK,0) 
+			SP7021_IOPAD(15,SP7021_PCTL_G_PMUX,MUXF_I2CM0_DAT,0)        
+		>;                                                        
+	}; 
+ 
+	spim0_pins: spim0_pins {                                   
+		sppctl,pins = <                                            
+			SP7021_IOPAD(8,SP7021_PCTL_G_PMUX,MUXF_SPIM0_INT,0)  
+			SP7021_IOPAD(9,SP7021_PCTL_G_PMUX,MUXF_SPIM0_CLK,0)  
+			SP7021_IOPAD(10,SP7021_PCTL_G_PMUX,MUXF_SPIM0_EN,0)  
+			SP7021_IOPAD(11,SP7021_PCTL_G_PMUX,MUXF_SPIM0_DO,0)  
+			SP7021_IOPAD(12,SP7021_PCTL_G_PMUX,MUXF_SPIM0_DI,0)  
+		>;                                                        
+	}; 
+
+	uart4_pins: uart4_pins {
+		sppctl,pins = <
+			SP7021_IOPAD(16,SP7021_PCTL_G_PMUX,MUXF_UA4_TX,0)
+			SP7021_IOPAD(18,SP7021_PCTL_G_PMUX,MUXF_UA4_RX,0)
+			SP7021_IOPAD(20,SP7021_PCTL_G_PMUX,MUXF_UA4_RTS,0)
+			SP7021_IOPAD(22,SP7021_PCTL_G_PMUX,MUXF_UA4_CTS,0)
+		>;
+	};
+
+	mipicsi0_pins: pinmux_mipicsi0_pins {
+		sppctl,pins = <
+			SP7021_IOPAD(64,SP7021_PCTL_G_PMUX,MUXF_I2CM1_DAT,0)
+			SP7021_IOPAD(61,SP7021_PCTL_G_PMUX,MUXF_I2CM1_CK,0)
+		>;
+	};
+
+	mmc1_mux: mmc1_mux {
+		sppctl,pins = <
+			SP7021_IOPAD(91,SP7021_PCTL_G_GPIO,0,0)
+		>;
+	};
+ 
+}; 
+

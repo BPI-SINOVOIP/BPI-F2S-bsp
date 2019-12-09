@@ -2,29 +2,22 @@
 
 set -e
 
-#SOC=rtd1296
 SOC=sp7021
-#MACH=rtd129x
 MACH=sp7021
 PLATFORM=
 BOARD=
 TYPE=sd
 TOPDIR=`pwd`
-#TARGET_PLATFORM="realtek"
-#TARGET_PRODUCT="bpi-w2"
 TARGET_PRODUCT="bpi-f2s"
-BPILINUX=linxu-sp
-BPIPACK=sp-pack
-BPISOC=sunplus
 
 CUR_DIR=$PWD
-#TOOLCHAIN=gcc-linaro-7.2.1-2017.11-x86_64_aarch64-linux-gnu
-#TOOLCHAIN=asdk64-4.9.4-a53-EL-3.10-g2.19-a64nt-160307
 TOOLCHAIN=gcc-linaro-7.3.1-2018.05-x86_64_arm-linux-gnueabihf
 CROSS_COMPILE=$CUR_DIR/toolchains/$TOOLCHAIN/bin
+kernel_modules="4.19.37-BPI-F2S-Kernel"
+kernel_headers="linux-headers-4.19.37-BPI-F2S-Kernel"
 
 list_boards() {
-	(cd ${BPIPACK}/${BPISOC}/${TARGET_PRODUCT}/configs ; ls -1d BPI* )
+	(cd sp-pack/${MACH}/configs ; ls -1d BPI* )
 }
 
 # keep the output `sh` friendly
@@ -56,6 +49,8 @@ generate_board_envsh() {
 	export CROSS_COMPILE=arm-linux-gnueabihf-
 	export UBOOT_CONFIG=pentagram_sp7021_emmc_defconfig
 	export KERNEL_CONFIG=pentagram_sp7021_achip_emu_bpi_defconfig
+	export KERNEL_MODULES=${kernel_modules}
+	export KERNEL_HEADERS=${kernel_headers}
 	export LICHEE_PLATFORM="linux"
 	export TOPDIR=${TOPDIR}
 	export TARGET_PLATFORM=${TARGET_PLATFORM}

@@ -1147,7 +1147,7 @@ int file_fat_read_at(const char *filename, loff_t pos, void *buffer,
 	if (ret)
 		goto out_free_both;
 
-	debug("reading %s at pos %llu\n", filename, pos);
+	printf("reading %s at pos %llu\n", filename, pos);
 
 	/* For saving default max clustersize memory allocated to malloc pool */
 	dir_entry *dentptr = itr->dent;

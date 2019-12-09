@@ -771,7 +771,8 @@ dtb-$(CONFIG_ARCH_ACTIONS) += \
 	owl-s500-guitar-bb-rev-b.dtb \
 	owl-s500-sparky.dtb
 dtb-$(CONFIG_ARCH_PENTAGRAM) += \
-	pentagram-sp7021-achip-emu.dtb	
+	pentagram-sp7021-achip-emu.dtb \
+	pentagram-sp7021-achip-bananapi-f2s.dtb	
 dtb-$(CONFIG_ARCH_PRIMA2) += \
 	prima2-evb.dtb
 dtb-$(CONFIG_ARCH_OXNAS) += \

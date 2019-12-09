@@ -529,11 +529,9 @@
 			interrupts = <175 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&clkc I2CM1>;
 			resets = <&rstc RST_I2CM1>;
-#if 1 // Demo board V3
-#if 0
+#if 0 // Demo board V3
 			pinctrl-names = "default";
 			pinctrl-0 = <&i2cm1_tpm_pins>;
-#endif
 			#address-cells = <1>;
 			#size-cells = <0>;
 			st33htpi: st33htpi@0{
@@ -692,9 +690,9 @@
 			compatible = "sunplus,sp7021-display";
 			reg = <0x9c005c80 0x1980>,
 			      <0x9c105000 0x80>;
-			ui_width = <1280>;
-			ui_height = <720>;
-			ui_format = <0x8>;
+			ui_width = <720>;
+			ui_height = <480>;
+			ui_format = <0xe>;
 				/* 0x2 = 8bpp (ARGB)
 				 * 0x4 = YUY2
 				 * 0x8 = RGB565
@@ -790,7 +788,7 @@
 			pinctrl-0 = <&mmc1_mux>;
 			bus-width = <4>;
 			max-frequency = <52000000>;
-			cd-gpio = <&pctl 91 GPIO_ACTIVE_LOW>;
+			cd-gpio = <&pctl 71 GPIO_ACTIVE_LOW>;
 			broken-cd;
 			disable-wp;
 			cap-sd-highspeed;
@@ -1011,7 +1009,7 @@
 			mmc1_mux: mmc1_mux {
 				sppctl,groups = "SD_CARD";
 				sppctl,function = "SD_CARD";
-				sppctl,pins = < SP7021_IOPAD(91,SP7021_PCTL_G_GPIO,0,0) >;
+				sppctl,pins = < SP7021_IOPAD(71,SP7021_PCTL_G_GPIO,0,0) >;
 			};
 #if 0
 			pins_uart1: pins_uart1 {
@@ -1109,8 +1107,8 @@
 
 			mipicsi0_pins: pinmux_mipicsi0_pins {
 				sppctl,pins = <
-					SP7021_IOPAD(64,SP7021_PCTL_G_PMUX,MUXF_I2CM1_DAT,0)
-					SP7021_IOPAD(61,SP7021_PCTL_G_PMUX,MUXF_I2CM1_CK,0)
+					SP7021_IOPAD(11,SP7021_PCTL_G_PMUX,MUXF_I2CM1_DAT,0)
+					SP7021_IOPAD(12,SP7021_PCTL_G_PMUX,MUXF_I2CM1_CK,0)
 #if 0
 					SP7021_IOPAD(14,SP7021_PCTL_G_GPIO,0,1)
 					SP7021_IOPAD(15,SP7021_PCTL_G_GPIO,0,1)	
