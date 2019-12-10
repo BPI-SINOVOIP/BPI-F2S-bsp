@@ -2,19 +2,13 @@
 
 set -e
 
-SOC=sp7021
 MACH=sp7021
-PLATFORM=
 BOARD=
-TYPE=sd
+board=
 TOPDIR=`pwd`
-TARGET_PRODUCT="bpi-f2s"
 
-CUR_DIR=$PWD
 TOOLCHAIN=gcc-linaro-7.3.1-2018.05-x86_64_arm-linux-gnueabihf
-CROSS_COMPILE=$CUR_DIR/toolchains/$TOOLCHAIN/bin
-kernel_modules="4.19.37-BPI-F2S-Kernel"
-kernel_headers="linux-headers-4.19.37-BPI-F2S-Kernel"
+CROSS_COMPILE=${TOPDIR}/toolchains/${TOOLCHAIN}/bin
 
 list_boards() {
 	(cd sp-pack/${MACH}/configs ; ls -1d BPI* )
@@ -26,14 +20,10 @@ generate_board_mk() {
 	
 	cat <<-EOT
 	BOARD=$BOARD
-	SOC=$SOC
 	MACH=$MACH
 	COMPILE_TOOL=$CROSS_COMPILE
-	#UBOOT_CONFIG=${SOC}_${TYPE}_bananapi_defconfig
-	#UBOOT_CONFIG=pentagram_sc7021_emmc_defconfig
 	UBOOT_CONFIG=pentagram_sp7021_emmc_defconfig
-	KERNEL_CONFIG=pentagram_sp7021_achip_emu_bpi_defconfig
-	TARGET_PLATFORM=${TARGET_PLATFORM}
+	KERNEL_CONFIG=pentagram_sp7021_achip_emu_${board}_defconfig
 	EOT
 
 }
@@ -43,18 +33,13 @@ generate_board_envsh() {
 	
 	cat <<-EOT
 	export ARCH=arm
-	export BOARD=$BOARD
-	export SOC=$SOC
 	export MACH=$MACH
-	export CROSS_COMPILE=arm-linux-gnueabihf-
+	export BOARD=$BOARD
 	export UBOOT_CONFIG=pentagram_sp7021_emmc_defconfig
-	export KERNEL_CONFIG=pentagram_sp7021_achip_emu_bpi_defconfig
-	export KERNEL_MODULES=${kernel_modules}
-	export KERNEL_HEADERS=${kernel_headers}
-	export LICHEE_PLATFORM="linux"
-	export TOPDIR=${TOPDIR}
-	export TARGET_PLATFORM=${TARGET_PLATFORM}
-	export TARGET_PRODUCT=${TARGET_PRODUCT}
+	export KERNEL_CONFIG=pentagram_sp7021_achip_emu_${board}_defconfig
+	export KERNEL_MODULES=4.19.37-${BOARD%-*}-Kernel
+	export KERNEL_HEADERS=linux-headers-4.19.37-${BOARD%-*}-Kernel
+	export TOPDIR=$TOPDIR
 	EOT
 
 }
@@ -65,7 +50,7 @@ usage() {
 
 	supported boards:
 	EOT
-	list_boards  #DK, update later
+	list_boards
 }
 
 if [ $# -eq 0 ]; then
@@ -74,6 +59,7 @@ if [ $# -eq 0 ]; then
 fi
 
 BOARD=$1
+board=$(echo ${BOARD%-*} | tr '[A-Z]' '[a-z]')
 
 generate_board_envsh "$1" > env.sh
 

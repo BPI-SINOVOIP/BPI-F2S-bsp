@@ -40,7 +40,7 @@ u-boot-clean:
 	$(Q)$(MAKE) -C u-boot-sp CROSS_COMPILE=$(U_CROSS_COMPILE) -j$J distclean
 
 $(K_DOT_CONFIG): linux-sp
-	$(Q)$(MAKE) -C linux-sp ARCH=arm $(KERNEL_CONFIG)
+	$(Q)$(MAKE) -C linux-sp ARCH=arm $(KERNEL_CONFIG) CROSS_COMPILE=${K_CROSS_COMPILE}
 
 kernel: $(K_DOT_CONFIG)
 	$(Q)$(MAKE) -C linux-sp ARCH=arm CROSS_COMPILE=${K_CROSS_COMPILE} -j$J INSTALL_MOD_PATH=output uImage dtbs
