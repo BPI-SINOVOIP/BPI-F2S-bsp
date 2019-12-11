@@ -50,9 +50,19 @@
                         i2c-id = <1>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&mipicsi0_pins>;
-			status = "okay";
+			status = "disabled";
                 };
 	};
+
+	leds {
+                compatible = "gpio-leds";
+
+                red {
+                        label = "sp7021:red:system";
+                        gpios = <&pctl 0 GPIO_ACTIVE_HIGH>;
+			linux,default-trigger = "timer";
+                };
+        };
 };
 
 
