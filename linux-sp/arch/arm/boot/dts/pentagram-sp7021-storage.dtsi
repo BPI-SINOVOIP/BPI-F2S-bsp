@@ -6,8 +6,6 @@
 #include <dt-bindings/interrupt-controller/sp-intc.h> /* SP_INTC_EXT_INT1 */
 #include <dt-bindings/reset/sp-q628.h>
 
-#define ENABLE_EMMC  /*Default enable emmc, if no define ENABLE_EMMC, it mean ENABLE_SPINAND. */
-
 / {
 
 	soc@B {
@@ -20,12 +18,11 @@
 
 		/* B modules */
 		/*emmc and spinand can't enable at the same time, they used the same pins. */
-#ifdef ENABLE_EMMC
 		mmc0: mmc@emmc {
 			pinctrl-names = "default";
 			pinctrl-0 = <&emmc_mux>;
 		};
-#else
+
 		spinand0: spinand@sp_spinand {
 			compatible = "sunplus,sp_spinand";
 			reg = <0x9c002B80 0x50>;
@@ -34,8 +31,7 @@
 			linux,part-probe = "ofpart", "sunplus_part";
 			clocks = <&clkc SPIND>;
 			resets = <&rstc RST_SPIND>;
+			status = "disabled";
 		};		
-#endif
-		
 	};
 };

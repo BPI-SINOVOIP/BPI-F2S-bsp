@@ -24,7 +24,7 @@
 			clock-frequency = <931000000>;
 			cpu-idle-states = <&CLUSTER_SLEEP_BIG>;
 		};
-#if 1
+
 		cpu@1 {
 			compatible = "arm,cortex-a7";
 			device_type = "cpu";
@@ -52,27 +52,17 @@
 			clock-frequency = <931000000>;
 			cpu-idle-states = <&CLUSTER_SLEEP_BIG>;
 		};
-#endif
-#if  1
+
 		idle-states {
 			CLUSTER_SLEEP_BIG: cluster-sleep-big {
 				compatible = "sp7021,idle-state";
-/*				local-timer-stop;*/
+				/*local-timer-stop;*/
 				entry-latency-us = <8000>;
 				exit-latency-us = <700>;
 				min-residency-us = <9000>;
 			};
-#if  0
-			CLUSTER_SLEEP_LITTLE: cluster-sleep-little {
-				compatible = "sp7021,idle-state";
-				local-timer-stop;
-				entry-latency-us = <1000>;
-				exit-latency-us = <500>;
-				min-residency-us = <2500>;
-			};
-#endif
+
 		};
-#endif
 	};
 
 	arm-pmu {
@@ -108,29 +98,6 @@
 			arm,cpu-registers-not-fw-configured;
 		};
 
-#if 0		/* Each Cortex A-7 has its own system timer, it's not required if armv7-timer is enabled. */
-		/* This timer will be used in sp_timer_test.c */
-		timer@A_G19 {
-			compatible = "sunplus,sp-stc";
-			reg = <0x9ec00980 0x80>;
-			interrupt-parent = <&gic>;
-			interrupts = <GIC_SPI 1 IRQ_TYPE_EDGE_RISING>, /* timer0 */
-				     <GIC_SPI 2 IRQ_TYPE_EDGE_RISING>, /* timer1 */
-				     <GIC_SPI 3 IRQ_TYPE_EDGE_RISING>, /* timer2 */
-				     <GIC_SPI 4 IRQ_TYPE_EDGE_RISING>; /* timer3 */
-		};
-#endif
-#if 0
-		sp_tmr_tst@9ec00980 {
-			compatible = "sunplus,sp-tmr-tst";
-			reg = <0x9ec00980 0x80>;
-			interrupt-parent = <&gic>;
-			interrupts = <GIC_SPI 1 IRQ_TYPE_EDGE_RISING>, /* timer0 */
-				     <GIC_SPI 2 IRQ_TYPE_EDGE_RISING>, /* timer1 */
-				     <GIC_SPI 3 IRQ_TYPE_EDGE_RISING>, /* timer2 */
-				     <GIC_SPI 4 IRQ_TYPE_EDGE_RISING>; /* timer3 */
-		};
-#endif
 
 		dma0@A_G11 {
 			compatible = "sunplus,sp-dma0";
