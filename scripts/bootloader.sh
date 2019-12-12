@@ -16,7 +16,7 @@ if [ ! -z $O ] ; then
 	BOARD=$O
 fi
 
-U=/tmp/${TARGET_PRODUCT}
+U=/tmp/${BOARD}
 if [ ! -d $U ]; then
 	mkdir -p $U
 fi

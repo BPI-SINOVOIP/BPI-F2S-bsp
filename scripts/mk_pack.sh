@@ -41,7 +41,7 @@ pack_bootloader()
   done
 
   cp -a ${TOPDIR}/sp-pack/${MACH}/bin/*.img.gz ${BOOTLOADER}/
-  cp -a /tmp/${board}/*.img.gz ${BOOTLOADER}/
+  cp -a /tmp/${BOARD}/*.img.gz ${BOOTLOADER}/
 }
 
 pack_boot()
