@@ -181,6 +181,11 @@ static void spsdc_set_bus_clk(struct spsdc_host *host, int clk)
 		clk = f_min;
 	if (clk > f_max)
 		clk = f_max;
+
+        /* SD 2.0 only max set to 50Mhz CLK */
+	if (clk >= SPSDC_50M_CLK)
+		clk = f_max;
+
 	spsdc_pr(INFO, "set bus clock to %d\n", clk);
 	clkdiv = (clk_get_rate(host->clk)+clk)/clk-1;
 	if (clkdiv > 0xfff) {
@@ -381,7 +386,8 @@ static void spsdc_prepare_data(struct spsdc_host *host, struct mmc_data *data)
 		}
 		for_each_sg(data->sg, sg, count, i) {
 			dma_addr = sg_dma_address(sg);
-			dma_size = sg_dma_len(sg) / 512 - 1;
+			dma_size = sg_dma_len(sg) / data->blksz - 1;
+			//dma_size = sg_dma_len(sg) / 512 - 1;
 			if (0 == i) {
 				writel(dma_addr, &host->base->dma_base_addr15_0);
 				writel(dma_addr >> 16, &host->base->dma_base_addr31_16);

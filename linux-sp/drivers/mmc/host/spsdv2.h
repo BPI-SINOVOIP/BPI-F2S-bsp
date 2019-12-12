@@ -21,6 +21,8 @@
 
 #define SPSDC_MIN_CLK	400000
 #define SPSDC_MAX_CLK	52000000
+#define SPSDC_50M_CLK   50000000
+
 #define SPSDC_MAX_BLK_COUNT 65536
 
 #define __rsvd_regs(l) __append_suffix(l, __COUNTER__)

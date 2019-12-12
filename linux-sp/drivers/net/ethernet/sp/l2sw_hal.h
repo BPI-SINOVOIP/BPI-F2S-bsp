@@ -12,10 +12,6 @@
 #define MOON5REG_R(M)           (moon5_reg_base->M)
 
 
-/* for reg_control() */
-#define REG_WRITE               0
-#define REG_READ                1
-
 #define MDIO_RW_TIMEOUT_RETRY_NUMBERS 500
 
 

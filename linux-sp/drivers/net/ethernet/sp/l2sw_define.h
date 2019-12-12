@@ -39,7 +39,7 @@
 #define ETH_WARNING(fmt, arg...)        printk(KERN_WARNING "[L2SW]" fmt, ##arg)
 #define ETH_NOTICE(fmt, arg...)         printk(KERN_NOTICE  "[L2SW]" fmt, ##arg)
 #define ETH_INFO(fmt, arg...)           printk(KERN_INFO    "[L2SW]" fmt, ##arg)
-#define ETH_DEBUG(fmt, arg...)          printk(KERN_DEBUG   "[L2SW]" fmt, ##arg)
+#define ETH_DEBUG(fmt, arg...)          pr_debug("[L2SW]" fmt, ##arg)
 
 
 //define MAC interrupt status bit

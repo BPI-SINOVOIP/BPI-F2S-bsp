@@ -140,8 +140,8 @@ static ssize_t sppctl_sop_fw_R(
  if ( !( _p = ( sppctl_pdata_t *)_pdev->platform_data)) return( -ENXIO);
  for ( i = 0; i < list_funcsSZ; i++) {
    f = &( list_funcs[ i]);
-   if ( list_funcs[ i].freg == fOFF_0) continue;
-   if ( list_funcs[ i].freg == fOFF_I) continue;
+   if ( f->freg == fOFF_0) continue;
+   if ( f->freg == fOFF_I) continue;
    if ( f->freg == fOFF_M) pin = sppctl_fun_get( _p, j++);
    if ( f->freg == fOFF_G) pin = sppctl_gmx_get( _p, f->roff, f->boff, f->blen);
    if ( pos > 0) {  pos -= sizeof( pin);  continue;  }
@@ -154,36 +154,34 @@ static ssize_t sppctl_sop_fw_R(
 static ssize_t sppctl_sop_fw_W(
  struct file *filp, struct kobject *_k, struct bin_attribute *_a,
  char *_b, loff_t _off, size_t _count) {
- int i = _off - 1, j = _off - 1;
- sppctl_sdata_t *sdp = NULL;
+ int i = _off, j = _off;
  sppctl_pdata_t *_p = NULL;
  func_t *f;
  struct device *_pdev = container_of( _k, struct device, kobj);
- if ( _off + _count < list_funcsSZ) {
-   KERR( _pdev, "%s() fw size %lld < %d\n", __FUNCTION__, _off + _count, list_funcsSZ);
-   return( -ENXIO);  }
+ if ( _off + _count < ( list_funcsSZ - 2)) {
+   KINF( _pdev, "%s() fw size %lld < %d\n", __FUNCTION__, _off + _count, list_funcsSZ);
+ }
  if ( !_pdev) return( -ENXIO);
  if ( !( _p = ( sppctl_pdata_t *)_pdev->platform_data)) return( -ENXIO);
- sdp = ( sppctl_sdata_t *)_a->private;
  for ( ; i < list_funcsSZ && j < _count; i++) {
    f = &( list_funcs[ i]);
-   if ( list_funcs[ i].freg == fOFF_0) continue;
-   if ( list_funcs[ i].freg == fOFF_I) continue;
-   if ( list_funcs[ i].freg == fOFF_M) sppctl_pin_set( _p, _b[ j++], sdp->ridx);
-   if ( list_funcs[ i].freg == fOFF_G) sppctl_gmx_set( _p, f->roff, f->boff, f->blen, _b[ j++]);
+   if ( f->freg == fOFF_0) continue;
+   if ( f->freg == fOFF_I) continue;
+   if ( f->freg == fOFF_M) {  sppctl_pin_set( _p, _b[ j], j);  j++;  }
+   if ( f->freg == fOFF_G) sppctl_gmx_set( _p, f->roff, f->boff, f->blen, _b[ j++]);
   }
  return( i);  }
 
 static struct device_attribute sppctl_sysfs_attrsD[] = {
  __ATTR(     name,0444,sppctl_sop_name_R,       NULL),
- __ATTR(     dbgi,0664,sppctl_sop_dbgi_R,       sppctl_sop_dbgi_W),
- __ATTR(   fwname,0664,sppctl_sop_fwname_R,     sppctl_sop_fwname_W),
+ __ATTR(     dbgi,0644,sppctl_sop_dbgi_R,       sppctl_sop_dbgi_W),
+ __ATTR(   fwname,0644,sppctl_sop_fwname_R,     sppctl_sop_fwname_W),
 };
 
 static struct bin_attribute sppctl_sysfs_attrsB[] = {
  __BIN_ATTR( list_muxes,0444,sppctl_sop_list_muxes_R, NULL, SPPCTL_MAX_BUF),
  __BIN_ATTR( txt_map   ,0444,sppctl_sop_txt_map_R,    NULL, SPPCTL_MAX_BUF),
- __BIN_ATTR( fw        ,0444,sppctl_sop_fw_R,         sppctl_sop_fw_W, SPPCTL_MAX_BUF),
+ __BIN_ATTR( fw        ,0644,sppctl_sop_fw_R,         sppctl_sop_fw_W, SPPCTL_MAX_BUF),
 };
 
 struct bin_attribute *sppctl_sysfs_Fap;
@@ -214,7 +212,7 @@ void sppctl_sysfs_init( struct platform_device *_pd) {
    sdp[ i].pdata = _p;
    sysfs_bin_attr_init( sppctl_sysfs_Fap[ i]);
    sppctl_sysfs_Fap[ i].attr.name = tmpp;
-   sppctl_sysfs_Fap[ i].attr.mode = 0664;
+   sppctl_sysfs_Fap[ i].attr.mode = 0644;
    sppctl_sysfs_Fap[ i].read  = sppctl_sop_func_R;
    sppctl_sysfs_Fap[ i].write = sppctl_sop_func_W;
    sppctl_sysfs_Fap[ i].size = SPPCTL_MAX_BUF;

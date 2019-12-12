@@ -87,9 +87,9 @@ void mac_hw_addr_set(struct l2sw_mac *mac)
 	do {
 		reg = HWREG_R(wt_mac_ad0);
 		ndelay(10);
-		//ETH_INFO(" wt_mac_ad0 = 0x%08x\n", reg);
+		ETH_DEBUG(" wt_mac_ad0 = 0x%08x\n", reg);
 	} while ((reg&(0x1<<1)) == 0x0);
-	//ETH_INFO(" mac_ad0 = %08x, mac_ad = %08x%04x\n", HWREG_R(wt_mac_ad0), HWREG_R(w_mac_47_16), HWREG_R(w_mac_15_0)&0xffff);
+	ETH_DEBUG(" mac_ad0 = %08x, mac_ad = %08x%04x\n", HWREG_R(wt_mac_ad0), HWREG_R(w_mac_47_16), HWREG_R(w_mac_15_0)&0xffff);
 
 	//mac_hw_addr_print();
 }
@@ -107,9 +107,9 @@ void mac_hw_addr_del(struct l2sw_mac *mac)
 	do {
 		reg = HWREG_R(wt_mac_ad0);
 		ndelay(10);
-		//ETH_INFO(" wt_mac_ad0 = 0x%08x\n", reg);
+		ETH_DEBUG(" wt_mac_ad0 = 0x%08x\n", reg);
 	} while ((reg&(0x1<<1)) == 0x0);
-	//ETH_INFO(" mac_ad0 = %08x, mac_ad = %08x%04x\n", HWREG_R(wt_mac_ad0), HWREG_R(w_mac_47_16), HWREG_R(w_mac_15_0)&0xffff);
+	ETH_DEBUG(" mac_ad0 = %08x, mac_ad = %08x%04x\n", HWREG_R(wt_mac_ad0), HWREG_R(w_mac_47_16), HWREG_R(w_mac_15_0)&0xffff);
 
 	//mac_hw_addr_print();
 }
@@ -131,17 +131,17 @@ void mac_addr_table_del_all(void)
 		do {
 			reg = HWREG_R(addr_tbl_st);
 			ndelay(10);
-			//ETH_INFO(" addr_tbl_st = %08x\n", reg);
+			ETH_DEBUG(" addr_tbl_st = %08x\n", reg);
 		} while (!(reg & (MAC_AT_TABLE_END|MAC_AT_DATA_READY)));
 
 		if (reg & MAC_AT_TABLE_END) {
 			break;
 		}
 
-		//ETH_INFO(" addr_tbl_st = %08x\n", reg);
-		//ETH_INFO(" @AT #%u: port=0x%01x, cpu=0x%01x, vid=%u, aging=%u, proxy=%u, mc_ingress=%u\n",
-		//	(reg>>22)&0x3ff, (reg>>12)&0x3, (reg>>10)&0x3, (reg>>7)&0x7,
-		//	(reg>>4)&0x7, (reg>>3)&0x1, (reg>>2)&0x1);
+		ETH_DEBUG(" addr_tbl_st = %08x\n", reg);
+		ETH_DEBUG(" @AT #%u: port=0x%01x, cpu=0x%01x, vid=%u, aging=%u, proxy=%u, mc_ingress=%u\n",
+			(reg>>22)&0x3ff, (reg>>12)&0x3, (reg>>10)&0x3, (reg>>7)&0x7,
+			(reg>>4)&0x7, (reg>>3)&0x1, (reg>>2)&0x1);
 
 		// Delete all entries which are learnt from lan ports.
 		if ((reg>>12)&0x3) {
@@ -155,9 +155,9 @@ void mac_addr_table_del_all(void)
 			do {
 				reg = HWREG_R(wt_mac_ad0);
 				ndelay(10);
-				//ETH_INFO(" wt_mac_ad0 = 0x%08x\n", reg);
+				ETH_DEBUG(" wt_mac_ad0 = 0x%08x\n", reg);
 			} while ((reg&(0x1<<1)) == 0x0);
-			//ETH_INFO(" mac_ad0 = %08x, mac_ad = %08x%04x\n", HWREG_R(wt_mac_ad0), HWREG_R(w_mac_47_16), HWREG_R(w_mac_15_0)&0xffff);
+			ETH_DEBUG(" mac_ad0 = %08x, mac_ad = %08x%04x\n", HWREG_R(wt_mac_ad0), HWREG_R(w_mac_47_16), HWREG_R(w_mac_15_0)&0xffff);
 		}
 
 		// Search next.
@@ -337,7 +337,7 @@ void rx_mode_set(struct net_device *net_dev)
 	struct l2sw_mac *mac = netdev_priv(net_dev);
 	u32 mask, reg, rx_mode;
 
-	//ETH_INFO(" net_dev->flags = %08x\n", net_dev->flags);
+	ETH_DEBUG(" net_dev->flags = %08x\n", net_dev->flags);
 
 	mask = (mac->lan_port<<2) | (mac->lan_port<<0);
 	reg = HWREG_R(cpu_cntl);
@@ -354,7 +354,7 @@ void rx_mode_set(struct net_device *net_dev)
 	}
 
 	HWREG_W(cpu_cntl, (reg & (~mask)) | ((~rx_mode) & mask));
-	//ETH_INFO(" cpu_cntl = %08x\n", HWREG_R(cpu_cntl));
+	ETH_DEBUG(" cpu_cntl = %08x\n", HWREG_R(cpu_cntl));
 }
 
 #define MDIO_READ_CMD   0x02

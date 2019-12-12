@@ -160,10 +160,10 @@ int sp7021_gpio_new( struct platform_device *_pd, void *_datap) {
  return( 0);  }
 
 int sp7021_gpio_del( struct platform_device *_pd, void *_datap) {
- sp7021gpio_chip_t *cp;
+ //sp7021gpio_chip_t *cp;
  // FIXME: can't use globally now
- if ( ( cp = platform_get_drvdata( _pd)) == NULL) return( -ENODEV);
- gpiochip_remove( &( cp->chip));
+ //if ( ( cp = platform_get_drvdata( _pd)) == NULL) return( -ENODEV);
+ //gpiochip_remove( &( cp->chip));
  // FIX: remove spinlock_t ?
  return( 0);  }
 

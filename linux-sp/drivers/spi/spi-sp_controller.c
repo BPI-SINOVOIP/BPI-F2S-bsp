@@ -288,17 +288,20 @@ struct pentagram_spi_master {
 	struct completion sla_isr;
 	unsigned int bufsiz;	
 	
+    unsigned int  rx_cur_len;
+    unsigned int  tx_cur_len; 
+
+    u8 tx_data_buf[SPI_MSG_DATA_SIZE];
+    u8 rx_data_buf[SPI_MSG_DATA_SIZE];	
+	
 	int isr_flag;
 };
 
 
-u8 tx_data_buf[SPI_MSG_DATA_SIZE];
-u8 rx_data_buf[SPI_MSG_DATA_SIZE];
 
 
-unsigned int  rx_cur_len;
-unsigned int  tx_cur_len;
-unsigned int  data_total_len;
+
+
 unsigned int  data_unit;
 
 
@@ -467,7 +470,7 @@ int pentagram_spi_slave_rw(struct spi_device *spi, const u8  *buf, u8  *data_buf
 			dev_dbg(&dev,"spim_reg->DMA_CTRL 0x%x\n",readl(&spim_reg->DMA_CTRL));
 		};
 
-		memcpy(buf, pspim->rx_dma_vir_base, len);
+		memcpy(data_buf, pspim->rx_dma_vir_base, len);
         writel(SLA_SW_RST, &spis_reg->SLV_DMA_CTRL);
 	
 		/* read*/
@@ -526,54 +529,54 @@ static irqreturn_t pentagram_spi_master_mas_irq(int irq, void *dev)
 
 		    if((readl(&spim_reg->SPI_FD_STATUS) & RX_FULL_FLAG) == RX_FULL_FLAG){
 		        for(i=0;i<data_unit;i++){	 // if READ_BYTE(0) i<16  can set the condition at here
-		 	       rx_data_buf[rx_cur_len] = readl(&spim_reg->FIFO_DATA);
-		 	       DBG_INFO("RXcnt492 data 0x%x  rx_cur_len = %d \n",rx_data_buf[rx_cur_len],rx_cur_len);		   
-		 	       rx_cur_len++;
+		 	       pspim->rx_data_buf[pspim->rx_cur_len] = readl(&spim_reg->FIFO_DATA);
+		 	       DBG_INFO("RXcnt492 data 0x%x  rx_cur_len = %d \n",pspim->rx_data_buf[pspim->rx_cur_len],pspim->rx_cur_len);		   
+		 	       pspim->rx_cur_len++;
 		 	    }
 		    }
 	
 			 while(readl(&spim_reg->SPI_FD_STATUS) & RX_CNT){	
-				 rx_data_buf[rx_cur_len] = readl(&spim_reg->FIFO_DATA);
-				 DBG_INFO("RXcnt480 data 0x%x ,tx_cur_len %d rx_cur_len = %d \n",rx_data_buf[rx_cur_len],tx_cur_len,rx_cur_len); 
-				 rx_cur_len++;
+				 pspim->rx_data_buf[pspim->rx_cur_len] = readl(&spim_reg->FIFO_DATA);
+				 DBG_INFO("RXcnt480 data 0x%x ,tx_cur_len %d rx_cur_len = %d \n",pspim->rx_data_buf[pspim->rx_cur_len],pspim->tx_cur_len,pspim->rx_cur_len); 
+				 pspim->rx_cur_len++;
 			 }
 		
 			 DBG_INFO("[SPI_FD]522 set SPI_FD_STATUS =0x%x\n",readl(&spim_reg->SPI_FD_STATUS));
              goto exit_irq;
 	
-	}else if(((readl(&spim_reg->SPI_FD_STATUS) & TX_EMP_FLAG) == TX_EMP_FLAG) || (tx_cur_len < tx_lenght) ){
+	}else if(((readl(&spim_reg->SPI_FD_STATUS) & TX_EMP_FLAG) == TX_EMP_FLAG) || (pspim->tx_cur_len < tx_lenght) ){
 
 	DBG_INFO("TX_EMP_FLAG");
 
 	   if((readl(&spim_reg->SPI_FD_STATUS) & RX_FULL_FLAG) == RX_FULL_FLAG){
 			for(i=0;i<data_unit;i++){	 // if READ_BYTE(0) i<16  can set the condition at here
-			    rx_data_buf[rx_cur_len] = readl(&spim_reg->FIFO_DATA);
-			    DBG_INFO("RXcnt533 data 0x%x  rx_cur_len = %d \n",rx_data_buf[rx_cur_len],rx_cur_len);		   
-			    rx_cur_len++;
-			    if(tx_cur_len < tx_lenght){
-		            writel(tx_data_buf[tx_cur_len], &spim_reg->FIFO_DATA);
-		            tx_cur_len++;				
+			    pspim->rx_data_buf[pspim->rx_cur_len] = readl(&spim_reg->FIFO_DATA);
+			    DBG_INFO("RXcnt533 data 0x%x  rx_cur_len = %d \n",pspim->rx_data_buf[pspim->rx_cur_len],pspim->rx_cur_len);		   
+			    pspim->rx_cur_len++;
+			    if(pspim->tx_cur_len < tx_lenght){
+		            writel(pspim->tx_data_buf[pspim->tx_cur_len], &spim_reg->FIFO_DATA);
+		            pspim->tx_cur_len++;				
 				}
 			}
 		}
 	   
 	    while(readl(&spim_reg->SPI_FD_STATUS) & RX_CNT){   
-		    rx_data_buf[rx_cur_len] = readl(&spim_reg->FIFO_DATA);
-		    DBG_INFO("RXcnt544 data 0x%x tx_cur_len = %d rx_cur_len = %d \n",rx_data_buf[rx_cur_len],tx_cur_len,rx_cur_len); 
-		    rx_cur_len++;
-			if((tx_cur_len < tx_lenght) &&  ((readl(&spim_reg->SPI_FD_STATUS) & TX_FULL_FLAG) != TX_FULL_FLAG)){
-		        writel(tx_data_buf[tx_cur_len], &spim_reg->FIFO_DATA);
-		        tx_cur_len++;				
+		    pspim->rx_data_buf[pspim->rx_cur_len] = readl(&spim_reg->FIFO_DATA);
+		    DBG_INFO("RXcnt544 data 0x%x tx_cur_len = %d rx_cur_len = %d \n",pspim->rx_data_buf[pspim->rx_cur_len],pspim->tx_cur_len,pspim->rx_cur_len); 
+		    pspim->rx_cur_len++;
+			if((pspim->tx_cur_len < tx_lenght) &&  ((readl(&spim_reg->SPI_FD_STATUS) & TX_FULL_FLAG) != TX_FULL_FLAG)){
+		        writel(pspim->tx_data_buf[pspim->tx_cur_len], &spim_reg->FIFO_DATA);
+		        pspim->tx_cur_len++;				
 			}			
 	    }
 
-		if(tx_cur_len < tx_lenght){
- 		    for(i=0;i<(tx_lenght-tx_cur_len);i++){
-		    	DBG_INFO("tx_data_buf554 0x%x  ,tx_cur_len %d data_total_len  %d  \n",tx_data_buf[tx_cur_len],tx_cur_len,data_total_len);
+		if(pspim->tx_cur_len < tx_lenght){
+ 		    while(tx_lenght-pspim->tx_cur_len){
+		    	DBG_INFO("tx_data_buf554 0x%x  ,tx_cur_len %d \n",pspim->tx_data_buf[pspim->tx_cur_len],pspim->tx_cur_len);
 				if((readl(&spim_reg->SPI_FD_STATUS) & TX_FULL_FLAG) == TX_FULL_FLAG)
 			    	break;
-		        writel(tx_data_buf[tx_cur_len], &spim_reg->FIFO_DATA);
-		        tx_cur_len++;
+		        writel(pspim->tx_data_buf[pspim->tx_cur_len], &spim_reg->FIFO_DATA);
+				pspim->tx_cur_len++;
 		    }  
 		}
 
@@ -586,19 +589,19 @@ static irqreturn_t pentagram_spi_master_mas_irq(int irq, void *dev)
 
 	
            for(i=0;i<data_unit;i++){    // if READ_BYTE(0) i<data_unit  can set the condition at here
-            //DBG_INFO("rx_cur_len %d",rx_cur_len);
+            //DBG_INFO("rx_cur_len %d",pspim->rx_cur_len);
            //char_temp= (char)readl(&spim_reg->FIFO_DATA);
 		   //DBG_INFO("001 char_temp %d",char_temp);
-		    //rx_data_buf[rx_cur_len] = (char)readl(&spim_reg->FIFO_DATA);
-			   rx_data_buf[rx_cur_len] = readl(&spim_reg->FIFO_DATA);
-		       DBG_INFO("RXcnt492 data 0x%x  rx_cur_len = %d \n",rx_data_buf[rx_cur_len],rx_cur_len);		   
-               rx_cur_len++;
+		    //pspim->rx_data_buf[pspim->rx_cur_len] = (char)readl(&spim_reg->FIFO_DATA);
+			   pspim->rx_data_buf[pspim->rx_cur_len] = readl(&spim_reg->FIFO_DATA);
+		       DBG_INFO("RXcnt492 data 0x%x  rx_cur_len = %d \n",pspim->rx_data_buf[pspim->rx_cur_len],pspim->rx_cur_len);		   
+               pspim->rx_cur_len++;
            }
 
 		   while((readl(&spim_reg->SPI_FD_STATUS) & RX_CNT) || ((readl(&spim_reg->SPI_FD_STATUS) & RX_FULL_FLAG) == RX_FULL_FLAG)){   
-			   rx_data_buf[rx_cur_len] = readl(&spim_reg->FIFO_DATA);
-			   DBG_INFO("RXcnt586 data 0x%x tx_cur_len = %d rx_cur_len = %d \n",rx_data_buf[rx_cur_len],tx_cur_len,rx_cur_len); 
-			   rx_cur_len++;		   
+			   pspim->rx_data_buf[pspim->rx_cur_len] = readl(&spim_reg->FIFO_DATA);
+			   DBG_INFO("RXcnt586 data 0x%x tx_cur_len = %d rx_cur_len = %d \n",pspim->rx_data_buf[pspim->rx_cur_len],pspim->tx_cur_len,pspim->rx_cur_len); 
+			   pspim->rx_cur_len++;		   
 		   }
 
 
@@ -837,10 +840,10 @@ static int pentagram_spi_master_fullduplex_write_read(struct spi_controller *ctl
 
     FUNC_DEBUG();
 
-	memcpy(&tx_data_buf[0], buf, data_len);
+	memcpy(&pspim->tx_data_buf[0], buf, data_len);
 	
 	DBG_INFO("data_buf 0x%x	\n",buf[0]);		
-	DBG_INFO("tx_data_buf init 0x%x	,tx_cur_len %d ,data_total_len  %d \n",tx_data_buf[0],tx_cur_len,data_total_len);	
+	DBG_INFO("tx_data_buf init 0x%x	,tx_cur_len %d  \n",pspim->tx_data_buf[0],pspim->tx_cur_len);	
 
 	
 	mutex_lock(&pspim->buf_lock);
@@ -849,18 +852,18 @@ static int pentagram_spi_master_fullduplex_write_read(struct spi_controller *ctl
 
 	
 	// set SPI FIFO data for full duplex (SPI_FD fifo_data)  91.13
-    if(tx_cur_len < data_len){
+    if(pspim->tx_cur_len < data_len){
         if(data_len >= data_unit){
 		    for(i=0;i<data_unit;i++){
-		    DBG_INFO("tx_data_buf1143 0x%x  ,tx_cur_len %d data_total_len  %d  \n",tx_data_buf[i],tx_cur_len,data_total_len);	
-		    writel(tx_data_buf[i], &spim_reg->FIFO_DATA);
-	    	tx_cur_len++;
+		    DBG_INFO("tx_data_buf1143 0x%x  ,tx_cur_len %d  \n",pspim->tx_data_buf[i],pspim->tx_cur_len);	
+		    writel(pspim->tx_data_buf[i], &spim_reg->FIFO_DATA);
+	            pspim->tx_cur_len++;
 	    	}
         }else{
  		    for(i=0;i<data_len;i++){
-		    DBG_INFO("tx_data_buf1150 0x%x  ,cur_len %d data_total_len  %d  \n",tx_data_buf[i],tx_cur_len,data_total_len);		
-		    writel(tx_data_buf[i], &spim_reg->FIFO_DATA);
-		    tx_cur_len++;
+		    DBG_INFO("tx_data_buf1150 0x%x  ,cur_len %d\n",pspim->tx_data_buf[i],pspim->tx_cur_len);		
+		    writel(pspim->tx_data_buf[i], &spim_reg->FIFO_DATA);
+		    pspim->tx_cur_len++;
 		    }   
         }
     }
@@ -898,10 +901,10 @@ static int pentagram_spi_master_fullduplex_write_read(struct spi_controller *ctl
 			goto free_master_write;
 		}
 
-		if((tx_len >0) && (rx_cur_len >= tx_len))
-		memcpy(data_buf, &rx_data_buf[tx_len], (rx_cur_len-tx_len));
+		if((tx_len >0) && (pspim->rx_cur_len >= tx_len))
+		memcpy(data_buf, &pspim->rx_data_buf[tx_len], (pspim->rx_cur_len-tx_len));
 		else
-        memcpy(data_buf, &rx_data_buf[0], rx_cur_len);
+        memcpy(data_buf, &pspim->rx_data_buf[0], pspim->rx_cur_len);
 
 		ret = 0;
 		
@@ -942,7 +945,7 @@ static int pentagram_spi_master_read(struct spi_controller *ctlr, const u8  *buf
     FUNC_DEBUG();
 
 
-	DBG_INFO("tx_cur_len %d ,data_total_len %d \n",tx_cur_len,data_total_len);	
+	DBG_INFO("tx_cur_len %d  %d \n",pspim->tx_cur_len);	
 
 
     mutex_lock(&pspim->buf_lock);
@@ -985,7 +988,7 @@ static int pentagram_spi_master_read(struct spi_controller *ctlr, const u8  *buf
 		goto free_master_read;
 	}
 
-	memcpy(data_buf, &rx_data_buf[0], rx_cur_len);
+	memcpy(data_buf, &pspim->rx_data_buf[0], pspim->rx_cur_len);
 	ret = 0;
 	
 free_master_read:
@@ -1024,10 +1027,10 @@ static int pentagram_spi_master_write(struct spi_controller *ctlr, const u8  *bu
 
     FUNC_DEBUG();
 
-	memcpy(&tx_data_buf[0], buf, data_len);
+	memcpy(&pspim->tx_data_buf[0], buf, data_len);
 
 	DBG_INFO("data_buf 0x%x	\n",buf[0]);		
-	DBG_INFO("tx_data_buf init 0x%x	,tx_cur_len %d ,data_total_len  %d \n",tx_data_buf[0],tx_cur_len,data_total_len);	
+	DBG_INFO("tx_data_buf init 0x%x	,tx_cur_len %d\n",pspim->tx_data_buf[0],pspim->tx_cur_len);	
 
 	DBG_INFO("SPI_FD_CONFIG =0x%x\n",readl(&spim_reg->SPI_FD_CONFIG));
 
@@ -1038,18 +1041,18 @@ static int pentagram_spi_master_write(struct spi_controller *ctlr, const u8  *bu
 	reinit_completion(&pspim->isr_done);
 
     // set SPI FIFO data for full duplex (SPI_FD fifo_data)  91.13
-    if(tx_cur_len < data_len){
+    if(pspim->tx_cur_len < data_len){
         if(data_len >= data_unit){
 		    for(i=0;i<data_unit;i++){
-		    DBG_INFO("tx_data_buf1143 0x%x  ,tx_cur_len %d data_total_len  %d  \n",tx_data_buf[i],tx_cur_len,data_total_len);	
-		    writel(tx_data_buf[i], &spim_reg->FIFO_DATA);
-	    	tx_cur_len++;
+		    DBG_INFO("tx_data_buf1143 0x%x  ,tx_cur_len %d \n",pspim->tx_data_buf[i],pspim->tx_cur_len);	
+		    writel(pspim->tx_data_buf[i], &spim_reg->FIFO_DATA);
+	      	    pspim->tx_cur_len++;
 	    	}
         }else{
  		    for(i=0;i<data_len;i++){
-		    DBG_INFO("tx_data_buf1150 0x%x  ,cur_len %d data_total_len  %d  \n",tx_data_buf[i],tx_cur_len,data_total_len);		
-		    writel(tx_data_buf[i], &spim_reg->FIFO_DATA);
-		    tx_cur_len++;
+		    DBG_INFO("tx_data_buf1150 0x%x  ,cur_len %d  \n",pspim->tx_data_buf[i],pspim->tx_cur_len);		
+		    writel(pspim->tx_data_buf[i], &spim_reg->FIFO_DATA);
+		    pspim->tx_cur_len++;
 		    }   
         }
     }
@@ -1133,11 +1136,11 @@ static int pentagram_spi_master_combine_write_read(struct spi_controller *ctlr,
 	bool xfer_rx = false;
 
 
-        FUNC_DEBUG();
+    FUNC_DEBUG();
 
-	memset(&tx_data_buf[0], 0, SPI_MSG_DATA_SIZE);
+	memset(&pspim->tx_data_buf[0], 0, SPI_MSG_DATA_SIZE);
 		
-	DBG_INFO("tx_data_buf init 0x%x	,tx_cur_len %d ,transfers_cnt  %d \n",tx_data_buf[0],tx_cur_len,transfers_cnt);	
+	DBG_INFO("tx_data_buf init 0x%x	,tx_cur_len %d ,transfers_cnt  %d \n",pspim->tx_data_buf[0],pspim->tx_cur_len,transfers_cnt);	
 	DBG_INFO("txrx: tx %p, rx %p, len %d\n", t->tx_buf, t->rx_buf, t->len);
 
 	
@@ -1148,7 +1151,7 @@ static int pentagram_spi_master_combine_write_read(struct spi_controller *ctlr,
 	for (i = 0; i < transfers_cnt; i++) {
 
 		if (t->tx_buf) 
-			memcpy(&tx_data_buf[data_len], t->tx_buf, t->len);
+			memcpy(&pspim->tx_data_buf[data_len], t->tx_buf, t->len);
 
 		if (t->rx_buf) 
 			xfer_rx = true;
@@ -1161,24 +1164,24 @@ static int pentagram_spi_master_combine_write_read(struct spi_controller *ctlr,
 
 	DBG_INFO("txrx1198: tx %p, rx %p, len %d\n", t->tx_buf, t->rx_buf, t->len);
 
-	DBG_INFO("tx_data_buf init 0x%x	,tx_cur_len %d ,data_len  %d \n",tx_data_buf[0],tx_cur_len,data_len);	
+	DBG_INFO("tx_data_buf init 0x%x	,tx_cur_len %d ,data_len  %d \n",pspim->tx_data_buf[0],pspim->tx_cur_len,data_len);	
 	DBG_INFO("xfer_rx %d   \n",xfer_rx);	
 
 
 	
 	// set SPI FIFO data for full duplex (SPI_FD fifo_data)  91.13
-    if(tx_cur_len < data_len){
+    if(pspim->tx_cur_len < data_len){
         if(data_len >= data_unit){
 		    for(i=0;i<data_unit;i++){
-		    DBG_INFO("tx_data_buf1143 0x%x  ,tx_cur_len %d data_total_len  %d  \n",tx_data_buf[i],tx_cur_len,data_total_len);	
-		    writel(tx_data_buf[i], &spim_reg->FIFO_DATA);
-	    	tx_cur_len++;
+		    DBG_INFO("tx_data_buf1143 0x%x  ,tx_cur_len %d\n",pspim->tx_data_buf[i],pspim->tx_cur_len);	
+		    writel(pspim->tx_data_buf[i], &spim_reg->FIFO_DATA);
+	    	   pspim->tx_cur_len++;
 	    	}
         }else{
  		    for(i=0;i<data_len;i++){
-		    DBG_INFO("tx_data_buf1150 0x%x  ,cur_len %d data_total_len  %d  \n",tx_data_buf[i],tx_cur_len,data_total_len);		
-		    writel(tx_data_buf[i], &spim_reg->FIFO_DATA);
-		    tx_cur_len++;
+		    DBG_INFO("tx_data_buf1150 0x%x  ,cur_len %d \n",pspim->tx_data_buf[i],pspim->tx_cur_len);		
+		    writel(pspim->tx_data_buf[i], &spim_reg->FIFO_DATA);
+		    pspim->tx_cur_len++;
 		    }   
         }
     }
@@ -1229,18 +1232,18 @@ static int pentagram_spi_master_combine_write_read(struct spi_controller *ctlr,
 	for (i = 0; i < transfers_cnt; i++) {
 	    if (t->rx_buf){
 			//DBG_INFO("txrx1269: tx %p, rx %p, len %d\n", t->tx_buf, t->rx_buf, t->len);
-		    memcpy(t->rx_buf, &rx_data_buf[data_len], t->len);
+		    memcpy(t->rx_buf, &pspim->rx_data_buf[data_len], t->len);
 	    }
 
 
-		    //DBG_INFO("RXcnt1268 data 0x%x data_len = %d  \n",rx_data_buf[0],data_len); 
-		    //DBG_INFO("RXcnt1268 data 0x%x data_len = %d	\n",rx_data_buf[1],data_len); 
-                    //DBG_INFO("RXcnt1268 data 0x%x data_len = %d	\n",rx_data_buf[2],data_len); 
-                    //DBG_INFO("RXcnt1268 data15 0x%x data_len = %d	\n",rx_data_buf[15],data_len); 
-                    //DBG_INFO("RXcnt1268 data32 0x%x data_len = %d	\n",rx_data_buf[32],data_len); 
+		    //DBG_INFO("RXcnt1268 data 0x%x data_len = %d  \n",pspim->rx_data_buf[0],data_len); 
+		    //DBG_INFO("RXcnt1268 data 0x%x data_len = %d	\n",pspim->rx_data_buf[1],data_len); 
+                    //DBG_INFO("RXcnt1268 data 0x%x data_len = %d	\n",pspim->rx_data_buf[2],data_len); 
+                    //DBG_INFO("RXcnt1268 data15 0x%x data_len = %d	\n",pspim->rx_data_buf[15],data_len); 
+                    //DBG_INFO("RXcnt1268 data32 0x%x data_len = %d	\n",pspim->rx_data_buf[32],data_len); 
 
-		    //DBG_INFO("RXcnt1269 data 0x%x rx_cur_len = %d \n",rx_data_buf[data_len],rx_cur_len); 
-		    //DBG_INFO("RXcnt1269 data 0x%x t->len = %d \n",rx_data_buf[data_len+t->len],t->len); 
+		    //DBG_INFO("RXcnt1269 data 0x%x rx_cur_len = %d \n",pspim->rx_data_buf[data_len],pspim->rx_cur_len); 
+		    //DBG_INFO("RXcnt1269 data 0x%x t->len = %d \n",pspim->rx_data_buf[data_len+t->len],t->len); 
 	
 		    data_len += t->len;
 		
@@ -1379,8 +1382,8 @@ static void pentagram_spi_setup_transfer(struct spi_device *spi, struct spi_cont
 
 	FUNC_DEBUG();
 	
-	   tx_cur_len = 0;
-	   rx_cur_len = 0;
+	   pspim->tx_cur_len = 0;
+	   pspim->rx_cur_len = 0;
 	   //memset(tx_data_buf,0,255);
 	   //memset(rx_data_buf,0,255);
 	
@@ -1613,15 +1616,12 @@ static int pentagram_spi_controller_transfer_one_message(struct spi_controller *
 	//struct pentagram_spi_master *pspim = spi_master_get_devdata(ctlr);
 	struct spi_device *spi = m->spi;
 
-
 	unsigned int xfer_cnt = 0, total_len = 0;
 	bool start_xfer;
-
-	struct spi_transfer *xfer, *next_xfer, *first_xfer = NULL;
-
+	struct spi_transfer *xfer,*first_xfer = NULL;
 	int ret;
 
-
+	//struct spi_transfer *next_xfer,
 
 	FUNC_DEBUG();
 

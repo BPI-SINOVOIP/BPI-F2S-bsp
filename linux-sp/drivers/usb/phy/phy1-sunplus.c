@@ -85,6 +85,10 @@ static void uphy1_init(struct platform_device *pdev)
 	val &= ~(POWER_SAVING_SET);
 	writel(val, uphy1_base_addr + POWER_SAVING_OFFSET);
 
+	val = readl(uphy1_base_addr + APHY_PROBE_OFFSET);
+	val = (val & ~APHY_PROBE_CTRL_MASK) | APHY_PROBE_CTRL;
+	writel(val, uphy1_base_addr + APHY_PROBE_OFFSET);
+
 	/* 5. USBC 1 reset */
 	writel(RF_MASK_V_SET(1 << 11), regs + USB_RESET_OFFSET);
 	writel(RF_MASK_V_CLR(1 << 11), regs + USB_RESET_OFFSET);

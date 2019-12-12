@@ -163,7 +163,7 @@ int sp7021_pctl_resmap( struct platform_device *_pd, sppctl_pdata_t *_pc) {
  KDBG( &( _pd->dev), "mapping [%X-%X]\n", rp->start, rp->end);
  if ( IS_ERR( _pc->baseI = devm_ioremap_resource( &( _pd->dev), rp))) {
    KERR( &( _pd->dev), "%s map res#I ERR\n", __FUNCTION__);
-   return( PTR_ERR( _pc->base2));  }
+   return( PTR_ERR( _pc->baseI));  }
  return( 0);  }
  
 static int sppctl_dnew( struct platform_device *_pd) {

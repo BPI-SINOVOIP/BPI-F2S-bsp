@@ -91,7 +91,7 @@ int sp7021gpio_u_isinv( struct gpio_chip *_c, unsigned int _n) {
  u16 inv_off = SP7021_GPIO_OFF_IINV;
  if ( sp7021gpio_f_gdi( _c, _n) == 0) inv_off = SP7021_GPIO_OFF_OINV;
  r = readl( pc->base1 + inv_off + R16_ROF(_n));
- return( R32_VAL(r,R16_BOF(_n)) ^ BIT(0));  }
+ return( R32_VAL(r,R16_BOF(_n)));  }
 
 void sp7021gpio_u_siinv( struct gpio_chip *_c, unsigned int _n) {
  u32 r;

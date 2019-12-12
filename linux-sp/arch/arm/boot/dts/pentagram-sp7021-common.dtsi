@@ -375,6 +375,7 @@
 			reg-names = "i2cm", "i2cmdma";
 			interrupt-parent = <&intc>;
 			interrupts = <174 IRQ_TYPE_LEVEL_HIGH>;
+			clock-frequency = <100000>;
 			clocks = <&clkc I2CM0>;
 			resets = <&rstc RST_I2CM0>;
 			status = "disabled";
@@ -386,6 +387,7 @@
 			reg-names = "i2cm", "i2cmdma";
 			interrupt-parent = <&intc>;
 			interrupts = <175 IRQ_TYPE_LEVEL_HIGH>;
+			clock-frequency = <100000>;
 			clocks = <&clkc I2CM1>;
 			resets = <&rstc RST_I2CM1>;
 			status = "disabled";
@@ -397,6 +399,7 @@
 			reg-names = "i2cm", "i2cmdma";
 			interrupt-parent = <&intc>;
 			interrupts = <176 IRQ_TYPE_LEVEL_HIGH>;
+			clock-frequency = <100000>;
 			clocks = <&clkc I2CM2>;
 			resets = <&rstc RST_I2CM2>;
 			status = "disabled";
@@ -408,6 +411,7 @@
 			reg-names = "i2cm", "i2cmdma";
 			interrupt-parent = <&intc>;
 			interrupts = <177 IRQ_TYPE_LEVEL_HIGH>;
+			clock-frequency = <100000>;
 			clocks = <&clkc I2CM3>;
 			resets = <&rstc RST_I2CM3>;
 			status = "disabled";
@@ -636,7 +640,7 @@
 			pinctrl-0 = <&mmc1_mux>;
 			bus-width = <4>;
 			max-frequency = <52000000>;
-			cd-gpio = <&pctl 71 GPIO_ACTIVE_LOW>;
+			cd-gpios = <&pctl 71 GPIO_ACTIVE_LOW>;
 			broken-cd;
 			disable-wp;
 			cap-sd-highspeed;
@@ -819,7 +823,7 @@
 
 		pctl: pctl@0x9C000100 {
 			compatible = "sunplus,sp7021-pctl";
-			reg = <0x9C000100 0x100>, <0x9C000300 0x80>, <0x9C000380 0x80>, <0x9C0032e4 0x80>, <0x9C000080 0x20>;
+			reg = <0x9C000100 0x100>, <0x9C000300 0x80>, <0x9C000380 0x80>, <0x9C0032e4 0x1C>, <0x9C000080 0x20>;
 			gpio-controller;
 			#gpio-cells = <2>;
 			interrupt-parent = <&intc>;

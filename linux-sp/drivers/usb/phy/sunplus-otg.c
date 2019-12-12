@@ -15,6 +15,8 @@
 
 extern struct sp_otg *sp_otg0_host;
 extern struct sp_otg *sp_otg1_host;
+extern u8 otg0_vbus_off;
+extern u8 otg1_vbus_off;
 
 static struct usb_phy *phy_sp[2] = {NULL, NULL};
 
@@ -356,17 +358,34 @@ int sp_notifier_call(struct notifier_block *self, unsigned long action,
 }
 
 #ifdef	CONFIG_ADP_TIMER
-static void adp_watchdog(unsigned long param)
+static void adp_watchdog0(struct timer_list *t)
 {
-	struct sp_otg *otg_host = (struct sp_otg *)param;
 	u32 val;
 
-	otg_debug("adp timer %d\n", otg_host->irq);
+	if (otg0_vbus_off == 1) {
+		otg0_vbus_off = 0;
 
-	/* request a-bus by iphone */
-	val = readl(&otg_host->regs_otg->otg_device_ctrl);
-	val |= A_BUS_REQ_BIT;
-	writel(val, &otg_host->regs_otg->otg_device_ctrl);
+		val = readl(&sp_otg0_host->regs_otg->mode_select);
+		val |= OTG_ADP;
+		writel(val, &sp_otg0_host->regs_otg->mode_select);
+
+		otg_debug("adp timer (otg0) %d\n", sp_otg0_host->irq);
+	}
+}
+
+static void adp_watchdog1(struct timer_list *t)
+{
+	u32 val;
+
+	if (otg1_vbus_off == 1) {
+		otg1_vbus_off = 0;
+
+		val = readl(&sp_otg1_host->regs_otg->mode_select);
+		val |= OTG_ADP;
+		writel(val, &sp_otg1_host->regs_otg->mode_select);
+
+		otg_debug("adp timer (otg0) %d\n", sp_otg1_host->irq);
+	}
 }
 #endif
 
@@ -442,6 +461,13 @@ static irqreturn_t otg_irq(int irq, void *dev_priv)
 		val = readl(&otg_host->regs_otg->otg_device_ctrl);
 		val |= A_BUS_DROP_BIT;
 		writel(val, &otg_host->regs_otg->otg_device_ctrl);
+
+		if (((otg_host->id == 1) && (otg0_vbus_off == 1)) ||
+		    ((otg_host->id == 2) && (otg1_vbus_off == 1))) {
+			val = readl(&otg_host->regs_otg->mode_select);
+			val &= ~OTG_ADP;
+			writel(val, &otg_host->regs_otg->mode_select);
+		}
 
 #ifdef	CONFIG_ADP_TIMER
 		mod_timer(&otg_host->adp_timer, ADP_TIMER_FREQ + jiffies);
@@ -619,9 +645,10 @@ int __devinit sp_otg_probe(struct platform_device *dev)
 	otg_host->otg.io_ops = &sp_phy_ios;
 
 #ifdef	CONFIG_ADP_TIMER
-	init_timer(&otg_host->adp_timer);
-	otg_host->adp_timer.function = adp_watchdog;
-	otg_host->adp_timer.data = (unsigned long)otg_host;
+	if (dev->id == 1)
+		timer_setup(&otg_host->adp_timer, adp_watchdog0, 0);
+	else if (dev->id == 2)
+		timer_setup(&otg_host->adp_timer, adp_watchdog1, 0);
 #endif
 
 	usb_set_transceiver_sp(&otg_host->otg, dev->id - 1);

@@ -397,9 +397,8 @@
 	"run boot_normal; run isp_common; " \
 	"\0" \
 "isp_common=setenv isp_ram_addr 0x1000000; " \
-	"fatls $isp_if $isp_dev / ; " \
 	RASPBIAN_INIT \
-	"fatload $isp_if $isp_dev $isp_ram_addr /ISPBOOOT.BIN 0x800 0x100000 && md.b $isp_ram_addr 0x200; " \
+	"fatload $isp_if $isp_dev $isp_ram_addr /ISPBOOOT.BIN 0x800 0x100000; " \
 	"setenv isp_main_storage ${sp_main_storage} && printenv isp_main_storage; " \
 	"setexpr script_addr $isp_ram_addr + 0x20 && setenv script_addr 0x${script_addr} && source $script_addr; " \
 	"\0" \
@@ -413,7 +412,7 @@
 	"\0" \
 "update_common=setenv isp_ram_addr 0x1000000; " \
 	"setenv isp_update_file_name ISP_UPDT.BIN; " \
-	"fatload $isp_if $isp_dev $isp_ram_addr /$isp_update_file_name 0x800 && md.b $isp_ram_addr 0x200; " \
+	"fatload $isp_if $isp_dev $isp_ram_addr /$isp_update_file_name 0x800; " \
 	"setenv isp_main_storage ${sp_main_storage} && printenv isp_main_storage; " \
 	"setenv isp_image_header_offset 0; " \
 	"setexpr script_addr $isp_ram_addr + 0x20 && setenv script_addr 0x${script_addr} && source $script_addr; " \
@@ -423,8 +422,7 @@
 	"printenv serverip; " \
 	"dhcp $isp_ram_addr $serverip:TFTP0000.BIN; " \
 	"setenv isp_main_storage ${sp_main_storage} && printenv isp_main_storage; " \
-	"setexpr script_addr $isp_ram_addr + 0x00 && setenv script_addr 0x${script_addr}; " \
-	"md.b $isp_ram_addr 0x200 && source $script_addr; " \
+	"setexpr script_addr $isp_ram_addr + 0x00 && setenv script_addr 0x${script_addr} && source $script_addr; " \
 	"\0"
 
 #if 0

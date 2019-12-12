@@ -20,7 +20,7 @@
 		mmc1: mmc@sdcard {
 			pinctrl-names = "default";
 			pinctrl-0 = <&mmc1_mux>;
-			cd-gpio = <&pctl 91 GPIO_ACTIVE_LOW>;
+			cd-gpios = <&pctl 91 GPIO_ACTIVE_LOW>;
 			status = "okay";
 		};
 

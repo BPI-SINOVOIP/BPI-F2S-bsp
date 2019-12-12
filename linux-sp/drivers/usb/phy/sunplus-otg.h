@@ -9,7 +9,7 @@
 
 //#define OTG_TEST
 
-//#define       CONFIG_ADP_TIMER
+#define       CONFIG_ADP_TIMER
 #define	ADP_TIMER_FREQ	(5*HZ)
 
 #define		WORD_MODE_MASK	(0x03)

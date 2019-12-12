@@ -419,7 +419,7 @@ static int ethernet_open(struct net_device *net_dev)
 {
 	struct l2sw_mac *mac = netdev_priv(net_dev);
 
-	//ETH_INFO("[%s] IN\n", __func__);
+	ETH_DEBUG(" Open port = %x\n", mac->lan_port);
 
 	/* Start phy */
 	//netif_carrier_off(net_dev);
@@ -432,7 +432,7 @@ static int ethernet_open(struct net_device *net_dev)
 	netif_carrier_on(net_dev);
 
 	if (netif_carrier_ok(net_dev)) {
-		//ETH_INFO(" Open netif_start_queue.\n");
+		ETH_DEBUG(" Open netif_start_queue.\n");
 		netif_start_queue(net_dev);
 	}
 
@@ -561,8 +561,8 @@ static int ethernet_set_mac_address(struct net_device *net_dev, void *addr)
 	memcpy(net_dev->dev_addr, hwaddr->sa_data, net_dev->addr_len);
 
 	/* Delete the old Ethernet MAC address */
-	//ETH_INFO(" HW Addr = %02x:%02x:%02x:%02x:%02x:%02x\n", mac->mac_addr[0], mac->mac_addr[1],
-	//       mac->mac_addr[2], mac->mac_addr[3], mac->mac_addr[4], mac->mac_addr[5]);
+	ETH_DEBUG(" HW Addr = %02x:%02x:%02x:%02x:%02x:%02x\n", mac->mac_addr[0], mac->mac_addr[1],
+		mac->mac_addr[2], mac->mac_addr[3], mac->mac_addr[4], mac->mac_addr[5]);
 	if (is_valid_ether_addr(mac->mac_addr)) {
 		mac_hw_addr_del(mac);
 	}
@@ -581,9 +581,8 @@ static int ethernet_do_ioctl(struct net_device *net_dev, struct ifreq *ifr, int 
 	struct mii_ioctl_data *data = if_mii(ifr);
 	unsigned long flags;
 
-	//ETH_INFO("[%s] IN\n", __func__);
-	//ETH_INFO("[%s] if = %s, cmd = 0x%04x\n", __func__, ifr->ifr_ifrn.ifrn_name, cmd);
-	//ETH_INFO(" phy_id = %d, reg_num = %d, val_in = %04x\n", data->phy_id, data->reg_num, data->val_in);
+	ETH_DEBUG("[%s] if = %s, cmd = 0x%04x\n", __func__, ifr->ifr_ifrn.ifrn_name, cmd);
+	ETH_DEBUG(" phy_id = %d, reg_num = %d, val_in = %04x\n", data->phy_id, data->reg_num, data->val_in);
 
 	// Check parameters' range.
 	if ((cmd == SIOCGMIIREG) || (cmd == SIOCSMIIREG)) {
@@ -610,7 +609,7 @@ static int ethernet_do_ioctl(struct net_device *net_dev, struct ifreq *ifr, int 
 		spin_lock_irqsave(&comm->ioctl_lock, flags);
 		data->val_out =  mdio_read(data->phy_id, data->reg_num);
 		spin_unlock_irqrestore(&comm->ioctl_lock, flags);
-		//ETH_INFO(" val_out = %04x\n", data->val_out);
+		ETH_DEBUG(" val_out = %04x\n", data->val_out);
 		break;
 
 	case SIOCSMIIREG:
@@ -927,7 +926,7 @@ static int l2sw_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "Failed to allocate memory!\n");
 		return -ENOMEM;
 	}
-	//ETH_INFO("[%s] comm = 0x%08x\n", __func__, (int)comm);
+	ETH_DEBUG("[%s] comm = 0x%08x\n", __func__, (int)comm);
 	memset(comm, '\0', sizeof(struct l2sw_common));
 	comm->pdev = pdev;
 #ifdef CONFIG_DUAL_NIC
@@ -948,7 +947,7 @@ static int l2sw_probe(struct platform_device *pdev)
 
 	// Get memory resoruce 0 from dts.
 	if ((r_mem = platform_get_resource(pdev, IORESOURCE_MEM, 0)) != NULL) {
-		//ETH_INFO(" r_mem->start = 0x%08x\n", r_mem->start);
+		ETH_DEBUG(" r_mem->start = 0x%08x\n", r_mem->start);
 		if (l2sw_reg_base_set(devm_ioremap(&pdev->dev, r_mem->start, (r_mem->end - r_mem->start + 1))) != 0){
 			ETH_ERR("[%s] ioremap failed!\n", __func__);
 			ret = -ENOMEM;
@@ -962,7 +961,7 @@ static int l2sw_probe(struct platform_device *pdev)
 
 	// Get memory resoruce 1 from dts.
 	if ((r_mem = platform_get_resource(pdev, IORESOURCE_MEM, 1)) != NULL) {
-		//ETH_INFO(" r_mem->start = 0x%08x\n", r_mem->start);
+		ETH_DEBUG(" r_mem->start = 0x%08x\n", r_mem->start);
 		if (moon5_reg_base_set(devm_ioremap(&pdev->dev, r_mem->start, (r_mem->end - r_mem->start + 1))) != 0){
 			ETH_ERR("[%s] ioremap failed!\n", __func__);
 			ret = -ENOMEM;
@@ -976,8 +975,8 @@ static int l2sw_probe(struct platform_device *pdev)
 
 	// Get irq resource from dts.
 	if ((res = platform_get_resource(pdev, IORESOURCE_IRQ, 0)) != NULL) {
-		//ETH_INFO(" res->name = \"%s\", res->start = 0x%08x, res->end = 0x%08x\n",
-		//      res->name, res->start, res->end);
+		ETH_DEBUG(" res->name = \"%s\", res->start = 0x%08x, res->end = 0x%08x\n",
+			res->name, res->start, res->end);
 		comm->irq = res->start;
 	} else {
 		ETH_ERR("[%s] No IRQ resource found!\n", __func__);
@@ -1059,7 +1058,7 @@ static int l2sw_probe(struct platform_device *pdev)
 			goto out_freemdio;
 		}
 	} else {
-		ETH_INFO("[%s] Failed to get phy-handle!\n", __func__);
+		ETH_ERR("[%s] Failed to get phy-handle!\n", __func__);
 	}
 
 	phy_cfg();

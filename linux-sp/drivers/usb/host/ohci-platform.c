@@ -98,6 +98,25 @@ static int ohci_platform_start(struct usb_hcd *hcd)
 	return err;
 }
 
+u8 otg0_vbus_off = 0;
+u8 otg1_vbus_off = 0;
+EXPORT_SYMBOL_GPL(otg0_vbus_off);
+EXPORT_SYMBOL_GPL(otg1_vbus_off);
+
+static int ohci_update_device(struct usb_hcd *hcd, struct usb_device *udev)
+{
+	struct platform_device *pdev = to_platform_device(hcd->self.controller);
+
+	if ((udev->descriptor.bcdDevice & 0x1) == 0x1) {
+		if (pdev->id == 1)
+			otg0_vbus_off = 1;
+		else if (pdev->id == 2)
+			otg1_vbus_off = 1;
+	}
+
+	return 0;
+}
+
 static const struct hc_driver ohci_platform_hc_driver = {
 	.description = hcd_name,
 	.product_desc = "Generic Platform OHCI Controller",
@@ -120,6 +139,8 @@ static const struct hc_driver ohci_platform_hc_driver = {
 	.endpoint_disable = ohci_endpoint_disable,
 
 	.get_frame_number = ohci_get_frame,
+
+	.update_device = ohci_update_device,
 
 	.hub_status_data = ohci_hub_status_data,
 	.hub_control = ohci_hub_control,

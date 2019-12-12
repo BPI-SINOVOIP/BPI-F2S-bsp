@@ -43,7 +43,7 @@
 	#define DBG_ERR(fmt, args ...)
 #endif
 
-#define I2C_FREQ             100
+#define I2C_FREQ             400
 #define I2C_SLEEP_TIMEOUT    200
 #define I2C_SCL_DELAY        1  //SCl dalay xT
 
@@ -84,6 +84,7 @@ typedef struct SpI2C_If_t_ {
 #endif
 	struct clk *clk;
 	struct reset_control *rstc;
+	unsigned int i2c_clk_freq;
 	int irq;
 } SpI2C_If_t;
 
@@ -1395,7 +1396,14 @@ static int sp_master_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs, int nu
 
 	memset(pstCmdInfo, 0, sizeof(I2C_Cmd_t));
 	pstCmdInfo->dDevId = adap->nr;
+
+
+    if(pstCmdInfo->dFreq > I2C_FREQ)
 	pstCmdInfo->dFreq = I2C_FREQ;
+	else
+	    pstCmdInfo->dFreq = pstSpI2CInfo->i2c_clk_freq/1000;
+
+	DBG_INFO("[I2C] set freq : %d\n", pstCmdInfo->dFreq);
 
 	for (i = 0; i < num; i++) {
 		if(msgs[i].flags & I2C_M_TEN)
@@ -1492,6 +1500,7 @@ static int sp_i2c_probe(struct platform_device *pdev)
 	SpI2C_If_t *pstSpI2CInfo = NULL;
 	I2C_Irq_Event_t *pstIrqEvent = NULL;
 	struct i2c_adapter *p_adap;
+	unsigned int i2c_clk_freq;
 	int device_id = 0;
 	int ret = I2C_SUCCESS;
 	struct device *dev = &pdev->dev;   
@@ -1506,6 +1515,16 @@ static int sp_i2c_probe(struct platform_device *pdev)
 
 	pstSpI2CInfo = &stSpI2CInfo[device_id];
 	memset(pstSpI2CInfo, 0, sizeof(SpI2C_If_t));
+
+	if(!of_property_read_u32(pdev->dev.of_node, "clock-frequency", &i2c_clk_freq)) {
+		dev_dbg(&pdev->dev,"clk_freq %d\n",i2c_clk_freq);
+		pstSpI2CInfo->i2c_clk_freq = i2c_clk_freq;
+	}else
+		pstSpI2CInfo->i2c_clk_freq = I2C_FREQ*1000;
+
+		DBG_INFO("[I2C adapter] get freq : %d\n", pstSpI2CInfo->i2c_clk_freq);
+
+
 
 	ret = _sp_i2cm_get_resources(pdev, pstSpI2CInfo);
 	if (ret != I2C_SUCCESS) {

@@ -1613,8 +1613,8 @@ static void _debug_cmd(char *tmpbuf)
 				SetTGEN.v_bp = 19;
 				SetTGEN.hactive = 320;
 				SetTGEN.vactive = 240;
-				disp_dev->panelRes.width = 320;
-				disp_dev->panelRes.height = 240;
+				//disp_dev->panelRes.width = 320;
+				//disp_dev->panelRes.height = 240;
 				sp_disp_dbg("set TGEN user mode\n");
 	#else
 				sp_disp_dbg("user mode unsupport\n");
