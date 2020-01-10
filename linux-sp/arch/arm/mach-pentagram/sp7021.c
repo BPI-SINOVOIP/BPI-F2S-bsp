@@ -23,7 +23,7 @@ static void sp_power_off(void)
 	void __iomem *regs = (void __iomem *)A_SYSTEM_BASE;
 	void __iomem *regs_B = (void __iomem *)B_SYSTEM_BASE;
 //	int i;
-	early_printk("%s\n", __func__);
+	pr_info("%s\n", __func__);
 
 	writel(0x0000, regs_B + 0x434); /* iop_data5=0x0000 */
 	writel(0x0060, regs_B + 0x438); /* iop_data6=0x0060 */
