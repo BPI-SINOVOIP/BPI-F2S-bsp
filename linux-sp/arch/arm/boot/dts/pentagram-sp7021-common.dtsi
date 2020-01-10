@@ -816,8 +816,6 @@
 			resets = <&rstc RST_MIPICSI0>, <&rstc RST_CSIIW0>;
 			reset-names = "rstc_mipicsi", "rstc_csiiw";
 			i2c-id = <1>;
-			pinctrl-names = "default";
-			pinctrl-0 = <&mipicsi0_pins>;
 			status = "disabled";
 		};
 

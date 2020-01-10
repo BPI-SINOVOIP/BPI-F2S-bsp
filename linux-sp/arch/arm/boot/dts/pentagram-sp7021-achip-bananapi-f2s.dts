@@ -48,8 +48,6 @@
 
 		mipicsi0: mipicsirx@0x9C005280 {
                         i2c-id = <1>;
-			pinctrl-names = "default";
-			pinctrl-0 = <&mipicsi0_pins>;
 			status = "disabled";
                 };
 

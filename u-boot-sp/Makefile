@@ -1027,7 +1027,8 @@ endif
 	@# options are whitelisted, so new ones should not be added.
 	@# create u-boot.img
 	@echo "Wrap u-boot image..."
-	./tools/add_uhdr.sh $(img_name) u-boot.bin u-boot.img 0x200040 0x200040
+	#./tools/add_uhdr.sh $(img_name) u-boot.bin u-boot.img 0x200040 0x200040
+	$(objtree)/tools/mkimage -A arm -O linux -T quickboot -C none -a 0x200040 -e 0x200040 -n $(img_name) -d u-boot.bin u-boot.img
 	@img_sz=`du -sb u-boot.img | cut -f1` ; \
 	printf "size: %d (hex %x)\n" $$img_sz $$img_sz
 	$(call cmd,cfgcheck,u-boot.cfg)

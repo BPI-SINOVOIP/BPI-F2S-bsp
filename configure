@@ -22,7 +22,7 @@ generate_board_mk() {
 	BOARD=$BOARD
 	MACH=$MACH
 	COMPILE_TOOL=$CROSS_COMPILE
-	UBOOT_CONFIG=pentagram_sp7021_emmc_defconfig
+	UBOOT_CONFIG=bananapi_${board#*-}_defconfig
 	KERNEL_CONFIG=pentagram_sp7021_achip_emu_${board}_defconfig
 	EOT
 
@@ -35,7 +35,7 @@ generate_board_envsh() {
 	export ARCH=arm
 	export MACH=$MACH
 	export BOARD=$BOARD
-	export UBOOT_CONFIG=pentagram_sp7021_emmc_defconfig
+	export UBOOT_CONFIG=bananapi_${board#*-}_defconfig
 	export KERNEL_CONFIG=pentagram_sp7021_achip_emu_${board}_defconfig
 	export KERNEL_MODULES=4.19.37-${BOARD%-*}-Kernel
 	export KERNEL_HEADERS=linux-headers-4.19.37-${BOARD%-*}-Kernel
