@@ -150,7 +150,7 @@ static int sp_rtc_suspend(struct platform_device *pdev, pm_message_t state)
 {
 	FUNC_DEBUG();
 	
-	rtc_reg_ptr->rtc_ctrl |= (0x0010 << 16) | (1 << 4);	/* Keep RTC from system reset */
+	rtc_reg_ptr->rtc_ctrl = (1 << (16+4)) | (1 << 4);	/* Keep RTC from system reset */
 
 	return 0;
 }
@@ -163,7 +163,7 @@ static int sp_rtc_resume(struct platform_device *pdev)
 	 */
 	FUNC_DEBUG();
 	
-	rtc_reg_ptr->rtc_ctrl |= (0x0010 << 16) | (1 << 4);	/* Keep RTC from system reset */
+	rtc_reg_ptr->rtc_ctrl = (1 << (16+4)) | (1 << 4);	/* Keep RTC from system reset */
 	return 0;
 }
 
@@ -185,6 +185,7 @@ static int sp_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 		return -EINVAL;
 
 	rtc_reg_ptr->rtc_alarm_set = (u32)(alarm_time);
+	wmb();
 	rtc_reg_ptr->rtc_ctrl = (0x003F << 16) | 0x0017;
 
 	return 0;
@@ -230,7 +231,7 @@ static void sp_rtc_set_batt_charge_ctrl( u32 _mode)
 {
 	u8 m = _mode & 0x000F;
 	DBG_INFO("batt charge:0x%X\n", m);
-	rtc_reg_ptr->rtc_battery_ctrl |= (0x000F << 16) | m;
+	rtc_reg_ptr->rtc_battery_ctrl = (0x000F << 16) | m;
 }
 
 static int sp_rtc_probe(struct platform_device *plat_dev)
@@ -283,7 +284,7 @@ static int sp_rtc_probe(struct platform_device *plat_dev)
 
 	DBG_INFO("sp_rtc->rstc002\n");
 	rtc_reg_ptr = (volatile struct sp_rtc_reg *)(reg_base);
-	rtc_reg_ptr->rtc_ctrl |= (0x0010 << 16) | (1 << 4);	/* Keep RTC from system reset */
+	rtc_reg_ptr->rtc_ctrl = (1 << (16+4)) | (1 << 4);	/* Keep RTC from system reset */
 
 	// request irq
 	irq = platform_get_irq(plat_dev, 0);

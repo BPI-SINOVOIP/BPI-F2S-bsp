@@ -19,7 +19,7 @@
 
 #include "sppctl.h"
 
-void sppctl_pinctrl_init( struct platform_device *_pdev);
+int sppctl_pinctrl_init( struct platform_device *_pdev);
 void sppctl_pinctrl_clea( struct platform_device *_pdev);
 
 #define D(x,y) (x)*8+(y)

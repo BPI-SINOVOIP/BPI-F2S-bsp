@@ -23,11 +23,9 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/version.h>
-
 #include <linux/errno.h>
 #include <linux/types.h>
 #include <linux/slab.h>
-
 #include <linux/platform_device.h>
 #include <linux/interrupt.h>
 #include <linux/of.h>
@@ -35,7 +33,6 @@
 #include <linux/of_irq.h>
 #include <linux/gpio/driver.h>
 #include <linux/stringify.h>
-
 #include <mach/io_map.h>
 
 #include "sppctl.h"

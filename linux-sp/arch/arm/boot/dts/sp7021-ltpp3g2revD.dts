@@ -1,0 +1,59 @@
+/*
+ * {desc_long}
+ * Copyright (C) 2020 Tibbo Tech. - http://tibbo.com/tps/
+ * License: GPLv2 or later
+ */
+/dts-v1/;
+
+#include "sp7021-ltpp3g2revD.dtsi"
+
+#include <dt-bindings/interrupt-controller/arm-gic.h>
+
+/ {
+	model = "SP7021 LTPP3G2 Rev. D";
+};
+
+&sdio {  status = "enabled";  };
+
+&uart1 {  status = "enabled";  };
+&uart2 {  status = "enabled";  };
+&uart3 {  status = "enabled";  };
+&uart4 {
+ status = "enabled";
+ pinctrl-0 = <&pins_btuart &pins_bt_reset>;
+};
+
+&pctl {
+ pins_uart1: pins_uart1 {
+    sppctl,pins = <
+      SP7021_IOPAD(8,SP7021_PCTL_G_PMUX,MUXF_UA1_TX,0)
+      SP7021_IOPAD(9,SP7021_PCTL_G_PMUX,MUXF_UA1_RX,0)
+      SP7021_IOPAD(10,SP7021_PCTL_G_PMUX,MUXF_UA1_RTS,0)
+      SP7021_IOPAD(11,SP7021_PCTL_G_PMUX,MUXF_UA1_CTS,0)
+    >;
+ };
+ pins_uart2: pins_uart2 {
+    sppctl,pins = <
+      SP7021_IOPAD(12,SP7021_PCTL_G_PMUX,MUXF_UA2_TX,0)
+      SP7021_IOPAD(13,SP7021_PCTL_G_PMUX,MUXF_UA2_RX,0)
+      SP7021_IOPAD(14,SP7021_PCTL_G_PMUX,MUXF_UA2_RTS,0)
+      SP7021_IOPAD(15,SP7021_PCTL_G_PMUX,MUXF_UA2_CTS,0)
+    >;
+ };
+ pins_uart3: pins_uart3 {
+    sppctl,pins = <
+      SP7021_IOPAD(16,SP7021_PCTL_G_PMUX,MUXF_UA3_TX,0)
+      SP7021_IOPAD(17,SP7021_PCTL_G_PMUX,MUXF_UA3_RX,0)
+      SP7021_IOPAD(18,SP7021_PCTL_G_PMUX,MUXF_UA3_RTS,0)
+      SP7021_IOPAD(19,SP7021_PCTL_G_PMUX,MUXF_UA3_CTS,0)
+    >;
+ };
+ pins_uart4: pins_uart4 {
+    sppctl,pins = <
+      SP7021_IOPAD(20,SP7021_PCTL_G_PMUX,MUXF_UA4_TX,0)
+      SP7021_IOPAD(21,SP7021_PCTL_G_PMUX,MUXF_UA4_RX,0)
+      SP7021_IOPAD(22,SP7021_PCTL_G_PMUX,MUXF_UA4_RTS,0)
+      SP7021_IOPAD(23,SP7021_PCTL_G_PMUX,MUXF_UA4_CTS,0)
+    >;
+ };
+};

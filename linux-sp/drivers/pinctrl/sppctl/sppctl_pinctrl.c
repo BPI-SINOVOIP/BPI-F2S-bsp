@@ -109,9 +109,9 @@ int stpctl_m_fre( struct pinctrl_dev *_pd, unsigned _pin) {
 int stpctl_m_f_cnt( struct pinctrl_dev *_pd) {  return( list_funcsSZ);  }
 const char *stpctl_m_f_nam( struct pinctrl_dev *_pd, unsigned _fid) {  return( list_funcs[ _fid].name);  }
 int stpctl_m_f_grp( struct pinctrl_dev *_pd, unsigned _fid, const char * const **grps, unsigned *_gnum) {
- func_t f = list_funcs[ _fid];
+ func_t *f = &( list_funcs[ _fid]);
  *_gnum = 0;
- switch ( f.freg) {
+ switch ( f->freg) {
    case fOFF_I:
    case fOFF_0:   // gen GPIO/IOP: all groups = all pins
         *_gnum = GPIS_listSZ;
@@ -122,12 +122,12 @@ int stpctl_m_f_grp( struct pinctrl_dev *_pd, unsigned _fid, const char * const *
         *grps = sp7021pmux_list_s;
         break;
    case fOFF_G:   // some IOP func 
-        if ( !f.grps) break;
-        *_gnum = f.gnum;
-        *grps = ( const char * const *)f.grps_sa;
+        if ( !f->grps) break;
+        *_gnum = f->gnum;
+        *grps = ( const char * const *)f->grps_sa;
         break;
    default:
-        KERR( _pd->dev, "%s(_fid:%d) unknown fOFF %d\n", __FUNCTION__, _fid, f.freg);
+        KERR( _pd->dev, "%s(_fid:%d) unknown fOFF %d\n", __FUNCTION__, _fid, f->freg);
         break;
  }
  KDBG( _pd->dev, "%s(_fid:%d) %d\n", __FUNCTION__, _fid, *_gnum);
@@ -135,10 +135,10 @@ int stpctl_m_f_grp( struct pinctrl_dev *_pd, unsigned _fid, const char * const *
 int stpctl_m_mux( struct pinctrl_dev *_pd, unsigned _fid, unsigned _gid) {
  int i = -1, j = -1;
  sppctl_pdata_t *pctrl = pinctrl_dev_get_drvdata( _pd);
- func_t f = list_funcs[ _fid];
+ func_t *f = &( list_funcs[ _fid]);
  grp2fp_map_t g2fpm = g2fp_maps[ _gid];
  KDBG( _pd->dev, "%s(fun:%d,grp:%d)\n", __FUNCTION__, _fid, _gid);
- switch ( f.freg) {
+ switch ( f->freg) {
      case fOFF_0:   // GPIO. detouch from all funcs - ?
         for ( i = 0; i < list_funcsSZ; i++) {
           if ( list_funcs[ i].freg != fOFF_M) continue;
@@ -151,16 +151,16 @@ int stpctl_m_mux( struct pinctrl_dev *_pd, unsigned _fid, unsigned _gid) {
         sppctl_pin_set( pctrl, ( _gid == 0 ? _gid : _gid - 7), _fid - 2);    // pin, fun FIXME
         break;
    case fOFF_G:   // GROUP
-        for ( i = 0; i < f.grps[ g2fpm.g_idx].pnum; i++) {
-          sp7021gpio_u_magpi_set( &( pctrl->gpiod->chip), f.grps[ g2fpm.g_idx].pins[ i], muxF_M, muxMKEEP);
+        for ( i = 0; i < f->grps[ g2fpm.g_idx].pnum; i++) {
+          sp7021gpio_u_magpi_set( &( pctrl->gpiod->chip), f->grps[ g2fpm.g_idx].pins[ i], muxF_M, muxMKEEP);
         }
-        sppctl_gmx_set( pctrl, f.roff, f.boff, f.blen, f.grps[ g2fpm.g_idx].gval);
+        sppctl_gmx_set( pctrl, f->roff, f->boff, f->blen, f->grps[ g2fpm.g_idx].gval);
         break;
    case fOFF_I:   // IOP
         sp7021gpio_u_magpi_set( &( pctrl->gpiod->chip), _gid, muxF_G, muxM_I);
         break;
    default:
-        KERR( _pd->dev, "%s(_fid:%d) unknown fOFF %d\n", __FUNCTION__, _fid, f.freg);
+        KERR( _pd->dev, "%s(_fid:%d) unknown fOFF %d\n", __FUNCTION__, _fid, f->freg);
         break;
  }
  return( 0);  }
@@ -204,19 +204,19 @@ const char *stpctl_o_g_nam( struct pinctrl_dev *_pd, unsigned _gid) {
  return( unq_grps[ _gid]);  }
 int stpctl_o_g_pins( struct pinctrl_dev *_pd, unsigned _gid, const unsigned **pins, unsigned *num_pins) {
  grp2fp_map_t g2fpm = g2fp_maps[ _gid];
- func_t f = list_funcs[ g2fpm.f_idx];
- KDBG( _pd->dev, " grp-pins g:%d f_idx:%d,g_idx:%d freg:%d...\n", _gid, g2fpm.f_idx, g2fpm.g_idx, f.freg);
+ func_t *f = &( list_funcs[ g2fpm.f_idx]);
+ KDBG( _pd->dev, " grp-pins g:%d f_idx:%d,g_idx:%d freg:%d...\n", _gid, g2fpm.f_idx, g2fpm.g_idx, f->freg);
  *num_pins = 0;
  // MUX | GPIO | IOP: 1 pin -> 1 group
- if ( f.freg != fOFF_G) {
+ if ( f->freg != fOFF_G) {
    *num_pins = 1;
    *pins = &sp7021pins_G[ _gid];
    return( 0);  }
  // IOP (several pins at once in a group)
- if ( !f.grps) return( 0);
- if ( f.gnum < 1) return( 0);
- *num_pins = f.grps[ g2fpm.g_idx].pnum;
- *pins = f.grps[ g2fpm.g_idx].pins;
+ if ( !f->grps) return( 0);
+ if ( f->gnum < 1) return( 0);
+ *num_pins = f->grps[ g2fpm.g_idx].pnum;
+ *pins = f->grps[ g2fpm.g_idx].pins;
  return( 0);  }
 // /sys/kernel/debug/pinctrl/sppctl/pins add: gpio_first and ctrl_sel
 #ifdef CONFIG_DEBUG_FS
@@ -253,7 +253,6 @@ int stpctl_o_n2map( struct pinctrl_dev *_pd, struct device_node *_dn, struct pin
  parent = of_get_parent( _dn);
  *_nm = size/sizeof( *list);
  *_map = kcalloc( *_nm + nmG, sizeof( **_map), GFP_KERNEL);
- configs = kcalloc( *_nm + nmG, sizeof( *configs), GFP_KERNEL);
  for ( i = 0; i < ( *_nm); i++) {
     dt_pin = be32_to_cpu( list[ i]);
     p_p = SP7021_PCTLD_P(dt_pin);
@@ -267,15 +266,17 @@ int stpctl_o_n2map( struct pinctrl_dev *_pd, struct device_node *_dn, struct pin
       (* _map)[ i].type = PIN_MAP_TYPE_CONFIGS_PIN;
       (* _map)[ i].data.configs.num_configs = 1;
       (* _map)[ i].data.configs.group_or_pin = pin_get_name( _pd, p_p);
-      configs[ i] = p_l;
-      (* _map)[ i].data.configs.configs = &( configs[ i]);
+      configs = kcalloc( 1, sizeof( *configs), GFP_KERNEL);
+      *configs = p_l;
+      (* _map)[ i].data.configs.configs = configs;
       KDBG( _pd->dev, "%s(%d) = x%X\n", (* _map)[ i].data.configs.group_or_pin, p_p, p_l);
     } else if ( p_g == SP7021_PCTL_G_IOPP) {
       (* _map)[ i].type = PIN_MAP_TYPE_CONFIGS_PIN;
       (* _map)[ i].data.configs.num_configs = 1;
       (* _map)[ i].data.configs.group_or_pin = pin_get_name( _pd, p_p);
-      configs[ i] = 0xFF;
-      (* _map)[ i].data.configs.configs = &( configs[ i]);
+      configs = kcalloc( 1, sizeof( *configs), GFP_KERNEL);
+      *configs = 0xFF;
+      (* _map)[ i].data.configs.configs = configs;
       KDBG( _pd->dev, "%s(%d) = x%X\n", (* _map)[ i].data.configs.group_or_pin, p_p, p_l);
     } else {
       (* _map)[ i].type = PIN_MAP_TYPE_MUX_GROUP;
@@ -357,7 +358,7 @@ void group_groups( struct platform_device *_pd) {
  return;  }
 
 // ---------- main (exported) functions
-void sppctl_pinctrl_init( struct platform_device *_pd) {
+int sppctl_pinctrl_init( struct platform_device *_pd) {
  int err;
  struct device *dev = &_pd->dev;
  struct device_node *np = of_node_get( dev->of_node);
@@ -375,9 +376,10 @@ void sppctl_pinctrl_init( struct platform_device *_pd) {
 
  if ( ( err = devm_pinctrl_register_and_init( &( _pd->dev), &( _p->pdesc), _p, &( _p->pcdp)))) {
    KERR( &( _pd->dev), "Failed to register\n");
-   of_node_put( np);  }
+   of_node_put( np);
+   return( err);  }
  pinctrl_enable( _p->pcdp);
- return;  }
+ return( 0);  }
 
 void sppctl_pinctrl_clea( struct platform_device *_pd) {
  sppctl_pdata_t *_p = ( sppctl_pdata_t *)_pd->dev.platform_data;

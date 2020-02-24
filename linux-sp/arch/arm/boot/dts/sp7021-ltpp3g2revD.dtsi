@@ -5,7 +5,7 @@
 #include <dt-bindings/interrupt-controller/arm-gic.h>
 
 / {
-	model = "SP7021 TPS test dts";
+	model = "SP7021 LTPP3G2 Rev. D";
 	compatible = "sunplus,sp7021-achip";
 
 	chosen {
@@ -22,10 +22,15 @@
 &sp_spinor0 {  status = "disabled";  };
 
 &sdio {
- max-frequency = <52000000>; bus-width = <4>; keep-power-in-suspend;
+ pinctrl-0 = <&pins_sdio &pins_sdio_reset>;
+ bus-width = <4>;
+ max-frequency = <40000000>; /* up to 52 */
+ // this: enable
+ status = "disabled";
  brcmf1: bcrmf@1 {
    reg = <1>;
-   compatible = "android,bcmdhd_wlan"/*"brcm,bcm43xx-fmac"*/;
+   compatible = "android,bcmdhd_wlan";
+   reset-gpios = <&pctl 83 GPIO_ACTIVE_LOW>;
  };
 };
 
@@ -58,19 +63,27 @@
 &uart1 {
  pinctrl-names = "default";
  pinctrl-0 = <&pins_uart1>;
+ status = "disabled";
+ // this: enable, pins_uart1
 };
 &uart2 {
  pinctrl-names = "default";
  pinctrl-0 = <&pins_uart2>;
+ status = "disabled";
+ // this: enable, pins_uart2
 };
 &uart3 {
  pinctrl-names = "default";
  pinctrl-0 = <&pins_uart3>;
+ status = "disabled";
+ // this: enable, pins_uart3
 };
 &uart4 {
  pinctrl-names = "default";
  /* pinctrl-0 = <&pins_uart4>; */
  pinctrl-0 = <&pins_btuart &pins_bt_reset>;
+ status = "disabled";
+ // this: enable (bt) | enable (uart4), pins_uart4
 };
 
 &pctl {
@@ -85,6 +98,8 @@
      MUXF_L2SW_LED_ON0
      MUXF_L2SW_LED_FLASH1
      MUXF_L2SW_LED_ON1
+     MUXF_L2SW_P0_MAC_RMII_RXER
+     MUXF_L2SW_P1_MAC_RMII_RXER
    >;
  };
  
@@ -131,6 +146,7 @@
       SP7021_IOPAD(5,SP7021_PCTL_G_GPIO,0,0)
     >;
  };
+// this:
  pins_uart1: pins_uart1 {
     sppctl,pins = <
       SP7021_IOPAD(8,SP7021_PCTL_G_PMUX,MUXF_UA1_TX,0)
@@ -139,6 +155,8 @@
       SP7021_IOPAD(11,SP7021_PCTL_G_PMUX,MUXF_UA1_CTS,0)
     >;
  };
+// this/
+// this:
  pins_uart2: pins_uart2 {
     sppctl,pins = <
       SP7021_IOPAD(12,SP7021_PCTL_G_PMUX,MUXF_UA2_TX,0)
@@ -147,6 +165,8 @@
       SP7021_IOPAD(15,SP7021_PCTL_G_PMUX,MUXF_UA2_CTS,0)
     >;
  };
+// this/
+// this:
  pins_uart3: pins_uart3 {
     sppctl,pins = <
       SP7021_IOPAD(16,SP7021_PCTL_G_PMUX,MUXF_UA3_TX,0)
@@ -155,6 +175,8 @@
       SP7021_IOPAD(19,SP7021_PCTL_G_PMUX,MUXF_UA3_CTS,0)
     >;
  };
+// this/
+// this:
  pins_uart4: pins_uart4 {
     sppctl,pins = <
       SP7021_IOPAD(20,SP7021_PCTL_G_PMUX,MUXF_UA4_TX,0)
@@ -163,17 +185,18 @@
       SP7021_IOPAD(23,SP7021_PCTL_G_PMUX,MUXF_UA4_CTS,0)
     >;
  };
+// this/
  pins_btuart: pins_btuart {
     sppctl,pins = <
       SP7021_IOPAD(40,SP7021_PCTL_G_PMUX,MUXF_UA4_RX,0)
       SP7021_IOPAD(41,SP7021_PCTL_G_PMUX,MUXF_UA4_TX,0)
-      SP7021_IOPAD(82,SP7021_PCTL_G_PMUX,MUXF_UA4_RTS,SP7021_PCTL_L_ONV)
-      SP7021_IOPAD(83,SP7021_PCTL_G_PMUX,MUXF_UA4_CTS,0)
+      SP7021_IOPAD(56,SP7021_PCTL_G_PMUX,MUXF_UA4_RTS,SP7021_PCTL_L_ONV)
+      SP7021_IOPAD(49,SP7021_PCTL_G_PMUX,MUXF_UA4_CTS,0)
     >;
  };
  pins_bt_reset: pins_bt_reset {
     sppctl,pins = <
-      SP7021_IOPAD(36,SP7021_PCTL_G_GPIO,0,0)
+      SP7021_IOPAD(82,SP7021_PCTL_G_GPIO,0,0)
     >;
  };
  buzzer0_pins: user_buzzer0_pins {
@@ -207,7 +230,6 @@
        SP7021_IOPAD(59,SP7021_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_CRSDV,0)
        SP7021_IOPAD(58,SP7021_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_RXD0,0)
        SP7021_IOPAD(57,SP7021_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_RXD1,0)
-       SP7021_IOPAD(56,SP7021_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_RXER,0)
   >;
  };
  eth1_pins: pinmux_eth1_pins {
@@ -218,7 +240,6 @@
        SP7021_IOPAD(52,SP7021_PCTL_G_PMUX,MUXF_L2SW_P1_MAC_RMII_CRSDV,0)
        SP7021_IOPAD(51,SP7021_PCTL_G_PMUX,MUXF_L2SW_P1_MAC_RMII_RXD0,0)
        SP7021_IOPAD(50,SP7021_PCTL_G_PMUX,MUXF_L2SW_P1_MAC_RMII_RXD1,0)
-       SP7021_IOPAD(49,SP7021_PCTL_G_PMUX,MUXF_L2SW_P1_MAC_RMII_RXER,0)
   >;
  };
 
@@ -235,6 +256,12 @@
 		SP7021_IOPAD(47,SP7021_PCTL_G_PMUX,MUXF_SDIO_CMD,0)
 		SP7021_IOPAD(42,SP7021_PCTL_G_PMUX,MUXF_SDIO_D3,0)
 		SP7021_IOPAD(43,SP7021_PCTL_G_PMUX,MUXF_SDIO_D2,0) >;
+ };
+ pins_sdio_reset: pins_sdio_reset {
+	sppctl,pins = <
+		/* additional reset pin for BRCM */
+		SP7021_IOPAD(83,SP7021_PCTL_G_GPIO,0,SP7021_PCTL_L_OU1)
+	>;
  };
 
 };

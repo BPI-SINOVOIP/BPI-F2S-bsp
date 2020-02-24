@@ -189,7 +189,7 @@ static const sp7021grp_t sp7021grps_pdmr[] = {
 
 static const unsigned pins_pcmt[] = {  D(3,7), D(4,0), D(4,1), D(4,2), D(4,3), D(4,4),  };
 static const sp7021grp_t sp7021grps_pcmt[] = {
- EGRP( "PDMRX_IFX0", 1, pins_pcmt),
+ EGRP( "PCM_IEC_TX", 1, pins_pcmt),
 };
 
 static const unsigned pins_lcdi[] = {

@@ -18,31 +18,15 @@
 
 	soc@B {
 		mmc1: mmc@sdcard {
-			pinctrl-names = "default";
-			pinctrl-0 = <&mmc1_mux>;
-			cd-gpios = <&pctl 91 GPIO_ACTIVE_LOW>;
 			status = "okay";
 		};
 
 		sp_display: display@0x9c005c80 {
 			ui_width = <1280>;
 			ui_height = <720>;
-
-			/* 0x2 = 8bpp (ARGB)
-			* 0x4 = YUY2
-			* 0x8 = RGB565
-			* 0x9 = ARGB1555
-			* 0xa = RGBA4444
-			* 0xb = ARGB4444
-			* 0xd = RGBA8888
-			* 0xe = ARGB8888
-			*/
-			ui_format = <0x8>;
 		};
 
 		hdmitx: hdmitx@0x9C00BE00 {
-			pinctrl-names = "default";
-			pinctrl-0 = <&hdmi_A_tx3>;
 			status = "okay";
 		};
 
@@ -52,35 +36,23 @@
                 };
 
 		l2sw: l2sw@0x9c108000 {
-			pinctrl-names = "default";
-			pinctrl-0 = <&l2sw_two_phy_pins>;
 			status = "okay";
 		};
 	};
 
 	leds {
-                compatible = "gpio-leds";
-
-                red {
-                        label = "sp7021:red:system";
-                        gpios = <&pctl 0 GPIO_ACTIVE_HIGH>;
-			linux,default-trigger = "timer";
-                };
+		status = "okay";
         };
 };
 
 
 &i2cm1 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&i2cm1_tpm_pins>;
-	#address-cells = <1>;
-	#size-cells = <0>;
 	status = "okay";
 
 	st33htpi: st33htpi@0{
 		compatible = "st,st33htpm-i2c";
 		reg = <0x2e>;
-		status="okay";
+		status="disabled";
 	};
 };
 
@@ -100,41 +72,5 @@
 			SP7021_IOPAD(19,SP7021_PCTL_G_PMUX,MUXF_UA2_CTS,0)
 		>;
 	};
-
-	mipicsi0_pins: pinmux_mipicsi0_pins {
-		sppctl,pins = <
-			SP7021_IOPAD(64,SP7021_PCTL_G_PMUX,MUXF_I2CM1_DAT,0)
-			SP7021_IOPAD(61,SP7021_PCTL_G_PMUX,MUXF_I2CM1_CK,0)
-		>;
-	};
-
-	mmc1_mux: mmc1_mux {
-		sppctl,pins = <
-			SP7021_IOPAD(91,SP7021_PCTL_G_GPIO,0,0)
-		>;
-	};
-
-	l2sw_two_phy_pins: pinmux_l2sw_two_phy_pins {
-		sppctl,pins = <
-			SP7021_IOPAD(49,SP7021_PCTL_G_PMUX,MUXF_L2SW_CLK_OUT,0)
-			SP7021_IOPAD(44,SP7021_PCTL_G_PMUX,MUXF_L2SW_MAC_SMI_MDC,0)
-			SP7021_IOPAD(43,SP7021_PCTL_G_PMUX,MUXF_L2SW_MAC_SMI_MDIO,0)
-			SP7021_IOPAD(52,SP7021_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_TXEN,0)
-			SP7021_IOPAD(50,SP7021_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_TXD0,0)
-			SP7021_IOPAD(51,SP7021_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_TXD1,0)
-			SP7021_IOPAD(46,SP7021_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_CRSDV,0)
-			SP7021_IOPAD(47,SP7021_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_RXD0,0)
-			SP7021_IOPAD(48,SP7021_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_RXD1,0)
-			SP7021_IOPAD(45,SP7021_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_RXER,0)
-			SP7021_IOPAD(59,SP7021_PCTL_G_PMUX,MUXF_L2SW_P1_MAC_RMII_TXEN,0)
-			SP7021_IOPAD(57,SP7021_PCTL_G_PMUX,MUXF_L2SW_P1_MAC_RMII_TXD0,0)
-			SP7021_IOPAD(58,SP7021_PCTL_G_PMUX,MUXF_L2SW_P1_MAC_RMII_TXD1,0)
-			SP7021_IOPAD(54,SP7021_PCTL_G_PMUX,MUXF_L2SW_P1_MAC_RMII_CRSDV,0)
-			SP7021_IOPAD(55,SP7021_PCTL_G_PMUX,MUXF_L2SW_P1_MAC_RMII_RXD0,0)
-			SP7021_IOPAD(56,SP7021_PCTL_G_PMUX,MUXF_L2SW_P1_MAC_RMII_RXD1,0)
-			SP7021_IOPAD(53,SP7021_PCTL_G_PMUX,MUXF_L2SW_P1_MAC_RMII_RXER,0)
-		>;
-	};
- 
 }; 
 

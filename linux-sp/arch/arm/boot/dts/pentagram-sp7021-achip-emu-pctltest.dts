@@ -24,7 +24,14 @@
 
 &sdio {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pins_sdio>;
+	pinctrl-0 = <&pins_sdio &pins_sdio_reset>;
+	bus-width = <4>;
+	/* max-frequency = <52000000>; */
+	brcmf1: bcrmf@1 {
+		reg = <1>;
+		compatible = "android,bcmdhd_wlan";
+		reset-gpios = <&pctl 83 GPIO_ACTIVE_LOW>;
+	};
 };
 
 &l2sw {
@@ -140,6 +147,12 @@ status = "disabled";
 		>;
 	};
 
+	pins_sdio_reset: pins_sdio_reset {
+		sppctl,pins = <
+			/* additional reset pin for BRCM */
+			SP7021_IOPAD(83,SP7021_PCTL_G_GPIO,0,SP7021_PCTL_L_OU1)
+		>;
+	};
 	/* for all eth */
 	ethA_pins: pinmux_ethA_pins {
 		sppctl,pins = <

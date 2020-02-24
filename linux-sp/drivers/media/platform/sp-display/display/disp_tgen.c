@@ -124,7 +124,7 @@ int DRV_TGEN_Set(DRV_SetTGEN_t *SetTGEN)
 		pTGENReg->tgen_dtg_start_line = SetTGEN->v_bp;
 		pTGENReg->tgen_dtg_ds_line_start_cd_point = SetTGEN->hactive;
 		pTGENReg->tgen_dtg_field_end_line = SetTGEN->vactive + SetTGEN->v_bp + 1;
-		sp_disp_err("htt:%d, vtt:%d, h:%d, v:%d, bp:%d\n", SetTGEN->htt, SetTGEN->vtt, SetTGEN->hactive, SetTGEN->vactive, SetTGEN->v_bp);
+		sp_disp_info("htt:%d, vtt:%d, h:%d, v:%d, bp:%d\n", SetTGEN->htt, SetTGEN->vtt, SetTGEN->hactive, SetTGEN->vactive, SetTGEN->v_bp);
 	} else {
 		// [Todo] Moon register setting for pll
 		pTGENReg->tgen_dtg_config = ((SetTGEN->fmt & 0x7) << 8) | ((SetTGEN->fps & 0x3) << 4);
@@ -132,6 +132,22 @@ int DRV_TGEN_Set(DRV_SetTGEN_t *SetTGEN)
 
 	return DRV_SUCCESS;
 }
+
+#ifdef TTL_MODE_SUPPORT
+#ifdef TTL_MODE_DTS
+void sp_disp_set_ttl_tgen(DRV_SetTGEN_t *SetTGEN)
+{
+	if (SetTGEN->fmt == DRV_FMT_USER_MODE) {
+		pTGENReg->tgen_dtg_total_pixel = SetTGEN->htt;
+		pTGENReg->tgen_dtg_total_line = SetTGEN->vtt;
+		pTGENReg->tgen_dtg_start_line = SetTGEN->v_bp;
+		pTGENReg->tgen_dtg_ds_line_start_cd_point = SetTGEN->hactive;
+		pTGENReg->tgen_dtg_field_end_line = SetTGEN->vactive + SetTGEN->v_bp + 1;
+		sp_disp_info("htt:%d, vtt:%d, h:%d, v:%d, bp:%d\n", SetTGEN->htt, SetTGEN->vtt, SetTGEN->hactive, SetTGEN->vactive, SetTGEN->v_bp);
+	}
+}
+#endif
+#endif
 
 void DRV_TGEN_Get(DRV_SetTGEN_t *GetTGEN)
 {

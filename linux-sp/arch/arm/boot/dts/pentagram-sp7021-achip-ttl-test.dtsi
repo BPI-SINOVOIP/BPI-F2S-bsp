@@ -1,0 +1,174 @@
+/dts-v1/;
+
+#include "pentagram-sp7021-common-ttl-test.dtsi"
+
+#include <dt-bindings/memory/sp-q628-mem.h>
+#include <dt-bindings/interrupt-controller/arm-gic.h>
+
+
+/ {
+	model = "Sunplus SP7021 (CA7)";
+	compatible = "sunplus,sp7021-achip";
+
+	interrupt-parent = <&gic>;
+
+
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		cpu0: cpu@0 {
+			compatible = "arm,cortex-a7";
+			device_type = "cpu";
+			reg = <0>;
+			clock-frequency = <931000000>;
+			cpu-idle-states = <&CLUSTER_SLEEP_BIG>;
+		};
+#if 1
+		cpu@1 {
+			compatible = "arm,cortex-a7";
+			device_type = "cpu";
+			reg = <1>;
+			enable-method = "sunplus,sc-smp";
+			cpu-boot-reg = <0x9ea7fff0>;
+			clock-frequency = <931000000>;
+			cpu-idle-states = <&CLUSTER_SLEEP_BIG>;
+		};
+		cpu@2 {
+			compatible = "arm,cortex-a7";
+			device_type = "cpu";
+			reg = <2>;
+			enable-method = "sunplus,sc-smp";
+			cpu-boot-reg = <0x9ea7ffec>;
+			clock-frequency = <931000000>;
+			cpu-idle-states = <&CLUSTER_SLEEP_BIG>;
+		};
+		cpu@3 {
+			compatible = "arm,cortex-a7";
+			device_type = "cpu";
+			reg = <3>;
+			enable-method = "sunplus,sc-smp";
+			cpu-boot-reg = <0x9ea7ffe8>;
+			clock-frequency = <931000000>;
+			cpu-idle-states = <&CLUSTER_SLEEP_BIG>;
+		};
+#endif
+#if  1
+		idle-states {
+			CLUSTER_SLEEP_BIG: cluster-sleep-big {
+				compatible = "sp7021,idle-state";
+/*				local-timer-stop;*/
+				entry-latency-us = <8000>;
+				exit-latency-us = <700>;
+				min-residency-us = <9000>;
+			};
+#if  0
+			CLUSTER_SLEEP_LITTLE: cluster-sleep-little {
+				compatible = "sp7021,idle-state";
+				local-timer-stop;
+				entry-latency-us = <1000>;
+				exit-latency-us = <500>;
+				min-residency-us = <2500>;
+			};
+#endif
+		};
+#endif
+	};
+
+	arm-pmu {
+		compatible = "arm,cortex-a7-pmu";
+		interrupts = <GIC_SPI 219 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 220 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 221 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 222 IRQ_TYPE_LEVEL_HIGH>;
+	};
+
+
+	soc@A {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		gic: interrupt-controller@CPU {
+			compatible = "arm,cortex-a7-gic";
+			interrupt-controller;
+			#interrupt-cells = <3>;
+			reg = <0x9f101000 0x1000>,
+			      <0x9f102000 0x2000>;
+		};
+
+		timer: timer@CPU {
+			compatible = "arm,armv7-timer";
+			interrupts = <GIC_PPI 13 (GIC_CPU_MASK_SIMPLE(4) | IRQ_TYPE_LEVEL_LOW)>,
+				     <GIC_PPI 14 (GIC_CPU_MASK_SIMPLE(4) | IRQ_TYPE_LEVEL_LOW)>,
+				     <GIC_PPI 11 (GIC_CPU_MASK_SIMPLE(4) | IRQ_TYPE_LEVEL_LOW)>,
+				     <GIC_PPI 10 (GIC_CPU_MASK_SIMPLE(4) | IRQ_TYPE_LEVEL_LOW)>;
+			clock-frequency = <27000000>;
+			arm,cpu-registers-not-fw-configured;
+		};
+
+#if 0		/* Each Cortex A-7 has its own system timer, it's not required if armv7-timer is enabled. */
+		/* This timer will be used in sp_timer_test.c */
+		timer@A_G19 {
+			compatible = "sunplus,sp-stc";
+			reg = <0x9ec00980 0x80>;
+			interrupt-parent = <&gic>;
+			interrupts = <GIC_SPI 1 IRQ_TYPE_EDGE_RISING>, /* timer0 */
+				     <GIC_SPI 2 IRQ_TYPE_EDGE_RISING>, /* timer1 */
+				     <GIC_SPI 3 IRQ_TYPE_EDGE_RISING>, /* timer2 */
+				     <GIC_SPI 4 IRQ_TYPE_EDGE_RISING>; /* timer3 */
+		};
+#endif
+#if 0
+		sp_tmr_tst@9ec00980 {
+			compatible = "sunplus,sp-tmr-tst";
+			reg = <0x9ec00980 0x80>;
+			interrupt-parent = <&gic>;
+			interrupts = <GIC_SPI 1 IRQ_TYPE_EDGE_RISING>, /* timer0 */
+				     <GIC_SPI 2 IRQ_TYPE_EDGE_RISING>, /* timer1 */
+				     <GIC_SPI 3 IRQ_TYPE_EDGE_RISING>, /* timer2 */
+				     <GIC_SPI 4 IRQ_TYPE_EDGE_RISING>; /* timer3 */
+		};
+#endif
+
+		dma0@A_G11 {
+			compatible = "sunplus,sp-dma0";
+			reg = <0x9ec00580 0x180>; /* G11 ~ G13 */
+			interrupt-parent = <&gic>;
+			interrupts = <GIC_SPI 8  IRQ_TYPE_EDGE_RISING>, /* ch0_job_done */
+                                     <GIC_SPI 9  IRQ_TYPE_EDGE_RISING>, /* ch1_job_done */
+                                     <GIC_SPI 10 IRQ_TYPE_EDGE_RISING>, /* ch2_job_done */
+                                     <GIC_SPI 11 IRQ_TYPE_EDGE_RISING>, /* ch3_job_done */
+                                     <GIC_SPI 12 IRQ_TYPE_EDGE_RISING>, /* ch4_job_done */
+                                     <GIC_SPI 13 IRQ_TYPE_EDGE_RISING>, /* ch5_job_done */
+                                     <GIC_SPI 14 IRQ_TYPE_EDGE_RISING>, /* ch6_job_done */
+                                     <GIC_SPI 15 IRQ_TYPE_EDGE_RISING>, /* ch7_job_done */
+                                     <GIC_SPI 16 IRQ_TYPE_EDGE_RISING>; /* addr_exp_err */
+		};
+	};
+
+	soc@B {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		interrupt-parent = <&intc>;
+
+		/* B modules */
+		intc: interrupt-controller@G15 {
+			compatible = "sunplus,sp-intc";
+			interrupt-controller;
+			#interrupt-cells = <2>;
+			reg = <0x9c000780 0x80>, /* G15 */
+			      <0x9c000a80 0x80>; /* G21 */
+			interrupt-parent = <&gic>;
+			interrupts = <GIC_SPI 5 IRQ_TYPE_LEVEL_HIGH>, /* EXT_INT0 */
+				     <GIC_SPI 6 IRQ_TYPE_LEVEL_HIGH>; /* EXT_INT1 */
+			ext0-mask = <0xf>; /* core0-3 */
+			ext1-mask = <0xe>; /* core1-3 */
+		};
+	};
+
+};

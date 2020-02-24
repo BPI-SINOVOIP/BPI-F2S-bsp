@@ -41,8 +41,7 @@ int sp7021gpio_u_soinv( struct gpio_chip *_c, unsigned int _n);
 int sp7021gpio_u_isodr( struct gpio_chip *_c, unsigned int _n);
 void sp7021gpio_u_seodr( struct gpio_chip *_c, unsigned int _n, unsigned _v);
 
-// --- in callbacks
-
+#ifndef SPPCTL_H
 // take pin (export/open for ex.): set GPIO_FIRST=1,GPIO_MASTER=1
 // FIX: how to prevent gpio to take over the mux if mux is the default?
 // FIX: idea: save state of MASTER/FIRST and return back after _fre?
@@ -50,6 +49,7 @@ int sp7021gpio_f_req( struct gpio_chip *_c, unsigned _n);
 
 // gave pin back: set GPIO_MASTER=0,GPIO_FIRST=0
 void sp7021gpio_f_fre( struct gpio_chip *_c, unsigned _n);
+#endif // SPPCTL_H
 
 // get dir: 0=out, 1=in, -E =err (-EINVAL for ex): OE inverted on ret
 int sp7021gpio_f_gdi( struct gpio_chip *_c, unsigned _n);

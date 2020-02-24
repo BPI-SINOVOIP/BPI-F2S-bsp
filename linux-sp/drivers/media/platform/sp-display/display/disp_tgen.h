@@ -42,6 +42,11 @@ extern unsigned int DRV_TGEN_GetLineCntNow(void);
 void DRV_TGEN_SetUserInt1(u32 count);
 void DRV_TGEN_SetUserInt2(u32 count);
 int DRV_TGEN_Set(DRV_SetTGEN_t *SetTGEN);
+#ifdef TTL_MODE_SUPPORT
+#ifdef TTL_MODE_DTS
+void sp_disp_set_ttl_tgen(DRV_SetTGEN_t *SetTGEN);
+#endif
+#endif
 void DRV_TGEN_Get(DRV_SetTGEN_t *GetTGEN);
 void DRV_TGEN_Reset(void);
 int DRV_TGEN_Adjust(DRV_TGEN_Input_e Input, u32 Adjust);

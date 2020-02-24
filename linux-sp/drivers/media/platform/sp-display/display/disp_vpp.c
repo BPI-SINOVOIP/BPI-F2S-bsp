@@ -61,9 +61,30 @@ void DRV_VPP_Init(void *pInHWReg1, void *pInHWReg2)
 int vpost_setting(int x, int y, int input_w, int input_h, int output_w, int output_h)
 {
 #ifdef TTL_MODE_SUPPORT
+	#ifdef TTL_MODE_DTS
+	struct sp_disp_device *disp_dev = gDispWorkMem;
+	int vpp_adj;
+	vpp_adj = (int)disp_dev->TTLPar.ttl_vpp_adj;
+	#endif
 	pVPOSTReg->vpost_mas_sla = 0x1; //en user mode
+	
+	#ifdef TTL_MODE_DTS
+	pVPOSTReg->vpost_o_act_xstart = 0; //x active
+	pVPOSTReg->vpost_o_act_ystart = vpp_adj; //y active
+	#else
+#ifdef TTL_MODE_1024_600
+	pVPOSTReg->vpost_o_act_xstart = 0; //x active
+	pVPOSTReg->vpost_o_act_ystart = 26; //y active
+#endif
+#ifdef TTL_MODE_800_480
+	pVPOSTReg->vpost_o_act_xstart = 0; //x active
+	pVPOSTReg->vpost_o_act_ystart = 29; //y active
+#endif
+#ifdef TTL_MODE_320_240
 	pVPOSTReg->vpost_o_act_xstart = 0; //x active
 	pVPOSTReg->vpost_o_act_ystart = 21; //y active
+#endif
+	#endif
 #endif
 
 	if ((input_w != output_w) || (input_h != output_h)) {
@@ -81,22 +102,35 @@ int vpost_setting(int x, int y, int input_w, int input_h, int output_w, int outp
 	pVPOSTReg->vpost_i_ylen = input_h;
 	pVPOSTReg->vpost_o_xlen = output_w;
 	pVPOSTReg->vpost_o_ylen = output_h;
-	//pVPOSTReg->vpost_i_xlen = 320;
-	//pVPOSTReg->vpost_i_ylen = 240;
-	//pVPOSTReg->vpost_o_xlen = 320;
-	//pVPOSTReg->vpost_o_ylen = 240;
 #else
 	pVPOSTReg->vpost_i_xlen = input_w;
 	pVPOSTReg->vpost_i_ylen = input_h;
 	pVPOSTReg->vpost_o_xlen = output_w;
 	pVPOSTReg->vpost_o_ylen = output_h;
 #endif
-	pVPOSTReg->vpost_config2 = 4;
-	//pVPOSTReg->vpost_config2 = 7; //border test pattern
+	pVPOSTReg->vpost_config2 = 4; //VPOST CHKSUM_EN
+	//pVPOSTReg->vpost_config2 = 5; //VPOST CHKSUM_EN | BIST_EN //colorbar test pattern
+	//pVPOSTReg->vpost_config2 = 7; //VPOST CHKSUM_EN | BIST_MMODE | BIST_EN //border test pattern
 
 	return 0;
 }
 EXPORT_SYMBOL(vpost_setting);
+
+#ifdef TTL_MODE_SUPPORT
+#ifdef TTL_MODE_DTS
+void sp_disp_set_ttl_vpp(void)
+{
+	struct sp_disp_device *disp_dev = gDispWorkMem;
+	int vpp_adj;
+	vpp_adj = (int)disp_dev->TTLPar.ttl_vpp_adj;
+	
+	pVPOSTReg->vpost_o_act_xstart = 0; //x active
+	pVPOSTReg->vpost_o_act_ystart = vpp_adj; //y active
+	
+}
+EXPORT_SYMBOL(sp_disp_set_ttl_vpp);
+#endif
+#endif
 
 int ddfch_setting(int luma_addr, int chroma_addr, int w, int h, int yuv_fmt)
 {
@@ -104,26 +138,9 @@ int ddfch_setting(int luma_addr, int chroma_addr, int w, int h, int yuv_fmt)
 
 #ifdef TTL_MODE_SUPPORT
 	sp_disp_dbg("ddfch setting for LCD \n");
-
-	pDDFCHReg->ddfch_latch_en = 1;
-	if (yuv_fmt == 0)
-		pDDFCHReg->ddfch_mode_option = 0; //source yuv420 NV12
-	else if(yuv_fmt == 1)
-		pDDFCHReg->ddfch_mode_option = 0x400; //source yuv422 NV16
-	else if(yuv_fmt == 2)
-		pDDFCHReg->ddfch_mode_option = 0x800; //source yuv422 YUY2
-
-	pDDFCHReg->ddfch_enable = 0xd0;
-	pDDFCHReg->ddfch_luma_base_addr_0 = luma_addr>>10;
-	pDDFCHReg->ddfch_crma_base_addr_0 = chroma_addr>>10;
-	pDDFCHReg->ddfch_vdo_frame_size = 384; //video line pitch
-	//pDDFCHReg->ddfch_vdo_crop_size = 0x01e002d0; //y size & x size
-	pDDFCHReg->ddfch_vdo_crop_offset = ((0 << 16) | 0);
-	pDDFCHReg->ddfch_config_0 = 0x10000;
-	pDDFCHReg->ddfch_bist = 0x80801002;
-	pDDFCHReg->ddfch_vdo_crop_size = 0x00f00140; //y size & x size
 #else
 	sp_disp_dbg("ddfch setting for HDMI \n");
+#endif
 
 	pDDFCHReg->ddfch_latch_en = 1;
 	if (yuv_fmt == 0)
@@ -142,7 +159,6 @@ int ddfch_setting(int luma_addr, int chroma_addr, int w, int h, int yuv_fmt)
 	pDDFCHReg->ddfch_config_0 = 0x10000;
 	pDDFCHReg->ddfch_bist = 0x80801002;
 	pDDFCHReg->ddfch_vdo_crop_size = ((h<<16) | w); //y size & x size
-#endif
 
 	return 0;
 }

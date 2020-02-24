@@ -19,7 +19,7 @@
 
 static void sp_power_off(void)
 {
-	unsigned int reg_value;
+//	unsigned int reg_value;
 	void __iomem *regs = (void __iomem *)A_SYSTEM_BASE;
 	void __iomem *regs_B = (void __iomem *)B_SYSTEM_BASE;
 //	int i;
@@ -85,6 +85,12 @@ static void __init sp_init(void)
 	unsigned int b_sysclk, io_ctrl;
 #ifdef CONFIG_MACH_PENTAGRAM_SP7021_ACHIP
 	unsigned int a_pllclk, coreclk, ioclk, sysclk, clk_cfg, a_pllioclk;
+#endif
+
+#ifdef CONFIG_SUNPLUS_WATCHDOG
+	void __iomem *regs = (void __iomem *)B_SYSTEM_BASE;
+	writel(0x7482, regs + 0x0630); /* clrirq */
+	writel(0x00120012, regs + 0x0274); /* G4.29 misc_ctl */
 #endif
 
 	early_printk("%s\n", __func__);

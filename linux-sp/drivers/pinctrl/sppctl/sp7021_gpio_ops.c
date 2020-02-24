@@ -20,17 +20,14 @@
 
 #include "sp7021_gpio.h"
 
-#define SP7021_GPIO_OFF_GFR 0x00
-#define SP7021_GPIO_OFF_CTL 0x00
-#define SP7021_GPIO_OFF_OE 0x20
-#define SP7021_GPIO_OFF_OUT 0x40
-#define SP7021_GPIO_OFF_IN 0x60
-// base1=380, IINV=380
+#define SP7021_GPIO_OFF_GFR  0x00
+#define SP7021_GPIO_OFF_CTL  0x00
+#define SP7021_GPIO_OFF_OE   0x20
+#define SP7021_GPIO_OFF_OUT  0x40
+#define SP7021_GPIO_OFF_IN   0x60
 #define SP7021_GPIO_OFF_IINV 0x00
-// base1=380, OINV=3A0
 #define SP7021_GPIO_OFF_OINV 0x20
-// base1=380, OINV=3C0
-#define SP7021_GPIO_OFF_OD 0x40
+#define SP7021_GPIO_OFF_OD   0x40
 
 // (/16)*4
 #define R16_ROF(r) (((r)>>4)<<2)
@@ -42,14 +39,12 @@
 
 int sp7021gpio_f_gdi( struct gpio_chip *_c, unsigned _n);
 
-// --- not in callbacks
-
 // who is first: GPIO(1) | MUX(0)
 int sp7021gpio_u_gfrst( struct gpio_chip *_c, unsigned int _n) {
  u32 r;
  sp7021gpio_chip_t *pc = ( sp7021gpio_chip_t *)gpiochip_get_data( _c);
  r = readl( pc->base2 + SP7021_GPIO_OFF_GFR + R32_ROF(_n));
-//KINF( _c->parent, "u F r:%X = %d %p off:%d\n", r, R32_VAL(r,R32_BOF(_n)), pc->base2, SP7021_GPIO_OFF_GFR + R32_ROF(_n));
+ //KINF( _c->parent, "u F r:%X = %d %p off:%d\n", r, R32_VAL(r,R32_BOF(_n)), pc->base2, SP7021_GPIO_OFF_GFR + R32_ROF(_n));
  return( R32_VAL(r,R32_BOF(_n)));  }
 
 // who is master: GPIO(1) | IOP(0)
@@ -57,7 +52,7 @@ int sp7021gpio_u_magpi( struct gpio_chip *_c, unsigned int _n) {
  u32 r;
  sp7021gpio_chip_t *pc = ( sp7021gpio_chip_t *)gpiochip_get_data( _c);
  r = readl( pc->base0 + SP7021_GPIO_OFF_CTL + R16_ROF(_n));
-//KINF( _c->parent, "u M r:%X = %d %p off:%d\n", r, R32_VAL(r,R16_BOF(_n)), pc->base0, SP7021_GPIO_OFF_CTL + R16_ROF(_n));
+ //KINF( _c->parent, "u M r:%X = %d %p off:%d\n", r, R32_VAL(r,R16_BOF(_n)), pc->base0, SP7021_GPIO_OFF_CTL + R16_ROF(_n));
  return( R32_VAL(r,R16_BOF(_n)));  }
 
 // set master: GPIO(1)|IOP(0), first:GPIO(1)|MUX(0)
@@ -67,11 +62,11 @@ void sp7021gpio_u_magpi_set( struct gpio_chip *_c, unsigned int _n, muxF_MG_t _f
  // FIRST
  if ( _f != muxFKEEP) {
    r = readl( pc->base2 + SP7021_GPIO_OFF_GFR + R32_ROF(_n));
-//KINF( _c->parent, "F r:%X %p off:%d\n", r, pc->base2, SP7021_GPIO_OFF_GFR + R32_ROF(_n));
+   //KINF( _c->parent, "F r:%X %p off:%d\n", r, pc->base2, SP7021_GPIO_OFF_GFR + R32_ROF(_n));
    if ( _f != R32_VAL(r,R32_BOF(_n))) {
      if ( _f == muxF_G) r |= BIT(R32_BOF(_n));
      else r &= ~BIT(R32_BOF(_n));
-//KINF( _c->parent, "F w:%X\n", r);
+     //KINF( _c->parent, "F w:%X\n", r);
      writel( r, pc->base2 + SP7021_GPIO_OFF_GFR + R32_ROF(_n));
    }
  } 
@@ -79,7 +74,7 @@ void sp7021gpio_u_magpi_set( struct gpio_chip *_c, unsigned int _n, muxF_MG_t _f
  if ( _m != muxMKEEP) {
    r = (BIT(R16_BOF(_n))<<16);
    if ( _m == muxM_G) r |= BIT(R16_BOF(_n));
-//KINF( _c->parent, "M w:%X %p off:%d\n", r, pc->base0, SP7021_GPIO_OFF_CTL + R16_ROF(_n));
+   //KINF( _c->parent, "M w:%X %p off:%d\n", r, pc->base0, SP7021_GPIO_OFF_CTL + R16_ROF(_n));
    writel( r, pc->base0 + SP7021_GPIO_OFF_CTL + R16_ROF(_n));
  }
  return;  }
@@ -122,8 +117,7 @@ void sp7021gpio_u_seodr( struct gpio_chip *_c, unsigned int _n, unsigned _v) {
  writel( r, pc->base1 + SP7021_GPIO_OFF_OD + R16_ROF(_n));
  return;  }
 
-// --- in callbacks
-
+#ifndef SPPCTL_H
 // take pin (export/open for ex.): set GPIO_FIRST=1,GPIO_MASTER=1
 // FIX: how to prevent gpio to take over the mux if mux is the default?
 // FIX: idea: save state of MASTER/FIRST and return back after _fre?
@@ -146,14 +140,15 @@ void sp7021gpio_f_fre( struct gpio_chip *_c, unsigned _n) {
  u32 r;
  sp7021gpio_chip_t *pc = ( sp7021gpio_chip_t *)gpiochip_get_data( _c);
  // set GPIO_MASTER(1):m16,v:16 - doesn't matter now: gpio mode is default
-// r = (BIT(R16_BOF(_n))<<16) | BIT(R16_BOF(_n);
-// writel( r, pc->base0 + SP7021_GPIO_OFF_CTL + R16_ROF(_n));
+ //r = (BIT(R16_BOF(_n))<<16) | BIT(R16_BOF(_n);
+ //writel( r, pc->base0 + SP7021_GPIO_OFF_CTL + R16_ROF(_n));
  // get GPIO_FIRST:32
  r = readl( pc->base2 + SP7021_GPIO_OFF_GFR + R32_ROF(_n));
  // set GPIO_FIRST(0):32
  r &= ~BIT(R32_BOF(_n));
  writel( r, pc->base2 + SP7021_GPIO_OFF_GFR + R32_ROF(_n));
  return;  }
+#endif // SPPCTL_H
 
 // get dir: 0=out, 1=in, -E =err (-EINVAL for ex): OE inverted on ret
 int sp7021gpio_f_gdi( struct gpio_chip *_c, unsigned _n) {
@@ -196,7 +191,7 @@ void sp7021gpio_f_set( struct gpio_chip *_c, unsigned int _n, int _v) {
  writel( r, pc->base0 + SP7021_GPIO_OFF_OUT + R16_ROF(_n));
  return;  }
 
- // FIX: test in-depth
+// FIX: test in-depth
 int sp7021gpio_f_scf( struct gpio_chip *_c, unsigned _n, unsigned long _conf) {
  u32 r;
  int ret = 0;

@@ -37,7 +37,7 @@ config VIDEO_SENSOR_IMX219
 	  Supports video sensor IMX219.
 
 choice
-	prompt "Selected Inage Size"
+	prompt "Selected Image Size"
 	depends on VIDEO_SENSOR_IMX219
 	---help---
 	  Press Enter to select image size if this is not you want.
@@ -60,7 +60,7 @@ config VIDEO_SENSOR_OV5647
 	  Supports video sensor OV5647.
 
 choice
-	prompt "Selected Inage Size"
+	prompt "Selected Image Size"
 	depends on VIDEO_SENSOR_OV5647
 	---help---
 	  Press Enter to select image size if this is not you want.

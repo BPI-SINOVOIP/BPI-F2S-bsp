@@ -290,6 +290,7 @@ static void mipicsi_init(struct sp_mipi_device *mipi)
 	writel(0x110, &mipi->mipicsi_regs->mipicsi_ecc_cfg);
 	writel(0x1000, &mipi->mipicsi_regs->mipi_analog_cfg1);
 	writel(0x1001, &mipi->mipicsi_regs->mipi_analog_cfg1);
+	udelay(1);
 	writel(0x1000, &mipi->mipicsi_regs->mipi_analog_cfg1);
 	writel(0x1, &mipi->mipicsi_regs->mipicsi_enable);               // Enable MIPICSI
 }
@@ -452,6 +453,7 @@ static int sp_start_streaming(struct vb2_queue *vq, unsigned count)
 	struct sp_buffer *buf, *tmp;
 	unsigned long flags;
 	unsigned long addr;
+	u32 analog_cfg1;
 	int ret;
 
 	DBG_INFO("%s\n", __FUNCTION__);
@@ -493,7 +495,17 @@ static int sp_start_streaming(struct vb2_queue *vq, unsigned count)
 	writel(mEXTENDED_ALIGNED(mipi->fmt.fmt.pix.bytesperline, 16), &mipi->csiiw_regs->csiiw_stride);
 	writel((mipi->fmt.fmt.pix.height<<16)|mipi->fmt.fmt.pix.bytesperline, &mipi->csiiw_regs->csiiw_frame_size);
 
-	writel(0x12701, &mipi->csiiw_regs->csiiw_config0);      // Enable csiiw and fe_irq
+	// Reset Serial-to-parallel Flip-flop
+	analog_cfg1 = readl(&mipi->mipicsi_regs->mipi_analog_cfg1);
+	analog_cfg1 |= 0x0001;
+	udelay(1);
+	writel(analog_cfg1, &mipi->mipicsi_regs->mipi_analog_cfg1);
+	udelay(1);
+	analog_cfg1 &= ~1;
+	writel(analog_cfg1, &mipi->mipicsi_regs->mipi_analog_cfg1);
+
+	// Enable csiiw and fe_irq
+	writel(0x12701, &mipi->csiiw_regs->csiiw_config0);
 
 	mipi->streaming = true;
 	mipi->skip_first_int = true;
@@ -847,23 +859,18 @@ static int sp_mipi_probe(struct platform_device *pdev)
 		goto err_get_csiiw_rstc;
 	}
 
-	// Get GPIO0/1.
-	mipi->gpio0 = of_get_named_gpio(pdev->dev.of_node, "mipicsi-gpio0", 0);
-	if (!gpio_is_valid(mipi->gpio0)) {
-		//MIP_ERR("Wrong pin %d configured for gpio0\n", mipi->gpio0);
-	}
-	else {
-		MIP_INFO("GPIO0 pin number %d\n", mipi->gpio0);
-		gpio_set_value(mipi->gpio0,1);
+	// Get cam_gpio0.
+	mipi->cam_gpio0 = devm_gpiod_get(&pdev->dev, "cam_gpio0", GPIOD_OUT_HIGH);
+	if (!IS_ERR(mipi->cam_gpio0)) {
+		MIP_INFO("cam_gpio0 is at G_MX[%d].\n", desc_to_gpio(mipi->cam_gpio0));
+		gpiod_set_value(mipi->cam_gpio0,1);
 	}
 
-	mipi->gpio1 = of_get_named_gpio(pdev->dev.of_node, "mipicsi-gpio1", 0);
-	if (!gpio_is_valid(mipi->gpio1)) {
-		//MIP_ERR("Wrong pin %d configured for gpio1\n", mipi->gpio1);
-	}
-	else {
-		MIP_INFO("GPIO1 pin number %d\n", mipi->gpio1);
-		gpio_set_value(mipi->gpio1,1);
+	// Get cam_gpio1.
+	mipi->cam_gpio1 = devm_gpiod_get(&pdev->dev, "cam_gpio1", GPIOD_OUT_HIGH);
+	if (!IS_ERR(mipi->cam_gpio1)) {
+		MIP_INFO("cam_gpio1 is at G_MX[%d].\n", desc_to_gpio(mipi->cam_gpio1));
+		gpiod_set_value(mipi->cam_gpio1,1);
 	}
 
 	// Get i2c id.

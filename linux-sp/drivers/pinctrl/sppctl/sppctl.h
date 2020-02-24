@@ -24,7 +24,6 @@
 #define M_ORG "SunPlus/Tibbo Tech."
 #define M_CPR "(C) 2019-2019"
 
-//#define FW_DEFNAME "sppctl.bin"
 #define FW_DEFNAME NULL
 
 #include <linux/kernel.h>
@@ -71,10 +70,6 @@
 
 #include "sp7021_gpio.h"
 
-//#define MOON_REG_BASE 0x9C000000
-//#define MOON_REG_N(n) 0x80*(n)+MOON_REG_BASE
-#define MOON_REG_N(n) PA_IOB_ADDR(0x80*(n))
-
 typedef struct sp7021gpio_chip_T sp7021gpio_chip_t;
 
 typedef struct sppctl_pdata_T {
@@ -116,10 +111,10 @@ typedef enum {
 } fOFF_t;
 
 typedef struct {
- const char *name;
- uint8_t gval;                          // value for register
- const unsigned *pins;   // list of pins
- const unsigned pnum;                   // number of pins
+ const char * const name;
+ const uint8_t gval;             // value for register
+ const unsigned * const pins;    // list of pins
+ const unsigned pnum;            // number of pins
 } sp7021grp_t;
 
 #define EGRP(n,v,p) { \
@@ -130,15 +125,14 @@ typedef struct {
 }
 
 typedef struct {
- const char *name;
- fOFF_t freg;               // function register type
- uint8_t roff;              // +register offset
- uint8_t boff;              // bit offset
- uint8_t blen;              // number of bits
- const sp7021grp_t *grps;   // list of groups
- const unsigned gnum;       // number of groups
- char *grps_sa[100];     // array of pointers to func's grps names
-// char **grps_sa;     // array of pointers to func's grps names
+ const char * const name;
+ const fOFF_t freg;          // function register type
+ const uint8_t roff;         // register offset
+ const uint8_t boff;         // bit offset
+ const uint8_t blen;         // number of bits
+ const sp7021grp_t * const grps; // list of groups
+ const unsigned gnum;        // number of groups
+ const char *grps_sa[5];     // array of pointers to func's grps names
 } func_t;
 
 #define FNCE(n,r,o,bo,bl,g) { \

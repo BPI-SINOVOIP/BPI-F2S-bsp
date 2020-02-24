@@ -88,8 +88,18 @@
 #endif
 
 #ifdef TTL_MODE_SUPPORT
-	#define VPP_WIDTH	320
-	#define VPP_HEIGHT	240
+	#ifdef TTL_MODE_1024_600
+		#define VPP_WIDTH	1024
+		#define VPP_HEIGHT	600
+	#endif
+	#ifdef TTL_MODE_800_480
+		#define VPP_WIDTH	800
+		#define VPP_HEIGHT	480
+	#endif
+	#ifdef TTL_MODE_320_240
+		#define VPP_WIDTH	320
+		#define VPP_HEIGHT	240
+	#endif
 #else
 	#define VPP_WIDTH	720//512//242
 	#define VPP_HEIGHT	480//300//255
@@ -142,6 +152,13 @@ static ssize_t _write_flush_proc(struct file *filp, const char __user *buffer, s
 #ifdef TIMING_SYNC_720P60
 extern int hdmitx_enable_display(int);
 extern void hdmitx_set_timming(enum hdmitx_timing timing);
+#endif
+
+#ifdef TTL_MODE_SUPPORT
+#ifdef TTL_MODE_DTS
+void sp_disp_set_ttl_clk(void);
+//extern void sp_disp_set_ttl_vpp(void);
+#endif
 #endif
 
 extern void sp_disp_set_vpp_resolution_v4l2(struct sp_disp_device *disp_dev, int is_hdmi);
@@ -1559,6 +1576,28 @@ static char* _mon_readint(char *p, int *x)
 
 static void _debug_cmd(char *tmpbuf)
 {
+	UINT32 ret;
+	DRV_SetTGEN_t SetTGEN;
+#ifdef TTL_MODE_SUPPORT
+	#ifdef TTL_MODE_DTS
+	struct sp_disp_device *disp_dev = gDispWorkMem;
+	int hfp,hp,hbp,hac,htot,vfp,vp,vbp,vac,vtot;
+	int clk,divm,divn;
+	int rgb_swap,clk_pol,vpp_adj,osd_adj;
+	
+	hfp = (int)(disp_dev->TTLPar.hfp);
+	hp = (int)(disp_dev->TTLPar.hsync);
+	hbp = (int)(disp_dev->TTLPar.hbp);
+	hac = (int)(disp_dev->TTLPar.hactive);
+	htot = hfp + hp + hbp + hac;
+	
+	vfp = (int)(disp_dev->TTLPar.vfp);
+	vp = (int)(disp_dev->TTLPar.vsync);
+	vbp = (int)(disp_dev->TTLPar.vfp);
+	vac = (int)(disp_dev->TTLPar.vactive);
+	vtot = vfp + vp + vbp + vac;
+	#endif
+#endif
 	tmpbuf = _mon_skipspace(tmpbuf);
 
 	sp_disp_dbg("run disp debug cmd \n");
@@ -1566,8 +1605,6 @@ static void _debug_cmd(char *tmpbuf)
 	if (!strncasecmp(tmpbuf, "fc", 2))
 	{
 		int mode = 0;
-		UINT32 ret;
-		DRV_SetTGEN_t SetTGEN;
 
 		tmpbuf = _mon_readint(tmpbuf + 2, (int *)&mode);
 
@@ -1608,13 +1645,42 @@ static void _debug_cmd(char *tmpbuf)
 	#ifdef TTL_MODE_SUPPORT
 				SetTGEN.fmt = DRV_FMT_USER_MODE;
 				SetTGEN.fps = DRV_FrameRate_5994Hz;
+	#ifdef TTL_MODE_DTS
+				SetTGEN.htt = (int)disp_dev->TTLPar.hfp + \
+											(int)disp_dev->TTLPar.hsync + \
+											(int)disp_dev->TTLPar.hbp + \
+											(int)disp_dev->TTLPar.hactive;
+				SetTGEN.vtt = (int)disp_dev->TTLPar.vfp + \
+											(int)disp_dev->TTLPar.vsync + \
+											(int)disp_dev->TTLPar.vbp + \
+											(int)disp_dev->TTLPar.vactive;				
+				SetTGEN.v_bp = (int)disp_dev->TTLPar.vsync + \
+											(int)disp_dev->TTLPar.vbp + 1;
+				SetTGEN.hactive = (int)disp_dev->TTLPar.hactive;
+				SetTGEN.vactive = (int)disp_dev->TTLPar.vactive;
+	#else
+#ifdef TTL_MODE_1024_600
+				SetTGEN.htt = 1344;
+				SetTGEN.vtt = 635;
+				SetTGEN.v_bp = 24;
+				SetTGEN.hactive = 1024;
+				SetTGEN.vactive = 600;
+#endif
+#ifdef TTL_MODE_800_480
+				SetTGEN.htt = 1056;
+				SetTGEN.vtt = 525;
+				SetTGEN.v_bp = 27;
+				SetTGEN.hactive = 800;
+				SetTGEN.vactive = 480;
+#endif
+#ifdef TTL_MODE_320_240
 				SetTGEN.htt = 408;
 				SetTGEN.vtt = 262;
 				SetTGEN.v_bp = 19;
 				SetTGEN.hactive = 320;
 				SetTGEN.vactive = 240;
-				//disp_dev->panelRes.width = 320;
-				//disp_dev->panelRes.height = 240;
+#endif
+	#endif
 				sp_disp_dbg("set TGEN user mode\n");
 	#else
 				sp_disp_dbg("user mode unsupport\n");
@@ -1642,6 +1708,142 @@ static void _debug_cmd(char *tmpbuf)
 			DRV_OSD_HDR_Write(offset, value);
 		}
 	}
+#ifdef TTL_MODE_SUPPORT
+	#ifdef TTL_MODE_DTS
+	else if (!strncasecmp(tmpbuf, "ttl", 3)) {
+		tmpbuf = _mon_skipspace(tmpbuf + 3);
+
+		if (!strncasecmp(tmpbuf, "dump", 4)) {
+			sp_disp_info("ttl dump \n");
+			if(disp_dev->TTLPar.dts_exist)
+				sp_disp_info("ttl parameter exist \n");
+			sp_disp_info("ttl_clk %d , m %d , n %d \n",(int)disp_dev->TTLPar.clk,(int)disp_dev->TTLPar.divm,(int)disp_dev->TTLPar.divn);
+			sp_disp_info("ttl_hor : %d %d %d %d , %d \n", hfp, hp, hbp, hac, htot);
+			sp_disp_info("ttl_ver : %d %d %d %d , %d \n", vfp, vp, vbp, vac, vtot);
+			if(disp_dev->TTLPar.ttl_rgb_swap)
+				sp_disp_info("ttl_rgb with swap %d \n",(int)disp_dev->TTLPar.ttl_rgb_swap);
+			else
+				sp_disp_info("ttl_rgb normal %d \n",(int)disp_dev->TTLPar.ttl_rgb_swap);
+			if(disp_dev->TTLPar.ttl_clock_pol)
+				sp_disp_info("ttl_clock_pol invert %d \n",(int)disp_dev->TTLPar.ttl_clock_pol);
+			else
+				sp_disp_info("ttl_clock_pol normal %d \n",(int)disp_dev->TTLPar.ttl_clock_pol);
+
+			sp_disp_info("ttl_vpp_adj : %d \n",(int)disp_dev->TTLPar.ttl_vpp_adj);
+			sp_disp_info("ttl_osd_adj : %d \n",(int)disp_dev->TTLPar.ttl_osd_adj);
+			//sp_disp_info("ttl_parm_adj : %d \n",(int)disp_dev->TTLPar.ttl_parm_adj);
+
+		}
+		else if (!strncasecmp(tmpbuf, "update", 6)) {
+			sp_disp_info("ttl para update\n");
+			sp_disp_set_ttl_clk();
+			
+			SetTGEN.fmt = DRV_FMT_USER_MODE;
+			SetTGEN.fps = DRV_FrameRate_5994Hz;
+			SetTGEN.htt = (int)disp_dev->TTLPar.hfp + \
+							(int)disp_dev->TTLPar.hsync + \
+							(int)disp_dev->TTLPar.hbp + \
+							(int)disp_dev->TTLPar.hactive;
+			SetTGEN.vtt = (int)disp_dev->TTLPar.vfp + \
+							(int)disp_dev->TTLPar.vsync + \
+							(int)disp_dev->TTLPar.vbp + \
+							(int)disp_dev->TTLPar.vactive;					
+			SetTGEN.v_bp = (int)disp_dev->TTLPar.vsync + \
+							(int)disp_dev->TTLPar.vbp + 1;
+			SetTGEN.hactive = (int)disp_dev->TTLPar.hactive;
+			SetTGEN.vactive = (int)disp_dev->TTLPar.vactive;
+			sp_disp_set_ttl_tgen(&SetTGEN);
+			
+			sp_disp_set_ttl_dve();
+			sp_disp_set_ttl_vpp();
+
+		}
+		else if (!strncasecmp(tmpbuf, "clk", 3)) {
+			sp_disp_info("ttl clk set\n");
+			tmpbuf = _mon_readint(tmpbuf + 3, &clk);
+			tmpbuf = _mon_readint(tmpbuf, &divm);
+			tmpbuf = _mon_readint(tmpbuf, &divn);
+			if(clk > 20000)
+				disp_dev->TTLPar.clk = (unsigned int)clk;
+			if((divm >= 0) && (divm <=31))
+				disp_dev->TTLPar.divm = (unsigned int)divm;
+			if((divn >= 0) && (divm <=127))
+				disp_dev->TTLPar.divn = (unsigned int)divn;
+		}
+		else if (!strncasecmp(tmpbuf, "hor", 3)) {
+			sp_disp_info("ttl hor set\n");
+			tmpbuf = _mon_readint(tmpbuf + 3, &hfp);
+			tmpbuf = _mon_readint(tmpbuf, &hp);
+			tmpbuf = _mon_readint(tmpbuf, &hbp);
+			tmpbuf = _mon_readint(tmpbuf, &hac);
+			if((hfp > 0) && (hfp <=500))
+				disp_dev->TTLPar.hfp = (unsigned int)hfp;
+			else
+				sp_disp_info("ttl hor hfp over! \n");
+			if((hp > 0) && (hp <=500))
+				disp_dev->TTLPar.hsync = (unsigned int)hp;
+			else
+				sp_disp_info("ttl hor hp over! \n");
+			if((hbp > 0) && (hbp <=500))
+				disp_dev->TTLPar.hbp = (unsigned int)hbp;
+			else
+				sp_disp_info("ttl hor hbp over! \n");
+			if((hac > 0) && (hac <=5000))
+				disp_dev->TTLPar.hactive = (unsigned int)hac;
+			else
+				sp_disp_info("ttl hor hac over! \n");
+
+		}
+		else if (!strncasecmp(tmpbuf, "ver", 3)) {
+			sp_disp_info("ttl ver set\n");
+			tmpbuf = _mon_readint(tmpbuf + 3, &vfp);
+			tmpbuf = _mon_readint(tmpbuf, &vp);
+			tmpbuf = _mon_readint(tmpbuf, &vbp);
+			tmpbuf = _mon_readint(tmpbuf, &vac);
+			if((vfp > 0) && (vfp <=500))
+				disp_dev->TTLPar.vfp = (unsigned int)vfp;
+			else
+				sp_disp_info("ttl ver vfp over! \n");	
+			if((vp > 0) && (vp <=500))
+				disp_dev->TTLPar.vsync = (unsigned int)vp;
+			else
+				sp_disp_info("ttl ver vp over! \n");	
+			if((vbp > 0) && (vbp <=500))
+				disp_dev->TTLPar.vbp = (unsigned int)vbp;
+			else
+				sp_disp_info("ttl ver vbp over! \n");	
+			if((vac > 0) && (vac <=5000))
+				disp_dev->TTLPar.vactive = (unsigned int)vac;
+			else
+				sp_disp_info("ttl ver vac over! \n");	
+		}
+		else if (!strncasecmp(tmpbuf, "adj", 3)) {
+			sp_disp_info("ttl adj set\n");
+			tmpbuf = _mon_readint(tmpbuf + 3, &rgb_swap);
+			tmpbuf = _mon_readint(tmpbuf, &clk_pol);
+			tmpbuf = _mon_readint(tmpbuf, &vpp_adj);
+			tmpbuf = _mon_readint(tmpbuf, &osd_adj);
+
+			if((rgb_swap >= 0) && (rgb_swap <=1))
+				disp_dev->TTLPar.ttl_rgb_swap = (unsigned int)rgb_swap;
+			else
+				sp_disp_info("ttl adj rgb_swap over! \n");	
+			if((clk_pol >= 0) && (clk_pol <=1))
+				disp_dev->TTLPar.ttl_clock_pol = (unsigned int)clk_pol;
+			else
+				sp_disp_info("ttl adj clk_pol over! \n");
+			if((vpp_adj >= 0) && (vpp_adj <=100))
+				disp_dev->TTLPar.ttl_vpp_adj = (unsigned int)vpp_adj;
+			else
+				sp_disp_info("ttl adj vpp_adj over! \n");
+			if((osd_adj >= 0) && (osd_adj <=100))
+				disp_dev->TTLPar.ttl_osd_adj = (unsigned int)osd_adj;
+			else
+				sp_disp_info("ttl adj osd_adj over! \n");
+		}
+	}
+	#endif
+#endif
 	else
 		sp_disp_err("unknown command:%s\n", tmpbuf);
 
@@ -1753,22 +1955,60 @@ ERROR:
 }
 
 #ifdef TTL_MODE_SUPPORT
-	#if (VPP_FMT_TTL == 0) //YUV420_NV12
-	char vpp_yuv_array[384*240*3/2] __attribute__((aligned(1024))) = {
-		#include "vpp_pattern/yuv420_NV12_320x240.h"
-	};
-	#elif (VPP_FMT_TTL == 1) //YUV422_NV16
-	char vpp_yuv_array[384*240*2] __attribute__((aligned(1024))) = {
-		#include "vpp_pattern/yuv422_NV16_320x240.h"
-	};	
-	#elif (VPP_FMT_TTL == 2) //YUV422_YUY2
-	char vpp_yuv_array[384*240*2] __attribute__((aligned(1024))) = {
-		#include "vpp_pattern/yuv422_YUY2_320x240.h"
-	};
-	#else //YUV420_NV12
-	char vpp_yuv_array[384*240*3/2] __attribute__((aligned(1024))) = {
-		#include "vpp_pattern/yuv420_NV12_320x240.h"
-	};
+	#if ((VPP_WIDTH == 1024) && (VPP_HEIGHT == 600))
+		#if (VPP_FMT_TTL == 0) //YUV420_NV12
+		char vpp_yuv_array[1024*600*3/2] __attribute__((aligned(1024))) = {
+			#include "vpp_pattern/yuv420_NV12_1024x600.h"
+		};
+		#elif (VPP_FMT_TTL == 1) //YUV422_NV16
+		char vpp_yuv_array[1024*600*2] __attribute__((aligned(1024))) = {
+			#include "vpp_pattern/yuv422_NV16_1024x600.h"
+		};	
+		#elif (VPP_FMT_TTL == 2) //YUV422_YUY2
+		char vpp_yuv_array[1024*600*2] __attribute__((aligned(1024))) = {
+			#include "vpp_pattern/yuv422_YUY2_1024x600.h"
+		};
+		#else //YUV420_NV12
+		char vpp_yuv_array[1024*600*3/2] __attribute__((aligned(1024))) = {
+			#include "vpp_pattern/yuv420_NV12_1024x600.h"
+		};
+		#endif
+	#elif ((VPP_WIDTH == 800) && (VPP_HEIGHT == 480))
+		#if (VPP_FMT_TTL == 0) //YUV420_NV12
+		char vpp_yuv_array[896*480*3/2] __attribute__((aligned(1024))) = {
+			#include "vpp_pattern/yuv420_NV12_800x480.h"
+		};
+		#elif (VPP_FMT_TTL == 1) //YUV422_NV16
+		char vpp_yuv_array[896*480*2] __attribute__((aligned(1024))) = {
+			#include "vpp_pattern/yuv422_NV16_800x480.h"
+		};	
+		#elif (VPP_FMT_TTL == 2) //YUV422_YUY2
+		char vpp_yuv_array[896*480*2] __attribute__((aligned(1024))) = {
+			#include "vpp_pattern/yuv422_YUY2_800x480.h"
+		};
+		#else //YUV420_NV12
+		char vpp_yuv_array[896*480*3/2] __attribute__((aligned(1024))) = {
+			#include "vpp_pattern/yuv420_NV12_800x480.h"
+		};
+		#endif
+	#elif ((VPP_WIDTH == 320) && (VPP_HEIGHT == 240))
+		#if (VPP_FMT_TTL == 0) //YUV420_NV12
+		char vpp_yuv_array[384*240*3/2] __attribute__((aligned(1024))) = {
+			#include "vpp_pattern/yuv420_NV12_320x240.h"
+		};
+		#elif (VPP_FMT_TTL == 1) //YUV422_NV16
+		char vpp_yuv_array[384*240*2] __attribute__((aligned(1024))) = {
+			#include "vpp_pattern/yuv422_NV16_320x240.h"
+		};	
+		#elif (VPP_FMT_TTL == 2) //YUV422_YUY2
+		char vpp_yuv_array[384*240*2] __attribute__((aligned(1024))) = {
+			#include "vpp_pattern/yuv422_YUY2_320x240.h"
+		};
+		#else //YUV420_NV12
+		char vpp_yuv_array[384*240*3/2] __attribute__((aligned(1024))) = {
+			#include "vpp_pattern/yuv420_NV12_320x240.h"
+		};
+		#endif
 	#endif
 #else
 	#if ((VPP_WIDTH == 720) && (VPP_HEIGHT == 480))
@@ -1887,6 +2127,117 @@ static int _display_init_clk(struct platform_device *pdev)
 
 	return 0;
 }
+
+#ifdef TTL_MODE_SUPPORT
+static int _display_init_plltv(struct device *dev, struct sp_disp_device *disp_dev)
+{
+	int len;
+	const char *ttl_name;
+	//sp_disp_info("_display_init_plltv \n");
+
+	len = of_property_read_string_index(dev->of_node, "ttl-name", 0, &ttl_name);
+	if (ttl_name) {
+		sp_disp_info("ttl-name %s \n",ttl_name);
+	}
+	
+	if (of_property_read_u32(dev->of_node, "ttl-clock-freq", &disp_dev->TTLPar.clk)) {
+		disp_dev->TTLPar.clk = 0;
+	}
+	else {
+		disp_dev->TTLPar.dts_exist = 1;
+	}
+
+	if (of_property_read_u32(dev->of_node, "ttl-clock-divm", &disp_dev->TTLPar.divm)) {
+		disp_dev->TTLPar.divm = 0;
+	}
+
+	if (of_property_read_u32(dev->of_node, "ttl-clock-divn", &disp_dev->TTLPar.divn)) {
+		disp_dev->TTLPar.divn = 0;
+	}
+
+	//decide divm and divn value for TTL clk setting
+	if(disp_dev->TTLPar.dts_exist) {
+		//sp_disp_info("ttl target clk %d \n",disp_dev->TTLPar.clk);	
+		//TBD , auto cal by target clk
+		//sp_disp_info("( M %d N %d ) \n",disp_dev->TTLPar.divm,disp_dev->TTLPar.divn);
+	}
+	else {
+		sp_disp_info("ttl dts not exist!! \n");
+		#ifdef TTL_MODE_1024_600
+			//clk = 51M //(FVCO= (27/(M+1)) * (N+1) ) M=8,N=16
+			//clk = 51.55M //(FVCO= (27/(M+1)) * (N+1) ) M=10,N=20
+			disp_dev->TTLPar.divm = 10;
+			disp_dev->TTLPar.divn = 20;
+		#endif
+		#ifdef TTL_MODE_800_480
+			//clk = 33.75M //(FVCO= (27/(M+1)) * (N+1) ) M=11,N=14
+			//clk = 33.75M //(FVCO= (27/(M+1)) * (N+1) ) M=31,N=39
+			disp_dev->TTLPar.divm = 31;
+			disp_dev->TTLPar.divn = 39;
+		#endif
+		#ifdef TTL_MODE_320_240
+			//clk = 6.75M //(FVCO= (27/(M+1)) * (N+1) ) M=3,N=0
+			//clk = 6.43M //(FVCO= (27/(M+1)) * (N+1) ) M=20,N=4
+			disp_dev->TTLPar.divm = 20;
+			disp_dev->TTLPar.divn = 4;
+		#endif
+	}
+
+	if (of_property_read_u32(dev->of_node, "hactive", &disp_dev->TTLPar.hactive)) {
+		disp_dev->TTLPar.hactive = 0;
+	}
+
+	if (of_property_read_u32(dev->of_node, "hback-porch", &disp_dev->TTLPar.hbp)) {
+		disp_dev->TTLPar.hbp = 0;
+	}
+
+	if (of_property_read_u32(dev->of_node, "hfront-porch", &disp_dev->TTLPar.hfp)) {
+		disp_dev->TTLPar.hfp = 0;
+	}
+
+	if (of_property_read_u32(dev->of_node, "hsync-len", &disp_dev->TTLPar.hsync)) {
+		disp_dev->TTLPar.hsync = 0;
+	}
+
+	if (of_property_read_u32(dev->of_node, "vactive", &disp_dev->TTLPar.vactive)) {
+		disp_dev->TTLPar.vactive = 0;
+	}
+
+	if (of_property_read_u32(dev->of_node, "vback-porch", &disp_dev->TTLPar.vbp)) {
+		disp_dev->TTLPar.vbp = 0;
+	}
+
+	if (of_property_read_u32(dev->of_node, "vfront-porch", &disp_dev->TTLPar.vfp)) {
+		disp_dev->TTLPar.vfp = 0;
+	}
+	
+	if (of_property_read_u32(dev->of_node, "vsync-len", &disp_dev->TTLPar.vsync)) {
+		disp_dev->TTLPar.vsync = 0;
+	}
+	
+	if (of_property_read_u32(dev->of_node, "ttl-rgb-swap", &disp_dev->TTLPar.ttl_rgb_swap)) {
+		disp_dev->TTLPar.ttl_rgb_swap = 0;
+	}
+
+	if (of_property_read_u32(dev->of_node, "ttl-clock-pol", &disp_dev->TTLPar.ttl_clock_pol)) {
+		disp_dev->TTLPar.ttl_clock_pol = 0;
+	}
+
+	if (of_property_read_u32(dev->of_node, "ttl-vpp-adj", &disp_dev->TTLPar.ttl_vpp_adj)) {
+		disp_dev->TTLPar.ttl_vpp_adj = 0;
+	}
+
+	if (of_property_read_u32(dev->of_node, "ttl-osd-adj", &disp_dev->TTLPar.ttl_osd_adj)) {
+		disp_dev->TTLPar.ttl_osd_adj = 0;
+	}
+
+	if (of_property_read_u32(dev->of_node, "ttl-parm-adj", &disp_dev->TTLPar.ttl_parm_adj)) {
+		disp_dev->TTLPar.ttl_parm_adj = 0;
+	}
+
+	return 0;
+}
+#endif
 
 static int sp_disp_get_register_base(struct platform_device *pdev, void **membase, int num)
 {
@@ -2154,13 +2505,50 @@ static int sp_disp_set_output_resolution(struct sp_disp_device *disp_dev, int is
 #ifdef TTL_MODE_SUPPORT
 			SetTGEN.fmt = DRV_FMT_USER_MODE;
 			SetTGEN.fps = DRV_FrameRate_5994Hz;
-			SetTGEN.htt = 408;
-			SetTGEN.vtt = 262;
-			SetTGEN.v_bp = 19;
-			SetTGEN.hactive = 320;
-			SetTGEN.vactive = 240;
-			disp_dev->panelRes.width = 320;
-			disp_dev->panelRes.height = 240;
+			#ifdef TTL_MODE_DTS
+					SetTGEN.htt = (int)disp_dev->TTLPar.hfp + \
+									(int)disp_dev->TTLPar.hsync + \
+									(int)disp_dev->TTLPar.hbp + \
+									(int)disp_dev->TTLPar.hactive;
+					SetTGEN.vtt = (int)disp_dev->TTLPar.vfp + \
+									(int)disp_dev->TTLPar.vsync + \
+									(int)disp_dev->TTLPar.vbp + \
+									(int)disp_dev->TTLPar.vactive;					
+					SetTGEN.v_bp = (int)disp_dev->TTLPar.vsync + \
+									(int)disp_dev->TTLPar.vbp + 1;
+					SetTGEN.hactive = (int)disp_dev->TTLPar.hactive;
+					SetTGEN.vactive = (int)disp_dev->TTLPar.vactive;
+					disp_dev->panelRes.width = (int)disp_dev->TTLPar.hactive;
+					disp_dev->panelRes.height = (int)disp_dev->TTLPar.vactive;
+			#else
+				#ifdef TTL_MODE_1024_600
+					SetTGEN.htt = 1344;
+					SetTGEN.vtt = 635;
+					SetTGEN.v_bp = 24;
+					SetTGEN.hactive = 1024;
+					SetTGEN.vactive = 600;
+					disp_dev->panelRes.width = 1024;
+					disp_dev->panelRes.height = 600;
+				#endif
+				#ifdef TTL_MODE_800_480
+					SetTGEN.htt = 1056;
+					SetTGEN.vtt = 525;
+					SetTGEN.v_bp = 27;
+					SetTGEN.hactive = 800;
+					SetTGEN.vactive = 480;
+					disp_dev->panelRes.width = 800;
+					disp_dev->panelRes.height = 480;
+				#endif
+				#ifdef TTL_MODE_320_240
+					SetTGEN.htt = 408;
+					SetTGEN.vtt = 262;
+					SetTGEN.v_bp = 19;
+					SetTGEN.hactive = 320;
+					SetTGEN.vactive = 240;
+					disp_dev->panelRes.width = 320;
+					disp_dev->panelRes.height = 240;
+				#endif
+			#endif
 			sp_disp_dbg("set TGEN user mode\n");
 #else
 			sp_disp_dbg("user mode unsupport\n");
@@ -2320,7 +2708,24 @@ static int sp_disp_set_vpp_resolution(struct device *dev, struct sp_disp_device 
 	}
 	else { //TTL output
 		sp_disp_dbg("TTL output \n");
+	#ifdef TTL_MODE_DTS
+		vpost_setting(((int)(disp_dev->TTLPar.hactive)-VPP_WIDTH)>>1, \
+						((int)(disp_dev->TTLPar.vactive)-VPP_HEIGHT)>>1, \
+						VPP_WIDTH, \
+						VPP_HEIGHT, \
+		 				(int)(disp_dev->TTLPar.hactive), \
+		  				(int)(disp_dev->TTLPar.vactive));
+	#else
+	#ifdef TTL_MODE_1024_600
+		vpost_setting((1024-VPP_WIDTH)>>1, (600-VPP_HEIGHT)>>1, VPP_WIDTH, VPP_HEIGHT, 1024, 600);
+	#endif
+	#ifdef TTL_MODE_800_480
+		vpost_setting((800-VPP_WIDTH)>>1, (480-VPP_HEIGHT)>>1, VPP_WIDTH, VPP_HEIGHT, 800, 480);
+	#endif
+	#ifdef TTL_MODE_320_240
 		vpost_setting((320-VPP_WIDTH)>>1, (240-VPP_HEIGHT)>>1, VPP_WIDTH, VPP_HEIGHT, 320, 240);
+	#endif
+	#endif
 		#ifdef SP_DISP_VPP_FIXED_ADDR
 		vpp_alloc_size = (VPP_FMT_TTL)?(ALIGN(VPP_WIDTH, 128)*VPP_HEIGHT*2):(ALIGN(VPP_WIDTH, 128)*VPP_HEIGHT*3/2);
 		vpp_yuv_ptr = ioremap(0x00120000, vpp_alloc_size);
@@ -2366,6 +2771,33 @@ static int sp_disp_set_vpp_resolution(struct device *dev, struct sp_disp_device 
 
 	return 0;
 }
+
+#ifdef TTL_MODE_SUPPORT
+#ifdef TTL_MODE_DTS	
+void sp_disp_set_ttl_clk(void)
+{
+	struct sp_disp_device *disp_dev = gDispWorkMem;
+
+	sp_disp_info("Set clk %d M %d N %d \n",disp_dev->TTLPar.clk,disp_dev->TTLPar.divm,disp_dev->TTLPar.divn);
+	if((disp_dev->TTLPar.clk) && ((disp_dev->TTLPar.divm) || (disp_dev->TTLPar.divn))) {
+		//with  formula ( FVCO = (27/(M+1)) * (N+1) )
+		disp_dev->TTLPar.clk = (27000000/(disp_dev->TTLPar.divm+1)) * (disp_dev->TTLPar.divn +1);
+		G4[14] = 0x80020000; //don't bypass
+		G4[16] = 0xFFFF0000 | ((disp_dev->TTLPar.divm << 8) & 0x0000ff00) | \
+								((disp_dev->TTLPar.divn << 0) & 0x0000ff); //Set M/N value for FVCO gen
+		G4[31] = 0x00300000; //clk no div
+	}
+	else {
+		//with  formula ( FVCO = (27/ div2 or div4 )
+		disp_dev->TTLPar.clk = 27000000/4;
+		G4[14] = 0x80418041; //en pll , clk = 27M
+		G4[16] = 0xFFFF0000; //don't care
+		G4[31] = 0x00200020; //clk div4
+	}
+	sp_disp_info("Target clk %d M %d N %d \n",disp_dev->TTLPar.clk,disp_dev->TTLPar.divm,disp_dev->TTLPar.divn);
+}
+#endif
+#endif
 
 void sp_disp_set_vpp_resolution_v4l2(struct sp_disp_device *disp_dev, int is_hdmi)
 {
@@ -2436,11 +2868,68 @@ static int _display_probe(struct platform_device *pdev)
 	}
 
 #ifdef TTL_MODE_SUPPORT
-		G1 = ioremap(0x9c000080, 32*4);
-		G4 = ioremap(0x9c000200, 32*4);
-		G1[4] = 0x00400040; //en LCDIF
+	G1 = ioremap(0x9c000080, 32*4);
+	G4 = ioremap(0x9c000200, 32*4);
+
+	//G1[4] = 0x00400040; //en LCDIF
+
+	ret = _display_init_plltv(&pdev->dev, disp_dev);
+	if (ret) {
+		sp_disp_err("Error: %s, %d\n", __func__, __LINE__);
+		return -1;
+	}
+	#ifdef TTL_MODE_DTS
+	//sp_disp_info("( M %d N %d ) \n",disp_dev->TTLPar.divm,disp_dev->TTLPar.divn);
+	//sp_disp_info("Target clk %d \n",disp_dev->TTLPar.clk);
+	if((disp_dev->TTLPar.clk) && ((disp_dev->TTLPar.divm) || (disp_dev->TTLPar.divn))) {
+		//sp_disp_info("Set plltv clk \n");
+		//with  formula ( FVCO = (27/(M+1)) * (N+1) )
+		disp_dev->TTLPar.clk = (27000000/(disp_dev->TTLPar.divm+1)) * (disp_dev->TTLPar.divn +1);
+		G4[14] = 0x80020000; //don't bypass
+		G4[16] = 0xFFFF0000 | ((disp_dev->TTLPar.divm << 8) & 0x0000ff00) | \
+								((disp_dev->TTLPar.divn << 0) & 0x0000ff); //Set M/N value for FVCO gen
+		G4[31] = 0x00300000; //clk no div
+	}
+	else {
+		//with  formula ( FVCO = (27/ div2 or div4 )
+		disp_dev->TTLPar.clk = 27000000/4;
 		G4[14] = 0x80418041; //en pll , clk = 27M
+		G4[16] = 0xFFFF0000; //don't care
 		G4[31] = 0x00200020; //clk div4
+	}
+	//sp_disp_info("new Target clk %d \n",disp_dev->TTLPar.clk);
+	#else
+
+	//sp_disp_info(" use default ttl setting!! \n");
+	#ifdef TTL_MODE_1024_600
+		G4[14] = 0x80020000; //don't bypass
+		//G4[16] = 0xFFFF0810; //en pll , clk = 51M //(FVCO= (27/(M+1)) * (N+1) ) M=8,N=16
+		G4[16] = 0xFFFF0A14; //en pll , clk = 51.55M //(FVCO= (27/(M+1)) * (N+1) ) M=10,N=20
+		G4[31] = 0x00300000; //clk no div
+	#endif
+	#ifdef TTL_MODE_800_480
+		G4[14] = 0x80020000; //don't bypass
+		//G4[16] = 0xFFFF0b0e; //en pll , clk = 33.75M //(FVCO= (27/(M+1)) * (N+1) ) M=11,N=14
+		G4[16] = 0xFFFF1f27; //en pll , clk = 33.75M //(FVCO= (27/(M+1)) * (N+1) ) M=31,N=39
+		G4[31] = 0x00300000; //clk no div
+	#endif
+	#ifdef TTL_MODE_320_240
+		#if 0
+		//method 1 , 27 div4 = 6.75M
+		G4[14] = 0x80418041; //en pll , clk = 27M
+		//G4[16] = 0xFFFF0000; //don't care
+		G4[31] = 0x00200020; //clk div4
+		#else
+		//method2
+		G4[14] = 0x80020000; //don't bypass
+		G4[16] = 0xFFFF0300; //en pll , clk = 6.75M //(FVCO= (27/(M+1)) * (N+1) ) M=3,N=0
+		//G4[16] = 0xFFFF0300; //en pll , clk = 6.43M //(FVCO= (27/(M+1)) * (N+1) ) M=20,N=4
+		G4[31] = 0x00300000; //clk no div
+		#endif
+	#endif
+
+	#endif
+
 #endif
 
 	ret = sp_disp_get_register_base(pdev, (void**)&pTmpRegBase,0);

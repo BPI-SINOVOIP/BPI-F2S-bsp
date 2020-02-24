@@ -477,6 +477,9 @@ static int __switch_sdio_bus_width(struct spsdc_host *host, int width)
 	cmd.arg |= 0x80000000;
 	cmd.arg |= ctrl;
 	spsdc_prepare_cmd(host, &cmd);
+	value = readl(&host->base->sd_int);
+	value = bitfield_replace(value, 0, 1, 0); /* sdcmpen */
+	writel(value, &host->base->sd_int);	
 	spsdc_trigger_transaction(host);
 	ret = spsdc_wait_finish(host);
 	if (ret) {

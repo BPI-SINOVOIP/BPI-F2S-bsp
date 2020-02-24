@@ -89,15 +89,15 @@ uint8_t sppctl_fun_get( sppctl_pdata_t *_p,  uint8_t _fun) {
 static void sppctl_fwload_cb( const struct firmware *_fw, void *_ctx) {
  int i = -1, j = 0;
  sppctl_pdata_t *p = ( sppctl_pdata_t *)_ctx;
- if ( !_fw) {  KERR( p->pcdp->dev, "Firmare not found\n");  return;  }
- if ( _fw->size < list_funcsSZ) {
-   KERR( p->pcdp->dev, " fw size %d < %d\n", _fw->size, list_funcsSZ);  return;
+ if ( !_fw) {  KERR( p->pcdp->dev, "Firmware not found\n");  return;  }
+ if ( _fw->size < list_funcsSZ-2) {
+   KERR( p->pcdp->dev, " fw size %d < %d\n", _fw->size, list_funcsSZ);
    goto out;  }
  for ( i = 0; i < list_funcsSZ && i < _fw->size; i++) {
    if ( list_funcs[ i].freg != fOFF_M) continue;
    sppctl_pin_set( p, _fw->data[ i], i);
    j++;
-}
+ }
  out:
  release_firmware( _fw);
  return;  }
@@ -184,7 +184,6 @@ static int sppctl_dnew( struct platform_device *_pd) {
  else strcpy( p->name, MNAME);
  dev_set_name( &( _pd->dev), "%s", p->name);
  if ( ( ret = sp7021_pctl_resmap( _pd, p)) != 0) {
-   devm_kfree( &( _pd->dev), p);
    return( ret);  }
  // set gpio_chip
  _pd->dev.platform_data = p;
@@ -192,8 +191,10 @@ static int sppctl_dnew( struct platform_device *_pd) {
  of_property_read_string( np, "fwname", &fwfname);
  if ( fwfname) strcpy( p->fwname, fwfname);
  sppctl_loadfw( &( _pd->dev), p->fwname);
- sp7021_gpio_new( _pd, p);
- sppctl_pinctrl_init( _pd);
+ if ( ( ret = sp7021_gpio_new( _pd, p)) != 0) {
+   return( ret);  }
+ if ( ( ret = sppctl_pinctrl_init( _pd)) != 0) {
+   return( ret);  }
  pinctrl_add_gpio_range( p->pcdp, &( p->gpio_range));
  printk( KERN_INFO M_NAM" by "M_ORG""M_CPR);
  return( 0);   }
@@ -203,7 +204,6 @@ static int sppctl_ddel( struct platform_device *_pd) {
  sp7021_gpio_del( _pd, p);
  sppctl_sysfs_clean( _pd);
  sppctl_pinctrl_clea( _pd);
- devm_kfree( &( _pd->dev), p);
  return( 0);  }
 
 static const struct of_device_id sppctl_dt_ids[] = {
@@ -213,25 +213,23 @@ static const struct of_device_id sppctl_dt_ids[] = {
 MODULE_DEVICE_TABLE(of, sppctl_dt_ids);
 MODULE_ALIAS("platform:" MNAME);
 static struct platform_driver sppctl_driver = {
- .driver		= {
-    .name		= MNAME,
-	.owner	    = THIS_MODULE,
-    .of_match_table	= of_match_ptr( sppctl_dt_ids),
+ .driver = {
+    .name           = MNAME,
+    .owner          = THIS_MODULE,
+    .of_match_table = of_match_ptr( sppctl_dt_ids),
  },
- .probe		= sppctl_dnew,
- .remove	= sppctl_ddel,
+ .probe  = sppctl_dnew,
+ .remove = sppctl_ddel,
 };
 
 //module_platform_driver(sppctl_driver);
 
-#if 1
 static int __init sppctl_drv_reg( void) {
  return platform_driver_register( &sppctl_driver);  }
 postcore_initcall( sppctl_drv_reg);
 static void __exit sppctl_drv_exit( void) {
  platform_driver_unregister( &sppctl_driver);  }
 module_exit(sppctl_drv_exit);
-#endif
 
 MODULE_AUTHOR(M_AUT);
 MODULE_DESCRIPTION(M_NAM);

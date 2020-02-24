@@ -40,6 +40,7 @@ static ssize_t sppctl_sop_fwname_R( struct device *_d, struct device_attribute *
 static ssize_t sppctl_sop_fwname_W( struct device *_d, struct device_attribute *_a, const char *_b, size_t _c) {
  sppctl_pdata_t *_p = ( sppctl_pdata_t *)_d->platform_data;
  strcpy( _p->fwname, _b);
+ if ( _p->fwname[strlen(_p->fwname)-1] == 0x0A) _p->fwname[strlen(_p->fwname)-1] = 0;
  sppctl_loadfw( _d, _p->fwname);
  return( _c);  }
 
@@ -131,14 +132,14 @@ static ssize_t sppctl_sop_func_W(
 static ssize_t sppctl_sop_fw_R(
  struct file *filp, struct kobject *_k, struct bin_attribute *_a,
  char *_b, loff_t _off, size_t _count) {
- int i = -1, j = 0, ret = 0, pos = _off;
+ int i = 0, j = 0, ret = 0, pos = _off;
  uint8_t pin = 0;
  sppctl_pdata_t *_p = NULL;
  func_t *f;
  struct device *_pdev = container_of( _k, struct device, kobj);
  if ( !_pdev) return( -ENXIO);
  if ( !( _p = ( sppctl_pdata_t *)_pdev->platform_data)) return( -ENXIO);
- for ( i = 0; i < list_funcsSZ; i++) {
+ for ( i = 0; i < list_funcsSZ && ret < _count; i++) {
    f = &( list_funcs[ i]);
    if ( f->freg == fOFF_0) continue;
    if ( f->freg == fOFF_I) continue;
@@ -154,23 +155,25 @@ static ssize_t sppctl_sop_fw_R(
 static ssize_t sppctl_sop_fw_W(
  struct file *filp, struct kobject *_k, struct bin_attribute *_a,
  char *_b, loff_t _off, size_t _count) {
- int i = _off, j = _off;
+ int i = 0, j = 0, pos = 0;
  sppctl_pdata_t *_p = NULL;
  func_t *f;
  struct device *_pdev = container_of( _k, struct device, kobj);
  if ( _off + _count < ( list_funcsSZ - 2)) {
-   KINF( _pdev, "%s() fw size %lld < %d\n", __FUNCTION__, _off + _count, list_funcsSZ);
+   KINF( _pdev, "%s() fw size %d < %d\n", __FUNCTION__, _count, list_funcsSZ);
  }
  if ( !_pdev) return( -ENXIO);
  if ( !( _p = ( sppctl_pdata_t *)_pdev->platform_data)) return( -ENXIO);
- for ( ; i < list_funcsSZ && j < _count; i++) {
+ for ( ; i < list_funcsSZ && pos < _count; i++) {
    f = &( list_funcs[ i]);
    if ( f->freg == fOFF_0) continue;
    if ( f->freg == fOFF_I) continue;
-   if ( f->freg == fOFF_M) {  sppctl_pin_set( _p, _b[ j], j);  j++;  }
-   if ( f->freg == fOFF_G) sppctl_gmx_set( _p, f->roff, f->boff, f->blen, _b[ j++]);
+   if ( j < _off) {  j++;  continue;  }
+   if ( f->freg == fOFF_M) sppctl_pin_set( _p, _b[ pos], j++);
+   if ( f->freg == fOFF_G) sppctl_gmx_set( _p, f->roff, f->boff, f->blen, _b[ pos]);
+   pos++;
   }
- return( i);  }
+ return( pos);  }
 
 static struct device_attribute sppctl_sysfs_attrsD[] = {
  __ATTR(     name,0444,sppctl_sop_name_R,       NULL),

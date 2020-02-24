@@ -112,8 +112,8 @@ struct sp_mipi_device {
 	int                             fe_irq;
 	bool                            streaming;              /* Indicates whether streaming started */
 	bool                            skip_first_int;
-	int 				gpio0;
-	int 				gpio1;
+	struct gpio_desc                *cam_gpio0;
+	struct gpio_desc                *cam_gpio1;
 };
 
 /* buffer for one video frame */
