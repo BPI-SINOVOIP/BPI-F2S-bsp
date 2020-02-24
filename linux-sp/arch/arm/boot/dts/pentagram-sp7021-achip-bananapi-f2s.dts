@@ -38,11 +38,11 @@
 		l2sw: l2sw@0x9c108000 {
 			status = "okay";
 		};
-	};
 
-	leds {
-		status = "okay";
-        };
+		leds {
+			status = "okay";
+		};
+	};
 };
 
 
