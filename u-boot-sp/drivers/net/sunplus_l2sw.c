@@ -34,10 +34,7 @@ static void print_packet(char *p, int len)
 	u32 LenType;
 	int i;
 
-	i = snprintf(buf, sizeof(buf), "MAC: DA=%02x:%02x:%02x:%02x:%02x:%02x, "
-		"SA=%02x:%02x:%02x:%02x:%02x:%02x, ",
-		(u32)p[0], (u32)p[1], (u32)p[2], (u32)p[3], (u32)p[4], (u32)p[5],
-		(u32)p[6], (u32)p[7], (u32)p[8], (u32)p[9], (u32)p[10], (u32)p[11]);
+	i = snprintf(buf, sizeof(buf), "MAC: DA=%pM, SA=%pM, ",	&p[0], &p[6]);
 	p += 12;        // point to LenType
 
 	LenType = (((u32)p[0])<<8) + p[1];
@@ -356,8 +353,7 @@ static int _l2sw_write_hwaddr(struct emac_eth_dev *priv, u8 *mac_id)
 	HWREG_W(w_mac_15_0, mac_id[0]+(mac_id[1]<<8));
 	HWREG_W(w_mac_47_16, mac_id[2]+(mac_id[3]<<8)+(mac_id[4]<<16)+(mac_id[5]<<24));
 
-	//eth_info("ethaddr=%02x:%02x:%02x:%02x:%02x:%02x\n", mac_id[0], mac_id[1],
-	//	mac_id[2], mac_id[3], mac_id[4], mac_id[5]);
+	//eth_info("ethaddr=%pM\n", mac_id);
 
 	HWREG_W(wt_mac_ad0, (1<<10)|(1<<4)|1);  // Set aging=1
 	do {
@@ -420,8 +416,7 @@ static int l2sw_eth_write_hwaddr(struct udevice *dev)
 	struct emac_eth_dev *priv = dev_get_priv(dev);
 
 	// Delete the old mac address.
-	//eth_info("ethaddr=%02x:%02x:%02x:%02x:%02x:%02x\n", priv->mac_addr[0], priv->mac_addr[1],
-	//	priv->mac_addr[2], priv->mac_addr[3], priv->mac_addr[4], priv->mac_addr[5]);
+	//eth_info("ethaddr=%pM\n", priv->mac_addr);
 	if (is_valid_ethaddr(priv->mac_addr)) {
 		_l2sw_remove_hwaddr(priv, priv->mac_addr);
 	}
@@ -430,9 +425,7 @@ static int l2sw_eth_write_hwaddr(struct udevice *dev)
 	if (is_valid_ethaddr(pdata->enetaddr)) {
 		return _l2sw_write_hwaddr(priv, pdata->enetaddr);
 	} else {
-		eth_err("Invalid mac address = %02x:%02x:%02x:%02x:%02x:%02x!\n",
-			pdata->enetaddr[0], pdata->enetaddr[1], pdata->enetaddr[2],
-			pdata->enetaddr[3], pdata->enetaddr[4], pdata->enetaddr[5]);
+		eth_err("Invalid mac address = %pM!\n",	pdata->enetaddr);
 	}
 
 	return -1;
@@ -679,7 +672,9 @@ static int l2sw_emac_eth_init(struct emac_eth_dev *priv, u8 *enetaddr)
 	HWREG_W(cpu_cntl, (reg & (~((0x1<<14)|(0x3c<<0)))) | (0x1<<12));
 
 	// Write mac address.
-	_l2sw_write_hwaddr(priv, enetaddr);
+	if (is_valid_ethaddr(enetaddr)) {
+		_l2sw_write_hwaddr(priv, enetaddr);
+	}
 
 	// Initialize rx/tx descriptor.
 	rx_descs_init(priv);
@@ -727,6 +722,19 @@ static const struct eth_ops l2sw_emac_eth_ops = {
 	.free_pkt       = l2sw_eth_free_pkt,
 	.stop           = l2sw_emac_eth_stop,
 };
+
+static void check_mac_vendor_id_and_convert(u8 *mac_addr)
+{
+	// Byte order of MAC address of some samples are reversed.
+	// Check vendor id and convert byte order if it is wrong.
+	if ((mac_addr[5] == 0xFC) && (mac_addr[4] == 0x4B) && (mac_addr[3] == 0xBC) &&
+		((mac_addr[0] != 0xFC) || (mac_addr[1] != 0x4B) || (mac_addr[2] != 0xBC))) {
+		char tmp;
+		tmp = mac_addr[0]; mac_addr[0] = mac_addr[5]; mac_addr[5] = tmp;
+		tmp = mac_addr[1]; mac_addr[1] = mac_addr[4]; mac_addr[4] = tmp;
+		tmp = mac_addr[2]; mac_addr[2] = mac_addr[3]; mac_addr[3] = tmp;
+	}
+}
 
 static int l2sw_emac_eth_ofdata_to_platdata(struct udevice *dev)
 {
@@ -786,13 +794,14 @@ static int l2sw_emac_eth_ofdata_to_platdata(struct udevice *dev)
 		for (i = 0; i < ARP_HLEN; i++) {
 			read_otp_data(priv->otp_mac_addr+i, (char*)&otp_mac[i]);
 		}
+		//eth_info("mac address = %pM\n", otp_mac);
+		check_mac_vendor_id_and_convert(otp_mac);
 
 		if (is_valid_ethaddr(otp_mac)) {
 			memcpy(pdata->enetaddr, otp_mac, ARP_HLEN);
 		} else {
-			eth_err("Invalid mac address from OTP[%d:%d] = %02x:%02x:%02x:%02x:%02x:%02x!\n",
-				priv->otp_mac_addr, priv->otp_mac_addr+5, otp_mac[0], otp_mac[1],
-				otp_mac[2], otp_mac[3], otp_mac[4], otp_mac[5]);
+			eth_err("Invalid mac address from OTP[%d:%d] = %pM!\n",
+				priv->otp_mac_addr, priv->otp_mac_addr+5, otp_mac);
 		}
 	} else if (priv->otp_mac_addr == -1) {
 		eth_err("OTP address of mac address is not defined!\n");
@@ -805,6 +814,7 @@ static int l2sw_emac_eth_ofdata_to_platdata(struct udevice *dev)
 
 static const struct udevice_id l2sw_emac_eth_ids[] = {
 	{.compatible = "sunplus,sunplus-q628-l2sw"},
+	{.compatible = "sunplus,sp7021-l2sw"},
 	{ }
 };
 

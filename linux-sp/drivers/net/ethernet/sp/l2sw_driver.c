@@ -476,7 +476,7 @@ static int ethernet_start_xmit(struct sk_buff *skb, struct net_device *net_dev)
 	//print_packet(skb);
 
 	if (unlikely(comm->tx_desc_full == 1)) { /* no desc left, wait for tx interrupt*/
-		ETH_ERR("[%s] TX descriptor queue full when awake!\n", __func__);
+		ETH_ERR("[%s] TX descriptor queue full when xmit!\n", __func__);
 		return NETDEV_TX_BUSY;
 	}
 
@@ -554,7 +554,7 @@ static int ethernet_set_mac_address(struct net_device *net_dev, void *addr)
 	//ETH_INFO("[%s] IN\n", __func__);
 
 	if (netif_running(net_dev)) {
-		ETH_ERR("[%s] Ebusy\n", __func__);
+		ETH_ERR("[%s] Device busy!\n", __func__);
 		return -EBUSY;
 	}
 
@@ -671,7 +671,20 @@ char *sp7021_otp_read_mac(struct device *_d, ssize_t *_l, char *_name) {
 	dev_dbg(_d, "%d bytes read from OTP %s", *_l, _name);
 
 	return (ret);
- }
+}
+
+static void check_mac_vendor_id_and_convert(char *mac_addr)
+{
+	// Byte order of MAC address of some samples are reversed.
+	// Check vendor id and convert byte order if it is wrong.
+	if ((mac_addr[5] == 0xFC) && (mac_addr[4] == 0x4B) && (mac_addr[3] == 0xBC) &&
+		((mac_addr[0] != 0xFC) || (mac_addr[1] != 0x4B) || (mac_addr[2] != 0xBC))) {
+		char tmp;
+		tmp = mac_addr[0]; mac_addr[0] = mac_addr[5]; mac_addr[5] = tmp;
+		tmp = mac_addr[1]; mac_addr[1] = mac_addr[4]; mac_addr[4] = tmp;
+		tmp = mac_addr[2]; mac_addr[2] = mac_addr[3]; mac_addr[3] = tmp;
+	}
+}
 
 /*********************************************************************
 *
@@ -710,6 +723,10 @@ static u32 init_netdev(struct platform_device *pdev, int eth_no, struct net_devi
 	} else {
 		// Check if mac-address is valid or not. If not, copy from default.
 		memcpy(mac->mac_addr, otp_v, 6);
+
+		// Byte order of Some samples are reversed. Convert byte order here.
+		check_mac_vendor_id_and_convert(mac->mac_addr);
+
 		if (!is_valid_ether_addr(mac->mac_addr)) {
 			ETH_INFO(" Invalid mac in OTP[%s] = %02x:%02x:%02x:%02x:%02x:%02x, use default!\n", m_addr_name,
 				mac->mac_addr[0], mac->mac_addr[1], mac->mac_addr[2], mac->mac_addr[3], mac->mac_addr[4], mac->mac_addr[5]);
@@ -732,7 +749,7 @@ static u32 init_netdev(struct platform_device *pdev, int eth_no, struct net_devi
 		*r_ndev = NULL;
 		return ret;
 	}
-	ETH_INFO("[%s] Registered net device \"%s\" successfully.\n", __func__, net_dev->name);
+	ETH_INFO(" Registered net device \"%s\" successfully.\n", net_dev->name);
 
 	*r_ndev = net_dev;
 	return 0;
@@ -819,7 +836,7 @@ static ssize_t l2sw_store_mode(struct device *dev, struct device_attribute *attr
 				unregister_netdev(net_dev2);
 				free_netdev(net_dev2);
 				mac->next_netdev = NULL;
-				ETH_INFO("[%s] Unregistered and freed net device \"%s\"!\n", __func__, net_dev2->name);
+				ETH_INFO(" Unregistered and freed net device \"eth1\"!\n");
 
 				comm->dual_nic = 0;
 				mac_switch_mode(mac);
@@ -1023,7 +1040,7 @@ static int l2sw_probe(struct platform_device *pdev)
 	mac = netdev_priv(net_dev);
 	mac->comm = comm;
 	comm->net_dev = net_dev;
-	ETH_INFO("[%s] net_dev = 0x%08x, mac = 0x%08x, comm = 0x%08x\n", __func__, (int)net_dev, (int)mac, (int)mac->comm);
+	ETH_DEBUG("[%s] net_dev = 0x%08x, mac = 0x%08x, comm = 0x%08x\n", __func__, (int)net_dev, (int)mac, (int)mac->comm);
 
 	comm->phy1_node = of_parse_phandle(pdev->dev.of_node, "phy-handle1", 0);
 	comm->phy2_node = of_parse_phandle(pdev->dev.of_node, "phy-handle2", 0);
@@ -1117,7 +1134,7 @@ static int l2sw_probe(struct platform_device *pdev)
 		net_dev2->irq = comm->irq;
 		mac2 = netdev_priv(net_dev2);
 		mac2->comm = comm;
-		ETH_INFO("[%s] net_dev = 0x%08x, mac = 0x%08x, comm = 0x%08x\n", __func__, (int)net_dev2, (int)mac2, (int)mac2->comm);
+		ETH_DEBUG("[%s] net_dev = 0x%08x, mac = 0x%08x, comm = 0x%08x\n", __func__, (int)net_dev2, (int)mac2, (int)mac2->comm);
 
 		mac_switch_mode(mac);
 		rx_mode_set(net_dev2);

@@ -8,7 +8,7 @@ static struct moon5_reg* moon5_reg_base = NULL;
 int l2sw_reg_base_set(void __iomem *baseaddr)
 {
 	ls2w_reg_base = (struct l2sw_reg*)baseaddr;
-	ETH_INFO("[%s] ls2w_reg_base = 0x%08x\n", __func__, (int)ls2w_reg_base);
+	ETH_DEBUG("[%s] ls2w_reg_base = 0x%08x\n", __func__, (int)ls2w_reg_base);
 
 	if (ls2w_reg_base == NULL){
 		return -1;
@@ -21,7 +21,7 @@ int l2sw_reg_base_set(void __iomem *baseaddr)
 int moon5_reg_base_set(void __iomem *baseaddr)
 {
 	moon5_reg_base = (struct moon5_reg*)baseaddr;
-	ETH_INFO("[%s] moon5_reg_base = 0x%08x\n", __func__, (int)moon5_reg_base);
+	ETH_DEBUG("[%s] moon5_reg_base = 0x%08x\n", __func__, (int)moon5_reg_base);
 
 	if (moon5_reg_base == NULL){
 		return -1;
