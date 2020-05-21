@@ -1529,8 +1529,9 @@ config SERIAL_OWL_CONSOLE
 	  as the system console.
 
 config SERIAL_SP_UART
+	depends on ARCH_PENTAGRAM
 	bool "Sunplus UART serial port support"
-
+		
 endmenu
 
 config SERIAL_MCTRL_GPIO

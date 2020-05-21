@@ -4,6 +4,10 @@
 
 #define I2C_CLK_SOURCE_FREQ         27000  // KHz(27MHz)
 
+#define I2C_RESET(id, val)          ((1 << (16 + id)) | (val << id))
+#define I2C_CLKEN(id, val)          ((1 << (16 + id)) | (val << id))
+#define I2C_GCLKEN(id, val)         ((1 << (16 + id)) | (val << id))
+
 #define I2C_CTL0_FREQ_MASK                  (0x7)     // 3 bit
 #define I2C_CTL0_SLAVE_ADDR_MASK            (0x7F)    // 7 bit
 #define I2C_CTL2_FREQ_CUSTOM_MASK           (0x7FF)   // 11 bit
@@ -583,3 +587,27 @@ void hal_i2cm_base_set(unsigned int device_id, void __iomem *membase)
 	}
 }
 EXPORT_SYMBOL(hal_i2cm_base_set);
+
+void hal_i2cm_disable(unsigned int device_id, void __iomem *membase)
+{
+	regs_moon0_t *pMoon0Reg = (regs_moon0_t *)membase;
+	//unsigned int reset;
+
+	if (device_id < I2C_MASTER_NUM) {
+		writel(I2C_RESET(device_id, 1), &(pMoon0Reg->reset[3]));
+	}
+}
+EXPORT_SYMBOL(hal_i2cm_disable);
+
+void hal_i2cm_enable(unsigned int device_id, void __iomem *membase)
+{
+	regs_moon0_t *pMoon0Reg = (regs_moon0_t *)membase;
+	//unsigned int reset, clken, gclken;
+
+	if (device_id < I2C_MASTER_NUM) {
+		writel(I2C_RESET(device_id, 0), &(pMoon0Reg->reset[3]));
+		writel(I2C_CLKEN(device_id, 1), &(pMoon0Reg->clken[3]));
+		writel(I2C_GCLKEN(device_id, 0), &(pMoon0Reg->gclken[3]));
+	}
+}
+EXPORT_SYMBOL(hal_i2cm_enable);

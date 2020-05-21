@@ -222,6 +222,9 @@ static int hnp_polling_watchdog(void *arg)
 	int ret;
 
 	while(1){
+		if (udev->config->interface[0]->altsetting->desc.bInterfaceClass == USB_CLASS_MASS_STORAGE)
+			continue;
+
 		ret = usb_control_msg(udev, usb_rcvctrlpipe(udev, 0),
 							  0, 0x80, 0, 0xf000, &otg_status, 4, 5000);
 		if(ret < 0) {

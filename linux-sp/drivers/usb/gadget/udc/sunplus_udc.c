@@ -1042,7 +1042,7 @@ static void sp_udc_handle_ep0s_idle(struct sp_udc *dev,
 	case USB_REQ_SET_FEATURE:
 #ifdef CONFIG_USB_SUNPLUS_OTG
 		if((0 == crq->bRequestType) && (3 == crq->wValue) && (0 == crq->wIndex) && (0 == crq->wLength)){
-			DEBUG_DBG("set hnp featrue\n");
+			DEBUG_DBG("set hnp feature\n");
 
 	#ifdef CONFIG_GADGET_USB0
 			otg_phy = usb_get_transceiver_sp(0);
@@ -1051,7 +1051,7 @@ static void sp_udc_handle_ep0s_idle(struct sp_udc *dev,
 	#endif
 
 			if (!otg_phy) {
-				DEBUG_NOTICE("Get otg control fail\n");
+				DEBUG_ERR("Get otg control fail\n");
 			} else {
 				sp_accept_b_hnp_en_feature(otg_phy->otg);
 			}
@@ -1119,13 +1119,13 @@ static void sp_udc_handle_ep0s(struct sp_udc *dev)
 	struct sp_request *req = NULL;
 
 	if (!cdev) {
-		DEBUG_DBG("cdev invalid\n");
+		DEBUG_ERR("cdev invalid\n");
 		return;
 	}
 	req_g = cdev->req;
 	req = to_sp_req(req_g);
 	if (!req) {
-		DEBUG_DBG("req invalid\n");
+		DEBUG_ERR("req invalid\n");
 		return;
 	}
 	ep0csr = udc_read(UDEP0CS);
@@ -2148,7 +2148,7 @@ static int sp_udc_ep11_bulkout_dma(struct sp_ep *ep,
 				udc_write(udc_read(UDEPBPPC) | SWITCH_BUFF, UDEPBPPC);
 			up(&ep11_sw_sem);
 		}
-		DEBUG_DBG("dma staus %x\n", udc_read(UDEPBDMACS));
+		DEBUG_DBG("dma status %x\n", udc_read(UDEPBDMACS));
 		DEBUG_DBG("************Wait DMA Finish***************** %x\n",
 			  udc_read(UDEPBDMACS));
 		t = jiffies;
@@ -2164,7 +2164,7 @@ static int sp_udc_ep11_bulkout_dma(struct sp_ep *ep,
 			   } */
 #endif
 			if (!(udc_read(UDEPBDMACS) & DMA_EN))
-				DEBUG_ERR("dma%d staus %x\n", ep->num,
+				DEBUG_ERR("dma%d status %x\n", ep->num,
 					  udc_read(UDEPBDMACS));
 			return 0;
 		}
@@ -2175,7 +2175,7 @@ static int sp_udc_ep11_bulkout_dma(struct sp_ep *ep,
 			udc_write(udc_read(UDCIE) | EPB_DMA_IF, UDCIE);
 
 			if (!(udc_read(UDEPBDMACS) & DMA_EN))
-				DEBUG_DBG("dma%d staus %x\n", ep->num,
+				DEBUG_DBG("dma%d status %x\n", ep->num,
 					  udc_read(UDEPBDMACS));
 			return 0;
 		}
@@ -4573,13 +4573,13 @@ static int sp_udc_probe(struct platform_device *pdev)
 	}
 #endif
 
-	DEBUG_ERR("udc-line:%d\n", __LINE__);
+	DEBUG_DBG("udc-line:%d\n", __LINE__);
 	ret = usb_add_gadget_udc(&pdev->dev, &udc->gadget);
 	if (ret) {
 		goto err_add_udc;
 	}
 
-	DEBUG_ERR("probe sp udc ok %x\n", udc_read(VERSION));
+	DEBUG_DBG("probe sp udc ok %x\n", udc_read(VERSION));
 	/*iap debug */
 	udc_write(udc_read(UDNBIE) | EP8N_IF | EP8I_IF, UDNBIE);
 	udc_write(EP_ENA | EP_DIR, UDEP89C);
@@ -4746,7 +4746,7 @@ void usb_switch(int device)
 		}
 		writel(value, USBC_CTL);
 #endif
-		DEBUG_ERR("host to device\n");
+		DEBUG_INFO("host to device\n");
 	} else {
 		udc_write(udc_read(UDLCSET) | SOFT_DISC, UDLCSET);
 		if (is_config) {
@@ -4764,7 +4764,7 @@ void usb_switch(int device)
 		}
 		bus_reset_finish_flag = false;
 		platform_device_handle_flag = false;
-		DEBUG_ERR("device to host!\n");
+		DEBUG_INFO("device to host!\n");
 	}
 }
 
@@ -4772,7 +4772,7 @@ void ctrl_rx_squelch(void)/*Controlling squelch signal to slove the uphy bad sig
 {
 	udc_write(udc_read(UEP12DMACS) | RX_STEP7, UEP12DMACS);	/*control rx signal */
 
-	DEBUG_NOTICE("ctrl_rx_squelch UEP12DMACS: %x\n",udc_read(UEP12DMACS));
+	DEBUG_DBG("ctrl_rx_squelch UEP12DMACS: %x\n",udc_read(UEP12DMACS));
 }
 
 EXPORT_SYMBOL(usb_switch);
@@ -4788,7 +4788,7 @@ void detech_start(void)
 	reset_global_value();
 	/*mod_timer(&vbus_polling_timer, jiffies + d_time0);*/
 	/*mod_timer(&sof_polling_timer, jiffies + HZ / 10);*/
-	DEBUG_ERR("detech_start......\n");
+	DEBUG_DBG("detech_start......\n");
 }
 EXPORT_SYMBOL(detech_start);
 
@@ -4860,7 +4860,7 @@ static int __init udc_init(void)
 	if (readl((void *)MO_STAMP) == IC_VERSION_A) {
 		is_vera = 1;
 		dma_fail = 1;
-		DEBUG_ERR("IC VerA\n");
+		DEBUG_INFO("IC VerA\n");
 	}
 #endif
 

@@ -1329,6 +1329,7 @@ config SCx200_ACB
 
 config SP_I2C
 	tristate "SP I2C support"
+	depends on ARCH_PENTAGRAM
 	help
 	  This driver supports the I2C device on the Sunplus processor chip.
 

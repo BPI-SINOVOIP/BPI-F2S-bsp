@@ -79,5 +79,8 @@ void hal_i2cm_slave_addr_set(unsigned int device_id, unsigned int addr);
 void hal_i2cm_clock_freq_set(unsigned int device_id, unsigned int freq);
 void hal_i2cm_reset(unsigned int device_id);
 void hal_i2cm_base_set(unsigned int device_id, void __iomem *membase);
+void hal_i2cm_disable(unsigned int device_id, void __iomem *membase);
+void hal_i2cm_enable(unsigned int device_id, void __iomem *membase);
+
 
 #endif /* __I2C_HAL_H__ */

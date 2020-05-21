@@ -13,13 +13,17 @@
 #endif
 #include <linux/serial_core.h>
 #include <linux/clk.h>
-#include <linux/reset.h> 
+#include <linux/reset.h>
 #include <linux/io.h>
 #include <linux/dma-mapping.h>
 #include <mach/sp_uart.h>
 #ifdef CONFIG_PM_RUNTIME_UART
 #include <linux/pm_runtime.h>
 #endif
+#include <linux/gpio.h>
+#include <linux/of.h>
+#include <linux/of_gpio.h>
+#include <dt-bindings/pinctrl/sp7021.h>
 
 #define NUM_UART	6	/* serial0,  ... */
 #define NUM_UARTDMARX	2	/* serial10, ... */
@@ -62,15 +66,16 @@
 extern unsigned int uart0_mask_tx;	/* Used for masking uart0 tx output */
 #endif
 
+
 struct sunplus_uart_port {
 	char name[16];	/* Sunplus_UARTx */
 	struct uart_port uport;
 	struct sunplus_uartdma_info *uartdma_rx;
 	struct sunplus_uartdma_info *uartdma_tx;
-	
 	struct clk *clk;
 	struct reset_control *rstc;
-		
+	struct gpio_desc *DE_RE_dir;
+	bool DE_RE_Select;
 };
 struct sunplus_uart_port sunplus_uart_ports[NUM_UART];
 
@@ -326,9 +331,8 @@ static void sunplus_console_write(struct console *co, const char *s, unsigned co
 				writel_relaxed((u32)(uartdma_tx->dma_handle), &(txdma_reg->txdma_start_addr));	/* txdma_reg->txdma_rd_adr is updated by h/w too */
 				writel_relaxed(((u32)(uartdma_tx->dma_handle) + UATXDMA_BUF_SZ - 1), &(txdma_reg->txdma_end_addr));
 				writel_relaxed(uartdma_tx->which_uart, &(txdma_reg->txdma_sel));
-				
+
 				writel_relaxed(0x00000005, &(txdma_reg->txdma_enable));		/* Use ring buffer for UART's Tx */
-				
 			}
 #endif
 		}
@@ -391,7 +395,6 @@ static unsigned int sunplus_uart_ops_tx_empty(struct uart_port *port)
 		} else {
 			return 0;
 		}
-
 	} else {
 		return ((sp_uart_get_line_status(port->membase) & SP_UART_LSR_TXE) ? TIOCSER_TEMT : 0);
 	}
@@ -644,15 +647,22 @@ static void transmit_chars(struct uart_port *port)	/* called by ISR */
 	u8 *byte_ptr;
 	struct circ_buf *xmit = &port->state->xmit;
 
+	if (sp_port->DE_RE_Select == 1)
+		gpiod_set_value(sp_port->DE_RE_dir,1);
+
 	if (port->x_char) {
 		sp_uart_put_char(port, port->x_char);
 		port->icount.tx++;
 		port->x_char = 0;
+		if (sp_port->DE_RE_Select == 1)
+			gpiod_set_value(sp_port->DE_RE_dir,0);
 		return;
 	}
 
 	if (uart_circ_empty(xmit) || uart_tx_stopped(port)) {
 		sunplus_uart_ops_stop_tx(port);
+		if (sp_port->DE_RE_Select == 1)
+			gpiod_set_value(sp_port->DE_RE_dir,0);
 		return;
 	}
 
@@ -701,6 +711,9 @@ static void transmit_chars(struct uart_port *port)	/* called by ISR */
 	if (uart_circ_empty(xmit)) {
 		sunplus_uart_ops_stop_tx(port);
 	}
+
+	if (sp_port->DE_RE_Select == 1)
+		gpiod_set_value(sp_port->DE_RE_dir,0);
 }
 
 static void receive_chars(struct uart_port *port)	/* called by ISR */
@@ -923,7 +936,7 @@ static int sunplus_uart_ops_startup(struct uart_port *port)
   	if (port->line > 0){
     		ret = pm_runtime_get_sync(port->dev);
     		if (ret < 0)
-  	  		goto out;  
+			goto out;
   	}
 #endif
 	ret = request_irq(port->irq, sunplus_uart_irq, 0, sp_port->name, port);
@@ -1004,9 +1017,8 @@ static int sunplus_uart_ops_startup(struct uart_port *port)
 			writel_relaxed((u32)(uartdma_tx->dma_handle), &(txdma_reg->txdma_start_addr));	/* txdma_reg->txdma_rd_adr is updated by h/w too */
 			writel_relaxed(((u32)(uartdma_tx->dma_handle) + UATXDMA_BUF_SZ - 1), &(txdma_reg->txdma_end_addr));
                         writel_relaxed(uartdma_tx->which_uart, &(txdma_reg->txdma_sel));
-                        writel_relaxed(0x41, &(gdma_reg->gdma_int_en));	
+                        writel_relaxed(0x41, &(gdma_reg->gdma_int_en));
 			writel_relaxed(0x00000005, &(txdma_reg->txdma_enable));		/* Use ring buffer for UART's Tx */
-			
 		}
 	}
 
@@ -1020,7 +1032,7 @@ static int sunplus_uart_ops_startup(struct uart_port *port)
 	sp_uart_set_int_en(port->membase, interrupt_en);
 
 	spin_unlock_irq(&port->lock);
-	
+
 #ifdef CONFIG_PM_RUNTIME_UART
   	if (port->line > 0){
     		pm_runtime_put(port->dev);
@@ -1092,7 +1104,7 @@ static void sunplus_uart_ops_shutdown(struct uart_port *port)
 		uartdma_rx->buf_va = NULL;
 #endif
 	}
-  
+
 	/* Disable flow control of Tx, so that queued data can be sent out */
 	/* There is no way for s/w to let h/w abort in the middle of transaction. */
 	/* Don't reset module except it's in idle state. Otherwise, it might cause bus to hang. */
@@ -1194,7 +1206,6 @@ static void sunplus_uart_ops_set_termios(struct uart_port *port, struct ktermios
 		baud = CLK_HIGH_UART / 232;
 	}
 #endif
-
 
 	clk = port->uartclk;
 	if ((baud > 115200) || (sp_port->uartdma_rx)) {
@@ -1621,7 +1632,7 @@ static int sunplus_uart_platform_driver_probe_of(struct platform_device *pdev)
 		idx_offset = NUM_UARTDMARX;
 		DBG_INFO("Setup DMA Tx %d\n", (pdev->id - ID_BASE_DMATX));
 	}
-	if (idx_offset >= 0) {	
+	if (idx_offset >= 0) {
 		DBG_INFO("Enable DMA clock(s)\n");
 		clk = devm_clk_get(&pdev->dev, NULL);
 		if (IS_ERR(clk)) {
@@ -1634,7 +1645,7 @@ static int sunplus_uart_platform_driver_probe_of(struct platform_device *pdev)
 				return ret;
 			}
 		}
-		
+
 		if (idx_offset == 0) {
 			idx = idx_offset + pdev->id - ID_BASE_DMARX;
 		} else {
@@ -1725,6 +1736,13 @@ static int sunplus_uart_platform_driver_probe_of(struct platform_device *pdev)
 	if (irq < 0)
 		return -ENODEV;
 
+	sunplus_uart_ports[pdev->id].DE_RE_Select = 0;
+	sunplus_uart_ports[pdev->id].DE_RE_dir = devm_gpiod_get(&pdev->dev, "dir", GPIOD_OUT_LOW);
+	if (!IS_ERR(sunplus_uart_ports[pdev->id].DE_RE_dir)) {
+		DBG_INFO("DE_RE is at G_MX[%d].\n", desc_to_gpio(sunplus_uart_ports[pdev->id].DE_RE_dir));
+		sunplus_uart_ports[pdev->id].DE_RE_Select = 1;
+	}
+
 #if 0
 	clk = devm_clk_get(&pdev->dev, NULL);
 	if (IS_ERR(clk)) {
@@ -1732,9 +1750,8 @@ static int sunplus_uart_platform_driver_probe_of(struct platform_device *pdev)
 	} else {
 		port->uartclk = clk_get_rate(clk);
 	}
-	
-#endif
 
+#endif
 
 	DBG_INFO("Enable UART clock(s)\n");
 	sunplus_uart_ports[pdev->id].clk = devm_clk_get(&pdev->dev, NULL);
@@ -1773,7 +1790,6 @@ static int sunplus_uart_platform_driver_probe_of(struct platform_device *pdev)
 		port->uartclk = clk_get_rate(clk);
 	}
 
-
 	port->iotype = UPIO_MEM;
 	port->irq = irq;
 	port->ops = &sunplus_uart_ops;
@@ -1808,7 +1824,7 @@ static int sunplus_uart_platform_driver_probe_of(struct platform_device *pdev)
 		return ret;
 	}
 	platform_set_drvdata(pdev, port);
-	
+
 #ifdef CONFIG_PM_RUNTIME_UART
   	if (pdev->id != 0){
     		pm_runtime_set_autosuspend_delay(&pdev->dev,5000);
@@ -1819,7 +1835,6 @@ static int sunplus_uart_platform_driver_probe_of(struct platform_device *pdev)
 #endif
 	return 0;
 }
-
 
 static int sunplus_uart_platform_driver_remove(struct platform_device *pdev)
 {
@@ -1841,7 +1856,7 @@ static int sunplus_uart_platform_driver_remove(struct platform_device *pdev)
 }
 
 static int sunplus_uart_platform_driver_suspend(struct platform_device *pdev, pm_message_t state)
-{	
+{
 	if ((pdev->id < NUM_UART)&&(pdev->id > 0)) {  //Don't suspend uart0 for cmd line usage
         	reset_control_assert(sunplus_uart_ports[pdev->id].rstc);
 	}
@@ -1901,7 +1916,7 @@ static struct platform_driver sunplus_uart_platform_driver = {
 	.probe		= sunplus_uart_platform_driver_probe_of,
 	.remove		= sunplus_uart_platform_driver_remove,
 	.suspend	= sunplus_uart_platform_driver_suspend,
-	.resume		= sunplus_uart_platform_driver_resume,	
+	.resume		= sunplus_uart_platform_driver_resume,
 	.driver = {
 		.name	= DEVICE_NAME,
 		.owner	= THIS_MODULE,
