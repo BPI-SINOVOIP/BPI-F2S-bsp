@@ -5,13 +5,12 @@
  * Copyright (c) 2013 Samsung Electronics Co., Ltd.
  *		http://www.samsung.com
  *
- * Author: Andrzej Pietrasiewicz <andrzej.p@samsung.com>
+ * Author: Andrzej Pietrasiewicz <andrzejtp2010@gmail.com>
  */
 
 #include "u_f.h"
 #include <linux/usb/ch9.h>
 
-#if 0	/* sunplus USB driver */
 struct usb_request *alloc_ep_req(struct usb_ep *ep, size_t len)
 {
 	struct usb_request      *req;
@@ -29,4 +28,3 @@ struct usb_request *alloc_ep_req(struct usb_ep *ep, size_t len)
 	return req;
 }
 EXPORT_SYMBOL_GPL(alloc_ep_req);
-#endif

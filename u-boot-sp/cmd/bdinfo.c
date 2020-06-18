@@ -331,6 +331,9 @@ static int do_bdinfo(cmd_tbl_t *cmdtp, int flag, int argc,
 #if defined(CONFIG_LCD) || defined(CONFIG_VIDEO)
 	print_num("FB base  ", gd->fb_base);
 #endif
+#if defined(CONFIG_DM_VIDEO)
+	print_num("logo addr   ", gd->bmp_logo_addr);
+#endif
 	/*
 	 * TODO: Currently only support for davinci SOC's is added.
 	 * Remove this check once all the board implement this.

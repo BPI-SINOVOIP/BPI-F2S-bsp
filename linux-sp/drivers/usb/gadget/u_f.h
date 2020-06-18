@@ -7,7 +7,7 @@
  * Copyright (c) 2013 Samsung Electronics Co., Ltd.
  *		http://www.samsung.com
  *
- * Author: Andrzej Pietrasiewicz <andrzej.p@samsung.com>
+ * Author: Andrzej Pietrasiewicz <andrzejtp2010@gmail.com>
  */
 
 #ifndef __U_F_H__
@@ -56,7 +56,6 @@ struct usb_request;
  * usb_requests's length (req->length) to refer to the allocated buffer size.
  * Requests allocated via alloc_ep_req() *must* be freed by free_ep_req().
  */
-	#if 0	/* sunplus USB driver */
 struct usb_request *alloc_ep_req(struct usb_ep *ep, size_t len);
 
 /* Frees a usb_request previously allocated by alloc_ep_req() */
@@ -67,5 +66,5 @@ static inline void free_ep_req(struct usb_ep *ep, struct usb_request *req)
 	req->buf = NULL;
 	usb_ep_free_request(ep, req);
 }
-	#endif
+
 #endif /* __U_F_H__ */

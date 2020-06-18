@@ -45,9 +45,6 @@
 #include <linux/usb/hcd.h>
 #include <linux/mutex.h>
 #include <linux/uaccess.h>
-#if 1	/* sunplus USB driver */
-#include <linux/usb/sp_usb.h>
-#endif
 
 #include "usb.h"
 
@@ -486,14 +483,8 @@ static ssize_t usb_device_dump(char __user **buffer, size_t *nbytes,
 	if (*nbytes <= 0)
 		return 0;
 
-#if 1	/* sunplus USB driver */
-	if (level > max_topo_level)
-		return 0;
-#else
 	if (level > MAX_TOPO_LEVEL)
 		return 0;
-#endif
-
 	/* allocate 2^1 pages = 8K (on i386);
 	 * should be more than enough for one device */
 	pages_start = (char *)__get_free_pages(GFP_NOIO, 1);
@@ -607,7 +598,7 @@ static ssize_t usb_device_read(struct file *file, char __user *buf,
 		return -EINVAL;
 	if (nbytes <= 0)
 		return 0;
-	if (!access_ok(VERIFY_WRITE, buf, nbytes))
+	if (!access_ok(buf, nbytes))
 		return -EFAULT;
 
 	mutex_lock(&usb_bus_idr_lock);

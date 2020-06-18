@@ -61,7 +61,7 @@ int verify_kernel_signature(const image_header_t  *hdr)
 		goto out;
 	
 	if ((read_sb_flag() & 0x01) == 0) {
-		puts("\n ******OTP Secure Boot is OFF ,return success******\n");
+		puts("\n ******OTP Secure Boot is OFF, return success******\n");
 		return 0;
 	}
 	
@@ -70,7 +70,7 @@ int verify_kernel_signature(const image_header_t  *hdr)
 	
 	/* load signature from image end */
 	if (imgsize < sig_size) {
-		puts("image size error,too small img\n");
+		puts("image size error, too small img\n");
 		goto out;
 	}
 	puts("Verify signature...(Uboot-->Kernel)");

@@ -1,17 +1,32 @@
-#!/bin/sh
+#!/bin/bash
 
 set -e
 
-MACH=sp7021
-BOARD=
-board=
 TOPDIR=`pwd`
 
+MACH=
+ARCH=
+BOARD=
+uboot_config=
+kernel_dtb=
+kernel_config=
+kernel_modules=
+kernel_headers=
+
 TOOLCHAIN=gcc-linaro-7.3.1-2018.05-x86_64_arm-linux-gnueabihf
-CROSS_COMPILE=${TOPDIR}/toolchains/${TOOLCHAIN}/bin
+CROSS_COMPILE=$TOPDIR/toolchains/$TOOLCHAIN/bin
 
 list_boards() {
-	(cd sp-pack/${MACH}/configs ; ls -1d BPI* )
+	for chipdir in $(find sp-pack/ -mindepth 1 -maxdepth 1 -type d | grep "sp") ;
+	do
+	    packchip=`basename ${chipdir}`
+	    echo "${packchip}"
+	    for boarddir in $(find sp-pack/${packchip} -mindepth 1 -maxdepth 1 -type d | grep "bpi") ;
+	    do
+		packboard=`basename ${boarddir}`
+		echo "    ${packboard}"
+	    done
+	done
 }
 
 # keep the output `sh` friendly
@@ -19,11 +34,12 @@ list_boards() {
 generate_board_mk() {
 	
 	cat <<-EOT
-	BOARD=$BOARD
 	MACH=$MACH
+	ARCH=$ARCH
+	BOARD=$BOARD
 	COMPILE_TOOL=$CROSS_COMPILE
-	UBOOT_CONFIG=bananapi_${board#*-}_defconfig
-	KERNEL_CONFIG=pentagram_sp7021_achip_emu_${board}_defconfig
+	UBOOT_CONFIG=$uboot_config
+	KERNEL_CONFIG=$kernel_config
 	EOT
 
 }
@@ -32,22 +48,21 @@ generate_board_mk() {
 generate_board_envsh() {
 	
 	cat <<-EOT
-	export ARCH=arm
 	export MACH=$MACH
+	export ARCH=$ARCH
 	export BOARD=$BOARD
-	export UBOOT_CONFIG=bananapi_${board#*-}_defconfig
-	export KERNEL_CONFIG=pentagram_sp7021_achip_emu_${board}_defconfig
-	export KERNEL_MODULES=4.19.37-${BOARD%-*}-Kernel
-	export KERNEL_HEADERS=linux-headers-4.19.37-${BOARD%-*}-Kernel
-	export TOPDIR=$TOPDIR
+	export UBOOT_CONFIG=$uboot_config
+	export KERNEL_DTB=$kernel_dtb
+	export KERNEL_CONFIG=$kernel_config
+	export KERNEL_MODULES=${kernel_modules}
+	export KERNEL_HEADERS=${kernel_headers}
+	export TOPDIR=${TOPDIR}
 	EOT
 
 }
 
 usage() {
 	cat <<-EOT >&2
-	Usage: $0 <board>
-
 	supported boards:
 	EOT
 	list_boards
@@ -59,15 +74,41 @@ if [ $# -eq 0 ]; then
 fi
 
 BOARD=$1
-board=$(echo ${BOARD%-*} | tr '[A-Z]' '[a-z]')
+case $BOARD in
+	bpi-f2s)
+		MACH=sp7021
+		ARCH=arm
+		BOARD=bpi-f2s
+		uboot_config=sp7021_bpi_f2s_defconfig
+		kernel_dtb=sp7021-bpi-f2s.dtb
+		kernel_config=sp7021_chipC_bpi-f2s_defconfig
+		kernel_modules="5.4.35-BPI-F2S-Kernel"
+		kernel_headers="linux-headers-5.4.35-BPI-F2S-Kernel"
+		;;    
+	bpi-f2p)
+		MACH=sp7021
+		ARCH=arm
+		BOARD=bpi-f2p
+		kernel_dtb=sp7021-bpi-f2p.dtb
+		uboot_config=${MACH}_bpi_f2p_defconfig
+		kernel_config=sp7021_chipC_bpi-f2p_defconfig
+		kernel_modules="5.4.35-BPI-F2P-Kernel"
+		kernel_headers="linux-headers-5.4.35-BPI-F2P-Kernel"
+		;;    
+esac
 
-generate_board_envsh "$1" > env.sh
-
-out=chosen_board.mk
-if generate_board_mk "$1" > $out~; then
-	mv $out~ $out
-	echo "$1 configured. Now run \`make\`"
-else
-	rm $out~
+if [ ! -d ${TOPDIR}/sp-pack/${MACH}/${BOARD} ]; then
+	echo -e "\033[31m${BOARD} not support, exit   \033[0m"
+	usage
 	exit 1
 fi
+
+if [ -e env.sh ]; then
+	rm env.sh
+fi
+generate_board_envsh "$1" > env.sh
+
+if [ -e chosen_board.mk ]; then
+        rm chosen_board.mk
+fi
+generate_board_mk "$1" > chosen_board.mk

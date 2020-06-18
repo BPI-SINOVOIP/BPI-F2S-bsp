@@ -64,6 +64,16 @@ config MACH_PENTAGRAM_SP7021_BCHIP
 	select PINCTRL
 	select PINCTRL_SPPCTL
 
+config MACH_PENTAGRAM_I143_ACHIP
+	bool "I143 A+B support"
+	select CPU_V7
+	select ARM_GIC
+	select SP_INTC
+	select HAVE_SMP
+	select PINCTRL
+	select PINCTRL_SP_I143
+	select OF_OVERLAY
+
 endchoice
 
 menu "Pentagram options"
@@ -82,5 +92,14 @@ config SP_MON
 	  Enable Sunplus MON shell in SysRq.
 
 endmenu
+
+config SOC_SP7021
+	def_bool MACH_PENTAGRAM_SP7021_ACHIP || MACH_PENTAGRAM_SP7021_BCHIP
+
+config SOC_I143
+	def_bool MACH_PENTAGRAM_I143_ACHIP
+
+config MACH_PENTAGRAM_ACHIP
+	def_bool MACH_PENTAGRAM_SP7021_ACHIP || MACH_PENTAGRAM_I143_ACHIP
 
 endif

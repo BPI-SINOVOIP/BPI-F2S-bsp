@@ -1,0 +1,13 @@
+config FB_SP7021
+	tristate "SP7021 Graphics Backend framebuffer support"
+	depends on FB && SOC_SP7021 && VIDEO_SP7021_DISP
+	default y
+	help
+	  This is the frame buffer device driver for the SP7021 Graphics
+	  hardware.
+
+config FB_SP7021_DEBUG
+	bool "External Debug support"
+	depends on FB_SP7021
+	help
+	  Say Y here, if you want to have debug support.

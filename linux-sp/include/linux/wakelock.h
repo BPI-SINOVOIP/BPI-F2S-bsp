@@ -33,6 +33,7 @@ struct wake_lock {
 	struct wakeup_source ws;
 };
 
+#if 0
 static inline void wake_lock_init(struct wake_lock *lock, int type,
 				  const char *name)
 {
@@ -43,6 +44,7 @@ static inline void wake_lock_destroy(struct wake_lock *lock)
 {
 	wakeup_source_trash(&lock->ws);
 }
+#endif
 
 static inline void wake_lock(struct wake_lock *lock)
 {

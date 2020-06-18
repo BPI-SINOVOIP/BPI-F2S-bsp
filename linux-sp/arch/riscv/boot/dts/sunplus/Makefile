@@ -1,0 +1,1 @@
+dtb-$(CONFIG_SOC_I143) += i143-ev.dtb

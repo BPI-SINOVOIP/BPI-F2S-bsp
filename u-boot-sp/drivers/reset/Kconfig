@@ -121,4 +121,12 @@ config RESET_SUNXI
 	  This enables support for common reset driver for
 	  Allwinner SoCs.
 
+config RESET_SP7021
+	bool "RESET support for Sunplus SP7021 SoC"
+	depends on DM_RESET && ARCH_PENTAGRAM
+	default y
+	help
+	  This enables support for common reset driver for
+	  Sunplus SP7021 SoCs.
+
 endmenu

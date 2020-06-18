@@ -37,37 +37,18 @@
 
 #include <linux/kernel.h>
 #include <linux/slab.h>
-#if 1	/* sunplus USB driver */
-#include <linux/utsname.h>
-#endif
 #include <linux/device.h>
-#if 0	/* sunplus USB driver */
 #include <linux/module.h>
 #include <linux/err.h>
-#endif
 #include <linux/usb/composite.h>
 
 #include "g_zero.h"
-#if 1	/* sunplus USB driver */
-#include <linux/usb/gadget_chips.h>
-#include "../function/f_sourcesink.c"
-#include "../function/f_loopback.c"
-#endif
-
 /*-------------------------------------------------------------------------*/
-#if 0	/* sunplus USB driver */
 USB_GADGET_COMPOSITE_OPTIONS();
-#endif
 
 #define DRIVER_VERSION		"Cinco de Mayo 2008"
 
 static const char longname[] = "Gadget Zero";
-
-#if 1	/* sunplus USB driver */
-uint buflen = 4096;
-module_param(buflen, uint, 0644);
-EXPORT_SYMBOL_GPL (buflen);
-#endif
 
 /*
  * Normally the "loopback" configuration is second (index 1) so
@@ -78,7 +59,6 @@ EXPORT_SYMBOL_GPL (buflen);
 static bool loopdefault = 0;
 module_param(loopdefault, bool, S_IRUGO|S_IWUSR);
 
-#if 0	/* sunplus USB driver */
 static struct usb_zero_options gzero_options = {
 	.isoc_interval = GZERO_ISOC_INTERVAL,
 	.isoc_maxpacket = GZERO_ISOC_MAXPACKET,
@@ -87,7 +67,6 @@ static struct usb_zero_options gzero_options = {
 	.ss_bulk_qlen = GZERO_SS_BULK_QLEN,
 	.ss_iso_qlen = GZERO_SS_ISO_QLEN,
 };
-#endif
 
 /*-------------------------------------------------------------------------*/
 
@@ -110,16 +89,10 @@ static struct usb_zero_options gzero_options = {
  * functional coverage for the "USBCV" test harness from USB-IF.
  * It's always set if OTG mode is enabled.
  */
- 
-#if 1	/* sunplus USB driver */
-unsigned autoresume = DEFAULT_AUTORESUME;
-#else
 static unsigned autoresume = DEFAULT_AUTORESUME;
-#endif
 module_param(autoresume, uint, S_IRUGO);
 MODULE_PARM_DESC(autoresume, "zero, or seconds before remote wakeup");
 
-#if 0	/* sunplus USB driver */
 /* Maximum Autoresume time */
 static unsigned max_autoresume;
 module_param(max_autoresume, uint, S_IRUGO);
@@ -132,8 +105,6 @@ MODULE_PARM_DESC(autoresume_interval_ms,
 		"milliseconds to increase successive wakeup delays");
 
 static unsigned autoresume_step_ms;
-#endif
-
 /*-------------------------------------------------------------------------*/
 
 static struct usb_device_descriptor device_desc = {
@@ -141,9 +112,6 @@ static struct usb_device_descriptor device_desc = {
 	.bDescriptorType =	USB_DT_DEVICE,
 
 	/* .bcdUSB = DYNAMIC */
-#if 1	/* sunplus USB driver */
-	.bcdUSB = cpu_to_le16(0x0200),
-#endif
 	.bDeviceClass =		USB_CLASS_VENDOR_SPEC,
 
 	.idVendor =		cpu_to_le16(DRIVER_VENDOR_NUM),
@@ -154,30 +122,12 @@ static struct usb_device_descriptor device_desc = {
 static const struct usb_descriptor_header *otg_desc[2];
 
 /* string IDs are assigned dynamically */
-#if 1	/* sunplus USB driver */
-#define STRING_MANUFACTURER_IDX		0
-#define STRING_PRODUCT_IDX		1
-#define STRING_SERIAL_IDX		2
-
-static char manufacturer[50];
-#endif
-
 /* default serial number takes at least two packets */
 static char serial[] = "0123456789.0123456789.0123456789";
 
-#if 0	/* sunplus USB driver */
 #define USB_GZERO_SS_DESC	(USB_GADGET_FIRST_AVAIL_IDX + 0)
 #define USB_GZERO_LB_DESC	(USB_GADGET_FIRST_AVAIL_IDX + 1)
-#endif
 
-#if 1	/* sunplus USB driver */
-static struct usb_string strings_dev[] = {
-	[STRING_MANUFACTURER_IDX].s = manufacturer,
-	[STRING_PRODUCT_IDX].s = longname,
-	[STRING_SERIAL_IDX].s = serial,
-	{}			/* end of list */
-};
-#else
 static struct usb_string strings_dev[] = {
 	[USB_GADGET_MANUFACTURER_IDX].s = "",
 	[USB_GADGET_PRODUCT_IDX].s = longname,
@@ -186,7 +136,6 @@ static struct usb_string strings_dev[] = {
 	[USB_GZERO_LB_DESC].s	= "loop input to output",
 	{  }			/* end of list */
 };
-#endif
 
 static struct usb_gadget_strings stringtab_dev = {
 	.language	= 0x0409,	/* en-us */
@@ -197,50 +146,6 @@ static struct usb_gadget_strings *dev_strings[] = {
 	&stringtab_dev,
 	NULL,
 };
-
-#if 1	/* sunplus USB driver */
-/*-------------------------------------------------------------------------*/
-struct usb_request *alloc_ep_req(struct usb_ep *ep)
-{
-	struct usb_request *req;
-
-	req = usb_ep_alloc_request(ep, GFP_ATOMIC);
-	if (req) {
-		req->length = buflen;
-		req->buf = kmalloc(buflen, GFP_ATOMIC);
-		if (!req->buf) {
-			usb_ep_free_request(ep, req);
-			req = NULL;
-		}
-	}
-	return req;
-}
-
-void free_ep_req(struct usb_ep *ep, struct usb_request *req)
-{
-	kfree(req->buf);
-	usb_ep_free_request(ep, req);
-}
-
-static void disable_ep(struct usb_composite_dev *cdev, struct usb_ep *ep)
-{
-	int value;
-
-	if (ep->driver_data) {
-		value = usb_ep_disable(ep);
-		if (value < 0)
-			printk(KERN_NOTICE "disable %s --> %d\n", ep->name, value);
-		ep->driver_data = NULL;
-	}
-}
-
-void disable_endpoints(struct usb_composite_dev *cdev,
-		       struct usb_ep *in, struct usb_ep *out)
-{
-	disable_ep(cdev, in);
-	disable_ep(cdev, out);
-}
-#endif
 
 /*-------------------------------------------------------------------------*/
 
@@ -262,11 +167,7 @@ static void zero_autoresume(struct timer_list *unused)
 	 */
 	if (g->speed != USB_SPEED_UNKNOWN) {
 		int status = usb_gadget_wakeup(g);
-#if 1	/* sunplus USB driver */
-		printk(KERN_NOTICE "%s --> %d\n", __func__, status);
-#else
 		INFO(cdev, "%s --> %d\n", __func__, status);
-#endif
 	}
 }
 
@@ -275,13 +176,6 @@ static void zero_suspend(struct usb_composite_dev *cdev)
 	if (cdev->gadget->speed == USB_SPEED_UNKNOWN)
 		return;
 
-#if 1	/* sunplus USB driver */
-	if (autoresume) {
-		mod_timer(&autoresume_timer, jiffies + (HZ * autoresume));
-		printk(KERN_NOTICE "suspend, wakeup in %d seconds\n", autoresume);
-	} else
-		printk(KERN_NOTICE "%s\n", __func__);
-#else
 	if (autoresume) {
 		if (max_autoresume &&
 			(autoresume_step_ms > max_autoresume * 1000))
@@ -295,89 +189,16 @@ static void zero_suspend(struct usb_composite_dev *cdev)
 		autoresume_step_ms += autoresume_interval_ms;
 	} else
 		DBG(cdev, "%s\n", __func__);
-#endif
 }
 
 static void zero_resume(struct usb_composite_dev *cdev)
 {
-#if 1	/* sunplus USB driver */
-	printk(KERN_NOTICE "%s\n", __func__);
-#else
 	DBG(cdev, "%s\n", __func__);
-#endif
 	del_timer(&autoresume_timer);
 }
 
 /*-------------------------------------------------------------------------*/
 
-#if 1	/* sunplus USB driver */
-static int __init zero_bind(struct usb_composite_dev *cdev)
-{
-	int gcnum;
-	struct usb_gadget *gadget = cdev->gadget;
-	int id;
-
-	/* Allocate string descriptor numbers ... note that string
-	 * contents can be overridden by the composite_dev glue.
-	 */
-	id = usb_string_id(cdev);
-	if (id < 0)
-		return id;
-	strings_dev[STRING_MANUFACTURER_IDX].id = id;
-	device_desc.iManufacturer = id;
-
-	id = usb_string_id(cdev);
-	if (id < 0)
-		return id;
-	strings_dev[STRING_PRODUCT_IDX].id = id;
-	device_desc.iProduct = id;
-
-	id = usb_string_id(cdev);
-	if (id < 0)
-		return id;
-	strings_dev[STRING_SERIAL_IDX].id = id;
-	device_desc.iSerialNumber = id;
-
-	timer_setup(&autoresume_timer, zero_autoresume, (unsigned long)cdev);
-	
-	/* Register primary, then secondary configuration.  Note that
-	 * SH3 only allows one config...
-	 */
-	if (loopdefault) {
-		loopback_add(cdev, autoresume != 0);
-		sourcesink_add(cdev, autoresume != 0);
-	} else {
-		sourcesink_add(cdev, autoresume != 0);
-		loopback_add(cdev, autoresume != 0);
-	}
-
-	gcnum = usb_gadget_controller_number(gadget);
-	if (gcnum >= 0)
-		device_desc.bcdDevice = cpu_to_le16(0x0200 + gcnum);
-	else {
-		/* gadget zero is so simple (for now, no altsettings) that
-		 * it SHOULD NOT have problems with bulk-capable hardware.
-		 * so just warn about unrcognized controllers -- don't panic.
-		 *
-		 * things like configuration and altsetting numbering
-		 * can need hardware-specific attention though.
-		 */
-		printk(KERN_NOTICE "%s: controller '%s' not recognized\n",
-			   longname, gadget->name);
-		device_desc.bcdDevice = cpu_to_le16(0x9999);
-	}
-
-	printk(KERN_NOTICE "%s, version: " DRIVER_VERSION "\n", longname);
-
-	snprintf(manufacturer, sizeof manufacturer, "%s %s with %s",
-		 init_utsname()->sysname, init_utsname()->release,
-		 gadget->name);
-
-	return 0;
-}
-#endif
-
-#if 0	/* sunplus USB driver */
 static struct usb_configuration loopback_driver = {
 	.label          = "loopback",
 	.bConfigurationValue = 2,
@@ -574,13 +395,10 @@ err_put_func_inst_ss:
 	func_inst_ss = NULL;
 	return status;
 }
-#endif
 
 static int zero_unbind(struct usb_composite_dev *cdev)
 {
 	del_timer_sync(&autoresume_timer);
-
-#if 0	/* sunplus USB driver */
 	if (!IS_ERR_OR_NULL(func_ss))
 		usb_put_function(func_ss);
 	usb_put_function_instance(func_inst_ss);
@@ -589,7 +407,6 @@ static int zero_unbind(struct usb_composite_dev *cdev)
 	usb_put_function_instance(func_inst_lb);
 	kfree(otg_desc[0]);
 	otg_desc[0] = NULL;
-#endif
 
 	return 0;
 }
@@ -605,26 +422,7 @@ static struct usb_composite_driver zero_driver = {
 	.resume		= zero_resume,
 };
 
-#if 0	/* sunplus USB driver */
 module_usb_composite_driver(zero_driver);
-#endif
 
 MODULE_AUTHOR("David Brownell");
 MODULE_LICENSE("GPL");
-
-#if 1	/* sunplus USB driver */
-static int __init init(void)
-{
-	return usb_composite_probe(&zero_driver);
-}
-
-module_init(init);
-
-static void __exit cleanup(void)
-{
-	usb_composite_unregister(&zero_driver);
-}
-
-module_exit(cleanup);
-#endif
-

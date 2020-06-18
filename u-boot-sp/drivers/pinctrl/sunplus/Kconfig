@@ -1,8 +1,15 @@
-
 config PINCTRL_SUNPLUS
-	depends on DM
+	depends on DM && (ARCH_PENTAGRAM && !TARGET_PENTAGRAM_I143_C)
 	default y
-	bool "Sunplus sp7021 pin control driver"
+	bool "Sunplus SP7021 pin control driver"
 	help
 	   Support pin multiplexing and pin configuration control on
 	   Sunplus's SP7021 SoC.
+
+config PINCTRL_SUNPLUS_I143
+	depends on DM && (TARGET_PENTAGRAM_I143_P || TARGET_PENTAGRAM_I143_C)
+	default y
+	bool "Sunplus I143 pin control driver"
+	help
+	   Support pin configuration control on Sunplus's i143 SoC.
+

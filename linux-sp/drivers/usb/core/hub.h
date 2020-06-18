@@ -32,10 +32,6 @@ struct usb_hub {
 
 	int			error;		/* last reported error */
 	int			nerrors;	/* track consecutive errors */
-	
-#if 1	/* sunplus USB driver */
-	struct list_head	event_list;	/* hubs w/data or errs ready */
-#endif
 
 	unsigned long		event_bits[1];	/* status change bitmask */
 	unsigned long		change_bits[1];	/* ports with logical connect
@@ -65,6 +61,7 @@ struct usb_hub {
 	unsigned		quiescing:1;
 	unsigned		disconnected:1;
 	unsigned		in_reset:1;
+	unsigned		quirk_disable_autosuspend:1;
 
 	unsigned		quirk_check_port_auto_suspend:1;
 
@@ -73,10 +70,9 @@ struct usb_hub {
 	struct delayed_work	leds;
 	struct delayed_work	init_work;
 	struct work_struct      events;
+	spinlock_t		irq_urb_lock;
+	struct timer_list	irq_urb_retry;
 	struct usb_port		**ports;
-#ifdef	CONFIG_USB_LOGO_TEST	/* sunplus USB driver */
-	struct task_struct	*usb_logo_thread;
-#endif
 };
 
 /**

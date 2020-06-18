@@ -1,0 +1,202 @@
+/dts-v1/;
+
+#include <dt-bindings/clock/sp-i143.h>
+#include <dt-bindings/interrupt-controller/arm-gic.h>
+#include <dt-bindings/interrupt-controller/sp-intc.h> /* SP_INTC_EXT_INT1 */
+#include <dt-bindings/reset/sp-i143.h>
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/pinctrl/sp_i143.h>
+
+#include "i143-storage.dtsi"
+
+/ {
+	aliases {
+		serial0 = &uart0;
+	};
+
+	clocks {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		extclk: clk@osc0 {
+			#clock-cells = <0>;
+			compatible = "fixed-clock";
+			clock-frequency = <27000000>;
+			clock-output-names = "extclk";
+		};
+
+		clkc: clkc@9c000054 {
+			#clock-cells = <1>;
+			compatible = "sunplus,sp-clkc";
+			reg = <0x9c000000 0x2c>, // G0.0 ~ G0.10
+				  <0x9c000200 0x80>; // G4
+		};
+	};
+
+	soc@B {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		interrupt-parent = <&intc>;
+
+		/* B modules */
+		rstc: reset@0x9c000054 {
+			compatible = "sunplus,sp-reset";
+			#reset-cells = <1>;
+			reg = <0x9c000054 0x28>;
+			reg-names = "reset";
+		};
+
+		uart0: serial@sp_uart0 {
+			compatible = "sunplus,sp7021-uart";
+			reg = <0x9c000900 0x80>;
+			interrupt-parent = <&intc>;
+			interrupts = <18 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&clkc UA0>;
+			resets = <&rstc RST_UA0>;
+		};
+
+		otp: otp@0x9C00AF00 {
+			compatible = "sunplus,i143-ocotp";
+			reg = <0x9C00AF00 0x34>, <0x9C00AF80 0x58>;
+			reg-names = "hb_gpio", "otprx";
+			clocks = <&clkc OTPRX>;
+			resets = <&rstc RST_OTPRX>;
+			#address-cells = <1>;
+			#size-cells = <1>;
+			//therm_calib: therm_calib {  reg = <0x14 0x3>;  };
+			mac_addr0: mac_addr0 {
+				reg = <0x34 0x6>;
+			};
+			mac_addr1: mac_addr1 {
+				reg = <0x3A 0x6>;
+			};
+			//disc_vol0: disc_vol0 {
+			//      reg = <0x18 0x2>;
+			//};
+			//disc_vol1: disc_vol1 {
+			//      reg = <0x18 0x2>;
+			//};
+		};
+
+		mmc0: mmc@emmc {
+			compatible = "sunplus,sp7021-emmc";
+			reg = <0x9c003b00 0x180>;
+			interrupt-parent = <&intc>;
+			interrupts = <11 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&clkc CARD_CTL0>;
+			resets = <&rstc RST_CARD_CTL0>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&emmc_mux>;
+			bus-width = <8>;
+			max-frequency = <52000000>;
+			non-removable;
+			disable-wp;
+			cap-mmc-highspeed;
+			mmc-ddr-3_3v;
+			no-sdio;
+			no-sd;
+		};
+
+		mmc1: mmc@sdcard {
+			compatible = "sunplus,sp7021-card1";
+			reg = <0x9c003e80 0x180>;
+			interrupt-parent = <&intc>;
+			interrupts = <12 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&clkc CARD_CTL1>;
+			resets = <&rstc RST_CARD_CTL1>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&mmc1_mux>;
+			bus-width = <4>;
+			max-frequency = <52000000>;
+			cd-gpios = <&pctl 63 GPIO_ACTIVE_LOW>;
+			broken-cd;
+			disable-wp;
+			cap-sd-highspeed;
+			no-sdio;
+			no-mmc;
+		};
+
+		gl2sw: gl2sw@0x9c108000 {
+			compatible = "sunplus,i143-gl2sw";
+			reg = <0x9c108000 0x400>, <0x9c000280 0x80>;
+			reg-names = "gl2sw", "moon5";
+			interrupt-parent = <&intc>;
+			interrupts =
+				<38 IRQ_TYPE_LEVEL_HIGH>,
+				<39 IRQ_TYPE_LEVEL_HIGH>,
+				<40 IRQ_TYPE_LEVEL_HIGH>,
+				<41 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&clkc GL2SW>;
+			resets = <&rstc RST_GL2SW>;
+			phy-handle1 = <&eth_phy0>;
+			phy-handle2 = <&eth_phy1>;
+			nvmem-cell-names = "mac_addr0", "mac_addr1";
+			nvmem-cells = <&mac_addr0>, <&mac_addr1>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&gl2sw_pins>;
+		};
+
+		mdio {
+			compatible = "sunplus,i143-mdio";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			eth_phy0: ethernet-phy@0 {
+				reg = <0>;
+			};
+			eth_phy1: ethernet-phy@1 {
+				reg = <1>;
+			};
+		};
+
+		pctl: pctl@0x9C000100 {
+			compatible = "sunplus,i143-pctl";
+			reg = <0x9C000100 0x100>,
+			      <0x9C000300 0x80>,
+			      <0x9C000380 0x80>,
+			      <0x9C0032e4 0x1C>,
+			      <0x9C000080 0x20>;
+			gpio-controller;
+			#gpio-cells = <2>;
+			//interrupt-parent = <&intc>;
+			//interrupts =
+			//	<120 IRQ_TYPE_LEVEL_HIGH>,
+			//	<121 IRQ_TYPE_LEVEL_HIGH>,
+			//	<122 IRQ_TYPE_LEVEL_HIGH>,
+			//	<123 IRQ_TYPE_LEVEL_HIGH>,
+			//	<124 IRQ_TYPE_LEVEL_HIGH>,
+			//	<125 IRQ_TYPE_LEVEL_HIGH>,
+			//	<126 IRQ_TYPE_LEVEL_HIGH>,
+			//	<127 IRQ_TYPE_LEVEL_HIGH>;
+			//clocks = <&clkc GPIO>;
+			//resets = <&rstc RST_GPIO>;
+
+			emmc_mux: emmc_mux {
+				sppctl,groups = "CARD0_EMMC";
+				sppctl,function = "CARD0_EMMC";
+			};
+
+			mmc1_mux: mmc1_mux {
+				sppctl,groups = "SD_CARD";
+				sppctl,function = "SD_CARD";
+				sppctl,pins = < I143_IOPAD(63,I143_PCTL_G_GPIO,0,0) >;
+			};
+
+			gl2sw_pins: gl2sw_pins {
+				sppctl,groups = "GL2SW";
+				sppctl,function = "GL2SW";
+			};
+		};
+
+		gpu: gpu@0x9C110000 {
+			compatible = "sunplus,galcore";
+			reg = <0x9C110000 0x40000>;
+			interrupt-parent = <&intc>;
+			interrupts =
+				<71 IRQ_TYPE_LEVEL_HIGH>; /* GC520_INT */
+		};
+	};
+};

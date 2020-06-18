@@ -1,8 +1,38 @@
+if TARGET_PENTAGRAM_COMMON || TARGET_PENTAGRAM_B_BOOT || TARGET_PENTAGRAM_I143_C
+
+if TARGET_PENTAGRAM_I143_C
+
+config SYS_CONFIG_NAME
+	default "pentagram_common_i143_c"
+
+config SUPPORT_I143_C
+	bool
+	default y if TARGET_PENTAGRAM_I143_C
+	help
+	 support i143 C-chip,used for config in code
+
+endif
+
 if TARGET_PENTAGRAM_COMMON || TARGET_PENTAGRAM_B_BOOT
 
 config SYS_CONFIG_NAME
 	default "pentagram_common"
-	select CMD_TPS_UPD
+
+endif
+
+if TARGET_BPI_F2S
+
+config BPI_BOARD
+	default "bpi-f2s"
+
+endif
+
+if TARGET_BPI_F2P
+
+config BPI_BOARD
+	default "bpi-f2p"
+
+endif
 
 config SYS_SOC
 	default "pentagram"
@@ -28,6 +58,16 @@ config SYS_USE_QKBOOT_HEADER
 	  It can speed up boot time. If enabled, we
 	  replace mkimage header of kernel image and
 	  also add sunplus-mkimage header on dtb image.
+
+config SRCADDR_NONOS
+	hex "nonos source address"
+	default 0x0 if SD_BOOT
+	default 0x0 if NAND_BOOT
+	default 0x98100000
+	help
+	  nonos source address
+	  nonos image is stored in this address.
+	  This address can be nand/emmc address.
 
 config SRCADDR_KERNEL
 	hex "Linux kernel source address"

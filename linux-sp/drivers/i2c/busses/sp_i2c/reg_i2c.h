@@ -1,7 +1,11 @@
 #ifndef __REG_I2C_H__
 #define __REG_I2C_H__
 
+
+#if defined(CONFIG_SOC_SP7021)
 #include <mach/io_map.h>
+#endif
+
 
 /****************************************
 * I2C Master

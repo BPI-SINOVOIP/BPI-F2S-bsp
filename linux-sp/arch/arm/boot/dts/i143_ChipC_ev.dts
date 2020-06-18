@@ -1,0 +1,25 @@
+/dts-v1/;
+
+#define CONFIG_SOC_I143
+
+#include "i143_ChipC.dtsi"
+
+/ {
+	#address-cells = <1>;
+	#size-cells = <1>;
+
+	model = "Sunplus I143 EMU (CA7)";
+	compatible = "sunplus,i143-achip";
+
+	chosen {
+		bootargs = "console=ttyS0,921600 earlyprintk loglevel=8";
+		stdout-path = "serial0";
+	};
+
+	memory {
+		device_type = "memory";
+		//reg = <0x20000000 0x20000000>; /* 512MB */
+		//reg = <0x20000000 0x08000000>; /* 128MB */
+		reg = <0x20000000 0x04000000>; /* 64MB */
+	};
+};

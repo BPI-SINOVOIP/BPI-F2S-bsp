@@ -329,9 +329,6 @@ struct usb_device_descriptor {
 #define USB_CLASS_MISC			0xef
 #define USB_CLASS_APP_SPEC		0xfe
 #define USB_CLASS_VENDOR_SPEC		0xff
-#if 1	/* sunplus USB driver */
-#define USB_CLASS_DEVICE_NOT_SUPPORT	0x1f
-#endif
 
 #define USB_SUBCLASS_VENDOR_SPEC	0xff
 
@@ -897,6 +894,8 @@ struct usb_ext_cap_descriptor {		/* Link Power Management */
 #define USB_BESL_SUPPORT		(1 << 2)	/* supports BESL */
 #define USB_BESL_BASELINE_VALID		(1 << 3)	/* Baseline BESL valid*/
 #define USB_BESL_DEEP_VALID		(1 << 4)	/* Deep BESL valid */
+#define USB_SET_BESL_BASELINE(p)	(((p) & 0xf) << 8)
+#define USB_SET_BESL_DEEP(p)		(((p) & 0xf) << 12)
 #define USB_GET_BESL_BASELINE(p)	(((p) & (0xf << 8)) >> 8)
 #define USB_GET_BESL_DEEP(p)		(((p) & (0xf << 12)) >> 12)
 } __attribute__((packed));

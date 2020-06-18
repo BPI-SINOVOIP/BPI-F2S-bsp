@@ -1,0 +1,6 @@
+PENTAGRAM BOARD
+M:	Denzel Lin <denzel.lin@sunplus.com>
+S:	Maintained
+F:	board/sunplus/pentagram_board/
+F:	include/configs/pentagram_common.h
+F:	configs/pentagram_defconfig

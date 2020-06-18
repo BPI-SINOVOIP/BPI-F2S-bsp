@@ -289,23 +289,12 @@ DECLARE_EVENT_CLASS(xhci_log_urb,
 	),
 	TP_printk("ep%d%s-%s: urb %p pipe %u slot %d length %d/%d sgs %d/%d stream %d flags %08x",
 			__entry->epnum, __entry->dir_in ? "in" : "out",
-			({ char *s;
-			switch (__entry->type) {
-			case USB_ENDPOINT_XFER_INT:
-				s = "intr";
-				break;
-			case USB_ENDPOINT_XFER_CONTROL:
-				s = "control";
-				break;
-			case USB_ENDPOINT_XFER_BULK:
-				s = "bulk";
-				break;
-			case USB_ENDPOINT_XFER_ISOC:
-				s = "isoc";
-				break;
-			default:
-				s = "UNKNOWN";
-			} s; }), __entry->urb, __entry->pipe, __entry->slot_id,
+			__print_symbolic(__entry->type,
+				   { USB_ENDPOINT_XFER_INT,	"intr" },
+				   { USB_ENDPOINT_XFER_CONTROL,	"control" },
+				   { USB_ENDPOINT_XFER_BULK,	"bulk" },
+				   { USB_ENDPOINT_XFER_ISOC,	"isoc" }),
+			__entry->urb, __entry->pipe, __entry->slot_id,
 			__entry->actual, __entry->length, __entry->num_mapped_sgs,
 			__entry->num_sgs, __entry->stream, __entry->flags
 		)
@@ -362,6 +351,11 @@ DEFINE_EVENT(xhci_log_ep_ctx, xhci_handle_cmd_reset_ep,
 );
 
 DEFINE_EVENT(xhci_log_ep_ctx, xhci_handle_cmd_config_ep,
+	TP_PROTO(struct xhci_ep_ctx *ctx),
+	TP_ARGS(ctx)
+);
+
+DEFINE_EVENT(xhci_log_ep_ctx, xhci_add_endpoint,
 	TP_PROTO(struct xhci_ep_ctx *ctx),
 	TP_ARGS(ctx)
 );
@@ -430,6 +424,31 @@ DEFINE_EVENT(xhci_log_slot_ctx, xhci_handle_cmd_set_deq,
 DEFINE_EVENT(xhci_log_slot_ctx, xhci_configure_endpoint,
 	TP_PROTO(struct xhci_slot_ctx *ctx),
 	TP_ARGS(ctx)
+);
+
+DECLARE_EVENT_CLASS(xhci_log_ctrl_ctx,
+	TP_PROTO(struct xhci_input_control_ctx *ctrl_ctx),
+	TP_ARGS(ctrl_ctx),
+	TP_STRUCT__entry(
+		__field(u32, drop)
+		__field(u32, add)
+	),
+	TP_fast_assign(
+		__entry->drop = le32_to_cpu(ctrl_ctx->drop_flags);
+		__entry->add = le32_to_cpu(ctrl_ctx->add_flags);
+	),
+	TP_printk("%s", xhci_decode_ctrl_ctx(__entry->drop, __entry->add)
+	)
+);
+
+DEFINE_EVENT(xhci_log_ctrl_ctx, xhci_address_ctrl_ctx,
+	TP_PROTO(struct xhci_input_control_ctx *ctrl_ctx),
+	TP_ARGS(ctrl_ctx)
+);
+
+DEFINE_EVENT(xhci_log_ctrl_ctx, xhci_configure_endpoint_ctrl_ctx,
+	TP_PROTO(struct xhci_input_control_ctx *ctrl_ctx),
+	TP_ARGS(ctrl_ctx)
 );
 
 DECLARE_EVENT_CLASS(xhci_log_ring,

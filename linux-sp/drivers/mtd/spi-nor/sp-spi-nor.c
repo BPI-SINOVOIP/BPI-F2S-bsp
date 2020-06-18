@@ -1143,7 +1143,7 @@ static int sp_spi_nor_probe(struct platform_device *pdev)
 	}
 #if (SP_SPINOR_DMA)
     	pspi->buff.size =CFG_BUFF_MAX;
-    	pspi->buff.virt = (void *)dma_alloc_coherent(NULL, PAGE_ALIGN(pspi->buff.size), \
+    	pspi->buff.virt = (void *)dma_alloc_coherent(dev, PAGE_ALIGN(pspi->buff.size), \
 						     &pspi->buff.phys , GFP_DMA | GFP_KERNEL);
     	dev_dbg(pspi->dev,"phy 0x%x virt 0x%x size 0x%x\n",pspi->buff.phys, (int)pspi->buff.virt,pspi->buff.size);
     	if (!pspi->buff.virt) {

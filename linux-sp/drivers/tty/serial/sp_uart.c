@@ -16,17 +16,18 @@
 #include <linux/reset.h>
 #include <linux/io.h>
 #include <linux/dma-mapping.h>
-#include <mach/sp_uart.h>
+#include <soc/sunplus/sp_uart.h>
 #ifdef CONFIG_PM_RUNTIME_UART
 #include <linux/pm_runtime.h>
 #endif
+#ifdef CONFIG_SOC_SP7021
 #include <linux/gpio.h>
 #include <linux/of.h>
 #include <linux/of_gpio.h>
 #include <dt-bindings/pinctrl/sp7021.h>
+#endif
 #include <linux/delay.h>
 #include <linux/hrtimer.h>
-
 
 #define NUM_UART	6	/* serial0,  ... */
 #define NUM_UARTDMARX	2	/* serial10, ... */
@@ -38,8 +39,8 @@
 #define IS_UARTDMARX_ID(X)		(((X) >= (ID_BASE_DMARX)) && ((X) < (ID_BASE_DMARX + NUM_UARTDMARX)))
 #define IS_UARTDMATX_ID(X)		(((X) >= (ID_BASE_DMATX)) && ((X) < (ID_BASE_DMATX + NUM_UARTDMATX)))
 /* ---------------------------------------------------------------------------------------------- */
-#define TTYS_KDBG_INFO
-#define TTYS_KDBG_ERR
+//#define TTYS_KDBG_INFO
+//#define TTYS_KDBG_ERR
 
 #ifdef TTYS_KDBG_INFO
 #define DBG_INFO(fmt, args ...)	printk(KERN_INFO "K_TTYS: " fmt, ## args)
@@ -63,7 +64,14 @@
 #define MAX_SZ_RXDMA_ISR		(1 << 9)
 #define UATXDMA_BUF_SZ			PAGE_SIZE
 /* ---------------------------------------------------------------------------------------------- */
+/* Refer zebu: testbench/uart.cc */
+#ifdef CONFIG_SOC_I143
+#define CLK_HIGH_UART			27000000
+#define UART_RATIO				29
+#else
 #define CLK_HIGH_UART			202500000
+#define UART_RATIO				232
+#endif
 /* ---------------------------------------------------------------------------------------------- */
 #if defined(CONFIG_SP_MON)
 extern unsigned int uart0_mask_tx;	/* Used for masking uart0 tx output */
@@ -444,15 +452,13 @@ static void sunplus_uart_ops_set_mctrl(struct uart_port *port, unsigned int mctr
 	} else {
 		if (sp_port->uport.rs485.flags & SER_RS485_ENABLED)
 		{
-			//data transfer ended, RTS low to high
-			//output high
+			//data transfer ended
 			return;
 		}
 		else
 		{
 			mcr &= ~SP_UART_MCR_RTS;  
 		}
-
 	}
 
 	if (mctrl & TIOCM_CAR) {
@@ -474,7 +480,7 @@ static void sunplus_uart_ops_set_mctrl(struct uart_port *port, unsigned int mctr
 	}
 
 	sp_uart_set_modem_ctrl(port->membase, mcr);	
-
+	
 	if (sp_port->uport.rs485.flags & SER_RS485_ENABLED)
 	{	    	    
 		mcr = sp_uart_get_modem_ctrl(port->membase);
@@ -483,7 +489,9 @@ static void sunplus_uart_ops_set_mctrl(struct uart_port *port, unsigned int mctr
 			if(((mcr&SP_UART_MCR_RTS)&&(sp_port->uport.rs485.flags & SER_RS485_RTS_AFTER_SEND))
 				|| (sp_port->uport.rs485.flags & SER_RS485_RTS_ON_SEND))
 			{
+				#ifdef CONFIG_SOC_SP7021
 				gpiod_set_value(sp_port->DE_RE_dir,1);
+				#endif 
 				ktime = ktime_set(0,500000);//500us
 				hrtimer_start(&sp_port->CheckTXE,ktime,HRTIMER_MODE_REL);		
 			}
@@ -885,7 +893,7 @@ static void receive_chars_rxdma(struct uart_port *port)	/* called by ISR */
 	 */
 	icount_rx = 0;
 	while (rx_size > icount_rx) {
-		if (!(((u32)(sw_ptr)) & (32 - 1))	/* 32-byte aligned */
+		if (!(((unsigned long)(sw_ptr)) & (32 - 1))	/* 32-byte aligned */
 		    && ((rx_size - icount_rx) >= 32)) {
 			/*
 			 * Copy 32 bytes data from non cache area to cache area.
@@ -971,7 +979,7 @@ static int sunplus_uart_ops_startup(struct uart_port *port)
     		if (ret < 0)
 			goto out;
   	}
-#endif
+#endif	
 
 	ret = request_irq(port->irq, sunplus_uart_irq, 0, sp_port->name, port);
 	if (ret) {
@@ -1224,36 +1232,28 @@ static void sunplus_uart_ops_set_termios(struct uart_port *port, struct ktermios
 	u32 clk, ext, div, div_l, div_h, baud;
 	u32 lcr;
 	unsigned long flags;
-	struct sunplus_uart_port *sp_port = (struct sunplus_uart_port *)(port->private_data);
+	//struct sunplus_uart_port *sp_port = (struct sunplus_uart_port *)(port->private_data);
 
 	baud = uart_get_baud_rate(port, termios, oldtermios, 0, (CLK_HIGH_UART >> 4));
 
-#if 0	/* For Zebu only, disable this in real chip */
+	/*
+	 * For zebu, the baudrate is 921600, Clock should be switched to CLK_HIGH_UART
+	 * For real chip, the baudrate is 115200.
+	 * */
 	if (baud == 921600) {
-		/*
-		 * Refer to Zebu's testbench/uart.cc
-		 * UART_RATIO should be 220 (CLK_HIGH_UART / 921600)
-		 * If change it to correct value, IBOOT must be changed.
-		 * (Clock should be switched to CLK_HIGH_UART)
-		 * For real chip, the baudrate is 115200.
-		 * */
-		baud = CLK_HIGH_UART / 232;
-	}
-#endif
-
-	clk = port->uartclk;
-	if ((baud > 115200) || (sp_port->uartdma_rx)) {
-		while (!(sp_uart_get_line_status(port->membase) & SP_UART_LSR_TXE)) {
-			/* Send all data in Tx FIFO before changing clock source, it should be UART0 only */
-		}
-
-		clk = CLK_HIGH_UART;
 		/* Don't change port->uartclk to CLK_HIGH_UART, keep the value of lower clk src */
-		/* Switch clock source */
-		sp_uart_set_clk_src(port->membase, 0);
+		clk = CLK_HIGH_UART;
+		baud = clk / UART_RATIO;
 	} else {
-		sp_uart_set_clk_src(port->membase, ~0);
+		clk = port->uartclk;
 	}
+
+	/* printk("UART clock: %d, baud: %d\n", clk, baud); */
+	while (!(sp_uart_get_line_status(port->membase) & SP_UART_LSR_TXE)) {
+		/* Send all data in Tx FIFO before changing clock source, it should be UART0 only */
+	}
+	/* Switch clock source: 0 for sysclk, 1 for 27M */
+	sp_uart_set_clk_src(port->membase, clk == 27000000);
 
 	/* printk("UART clock: %d, baud: %d\n", clk, baud); */
 	clk += baud >> 1;
@@ -1596,11 +1596,13 @@ static enum hrtimer_restart Check_TXE(struct hrtimer *t)
 			else
 				mcr &= ~SP_UART_MCR_RTS;  
 			sp_uart_set_modem_ctrl(rs485->uport.membase, mcr); 
+			#ifdef CONFIG_SOC_SP7021
 			gpiod_set_value(rs485->DE_RE_dir,0);
+			#endif 
 		}
 		else
 		{
-			ktime = ktime_set(0,nsec);
+ 		    ktime = ktime_set(0,nsec);
 			hrtimer_start(&rs485->RtsDelay,ktime,HRTIMER_MODE_REL);		
 		}
 		//DBG_INFO("TXE\n");	
@@ -1615,7 +1617,9 @@ static enum hrtimer_restart Rts_Delay(struct hrtimer *t)
 	unsigned char mcr;
 	
 	rs485 = container_of(t, struct sunplus_uart_port, RtsDelay);
+	#ifdef CONFIG_SOC_SP7021
 	gpiod_set_value(rs485->DE_RE_dir,0);
+	#endif 
 	mcr = sp_uart_get_modem_ctrl(rs485->uport.membase);
 	if (rs485->uport.rs485.flags & SER_RS485_RTS_ON_SEND)
 		mcr |= SP_UART_MCR_RTS;  
@@ -1826,7 +1830,9 @@ static int sunplus_uart_platform_driver_probe_of(struct platform_device *pdev)
 	{
 		//DBG_INFO("delay_rts_before_send = %d \n",sunplus_uart_ports[pdev->id].uport.rs485.delay_rts_before_send);
 		//DBG_INFO("delay_rts_after_send = %d \n",sunplus_uart_ports[pdev->id].uport.rs485.delay_rts_after_send);
+		#ifdef CONFIG_SOC_SP7021
 		sunplus_uart_ports[pdev->id].DE_RE_dir = devm_gpiod_get(&pdev->dev, "dir", GPIOD_OUT_LOW);
+		#endif 
 		if (!IS_ERR(sunplus_uart_ports[pdev->id].DE_RE_dir)) {
 			DBG_INFO("DE_RE is at G_MX[%d].\n", desc_to_gpio(sunplus_uart_ports[pdev->id].DE_RE_dir));
 			hrtimer_init(&sunplus_uart_ports[pdev->id].CheckTXE, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
@@ -2047,6 +2053,37 @@ static int __init sunplus_uart_init(void)
 __initcall(sunplus_uart_init);
 
 module_param(uart0_as_console, uint, S_IRUGO);
+
+static void sunplus_uart_putc(struct uart_port *port, int c)
+{
+	unsigned int status;
+
+	for (;;) {
+		status = readl(port->membase + SP_UART_LSR);
+		if ((status & SP_UART_LSR_TXE) == SP_UART_LSR_TXE)
+			break;
+		cpu_relax();
+	}
+	writel(c, port->membase + SP_UART_DATA);
+}
+
+static void sunplus_uart_early_write(struct console *con,
+			      const char *s, unsigned n)
+{
+	struct earlycon_device *dev = con->data;
+	uart_console_write(&dev->port, s, n, sunplus_uart_putc);
+}
+
+int __init sunplus_uart_early_setup(struct earlycon_device *device,
+					 const char *opt)
+{
+	if (!(device->port.membase || device->port.iobase))
+		return -ENODEV;
+
+	device->con->write = sunplus_uart_early_write;
+	return 0;
+}
+OF_EARLYCON_DECLARE(sp_uart, "sunplus,sp7021-uart", sunplus_uart_early_setup);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Sunplus Technology");

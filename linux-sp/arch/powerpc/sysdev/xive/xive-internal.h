@@ -1,13 +1,16 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 /*
  * Copyright 2016,2017 IBM Corporation.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version
- * 2 of the License, or (at your option) any later version.
  */
 #ifndef __XIVE_INTERNAL_H
 #define __XIVE_INTERNAL_H
+
+/*
+ * A "disabled" interrupt should never fire, to catch problems
+ * we set its logical number to this
+ */
+#define XIVE_BAD_IRQ		0x7fffffff
+#define XIVE_MAX_IRQ		(XIVE_BAD_IRQ - 1)
 
 /* Each CPU carry one of these with various per-CPU state */
 struct xive_cpu {
@@ -37,6 +40,8 @@ struct xive_cpu {
 struct xive_ops {
 	int	(*populate_irq_data)(u32 hw_irq, struct xive_irq_data *data);
 	int 	(*configure_irq)(u32 hw_irq, u32 target, u8 prio, u32 sw_irq);
+	int	(*get_irq_config)(u32 hw_irq, u32 *target, u8 *prio,
+				  u32 *sw_irq);
 	int	(*setup_queue)(unsigned int cpu, struct xive_cpu *xc, u8 prio);
 	void	(*cleanup_queue)(unsigned int cpu, struct xive_cpu *xc, u8 prio);
 	void	(*setup_cpu)(unsigned int cpu, struct xive_cpu *xc);

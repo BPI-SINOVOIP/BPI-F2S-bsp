@@ -1,0 +1,18 @@
+config MIPICSI_RX_SUNPLUS_SP7021
+	tristate "Sunplus SP7021 MIPI/CSI-RX driver"
+	depends on SOC_SP7021 && VIDEO_DEV && VIDEO_V4L2
+	select VIDEOBUF2_DMA_CONTIG
+	select VIDEOBUF2_VMALLOC
+	default n
+	help
+	  This driver supports the MIPI/CSI-RX device on the Sunplus SP7021 SoC.
+
+config MIPICSI_RX_SUNPLUS_I143
+	tristate "Sunplus I143 MIPI/CSI-RX driver"
+	depends on SOC_I143 && VIDEO_DEV && VIDEO_V4L2
+	select VIDEOBUF2_DMA_CONTIG
+	select VIDEOBUF2_VMALLOC
+	select I2C_MIPI_SUNPLUS
+	default n
+	help
+	  This driver supports the MIPI/CSI-RX device on the Sunplus I143 SoC.

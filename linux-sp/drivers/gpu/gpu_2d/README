@@ -1,0 +1,27 @@
+
+Files layout
+============
+<AQROOT>/
+    |
+    +---arch/XAQ2                    : Hardware specific driver code
+    |
+    +---driver
+    |    |
+    |    \---gfx                     : DirectFB accelerator
+    |
+    +---hal
+    |    |
+    |    +---inc                     : HAL header files
+    |    |
+    |    +---os                      : OS layer HAL driver
+    |    |
+    |    +---user                    : User mode HAL driver
+    |    |
+    |    \---kernel                  : Kernel mode HAL driver
+    |
+    \---release/SW                   : SDK release ReadMe files
+
+How to build
+============
+1. Build steps for Linux: $(AQROOT)/release/SW/ReadMe_Linux.txt
+2. Build steps for WinCE: $(AQROOT)/release/SW/ReadMe_WinCE.txt

@@ -1,0 +1,44 @@
+#
+# Sunplus Ethernet device configuration
+#
+
+config NET_VENDOR_SUNPLUS
+	tristate "Sunplus Ethernet devices"
+	depends on ETHERNET && SOC_SP7021
+	select PHYLIB
+	select PINCTRL_SPPCTL
+	select COMMON_CLK_SP7021
+	select RESET_SUNPLUS
+	select NVMEM_SUNPLUS_OCOTP
+	---help---
+	  If you have a Sunplus network (Ethernet) device belonging to this class,
+	  say Y.
+
+	  Note that the answer to this question doesn't directly affect
+	  the kernel: saying N will just cause the configurator to skip all
+	  the questions about Sunplus device. If you say Y, you will be asked
+	  for your specific device in the following questions.
+
+config NET_VENDOR_SUNPLUS_GL2SW
+	tristate "Sunplus Giga Ethernet devices"
+	depends on ETHERNET && SOC_I143
+	select PHYLIB
+	select PINCTRL_SPPCTL_I143
+	select COMMON_CLK_SP_I143
+	select RESET_SUNPLUS
+	select NVMEM_SUNPLUS_I143_OCOTP
+	---help---
+	  If you have a network (Ethernet) device belonging to this class, say Y.
+
+	  Note that the answer to this question doesn't directly affect
+	  the kernel: saying N will just cause the configurator to skip all
+	  the questions about Sunplus device. If you say Y, you will be asked
+	  for your specific device in the following questions.
+
+config DYNAMIC_MODE_SWITCHING_BY_SYSFS
+	bool "Support Dynamic Mode-switching by sysfs"
+	depends on NET_VENDOR_SUNPLUS || NET_VENDOR_SUNPLUS_GL2SW
+	default y
+	---help---
+	  This mode supports dynamic mode-switching by sysfs:
+

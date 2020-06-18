@@ -115,6 +115,7 @@ typedef struct global_data {
 #ifdef CONFIG_DM_VIDEO
 	ulong video_top;		/* Top of video frame buffer area */
 	ulong video_bottom;		/* Bottom of video frame buffer area */
+	ulong bmp_logo_addr;		/* bmp logo addr */
 #endif
 #ifdef CONFIG_BOOTSTAGE
 	struct bootstage_data *bootstage;	/* Bootstage information */

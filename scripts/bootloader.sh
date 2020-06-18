@@ -1,6 +1,4 @@
-#!/bin/sh
-
-#gunzip -c BPI_M3_1080P.img.gz | dd of=/dev/mmcblk0 conv=sync,noerror bs=1k
+#!/bin/bash
 
 die() {
         echo "$*" >&2
@@ -16,16 +14,15 @@ if [ ! -z $O ] ; then
 	BOARD=$O
 fi
 
-U=/tmp/${BOARD}
-if [ ! -d $U ]; then
-	mkdir -p $U
-fi
-
 echo "Banana Pi BPI-F2S support FAT32 bootfile /ISPBOOOT.BIN (xboot) & u-boot.img for SD/USB boot"
 echo "Banana Pi BPI-F2S emmc boot with mmcblk1boot0 (xboot) & GPT or emmc load uboot@blk=0x00000022"
 TMP_FILE=/tmp/${BOARD}.tmp
-IMG_FILE=${U}/${BOARD}-2k.img
+IMG_FILE=/tmp/${BOARD}-2k.img
 UBOOT=$TOPDIR/u-boot-sp/u-boot.img
+if [ ! -e "$UBOOT" ]; then
+	echo -e "\033[31m u-boot.bin not exit, please build u-boot before pack\033[0m"
+	exit 1
+fi
 
 (sudo dd if=/dev/zero of=${TMP_FILE} bs=1M count=1) >/dev/null 2>&1
 LOOP_DEV=`sudo losetup -f --show ${TMP_FILE}`

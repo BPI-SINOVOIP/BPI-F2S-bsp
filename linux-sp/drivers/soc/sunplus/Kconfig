@@ -1,0 +1,13 @@
+#
+# AXI Monitor subsystem configuration
+#
+
+menu "Sunplus AXI Monitor"
+
+config SUNPLUS_AXI_MONITOR
+	tristate "Sunplus AXI monitor support"
+	default n
+	help
+	  Sunplus breakpoint analysis of backbone-dram problem.
+#source "drivers/soc/iop/qtest/Kconfig"
+endmenu

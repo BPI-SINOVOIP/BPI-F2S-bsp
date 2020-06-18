@@ -685,10 +685,10 @@ static int spsoc_pcm_mmap(struct snd_pcm_substream *substream, struct vm_area_st
 	AUD_INFO("%s IN, stream direction: %d\n", __func__, substream->stream);
 #ifdef USE_KELNEL_MALLOC
         AUD_INFO("dev: 0x%x, dma_area 0x%x dma_addr 0x%x dma_bytes 0x%x\n", substream->pcm->card->dev, runtime->dma_area, runtime->dma_addr, runtime->dma_bytes);
-	ret = dma_mmap_writecombine(substream->pcm->card->dev, vma,
-				    runtime->dma_area,
-				    runtime->dma_addr,
-				    runtime->dma_bytes);
+	ret = dma_mmap_wc(substream->pcm->card->dev, vma,
+			  runtime->dma_area,
+			  runtime->dma_addr,
+			  runtime->dma_bytes);
 #else
 	vma->vm_flags |= VM_IO | VM_RESERVED;
 	vma->vm_page_prot = pgprot_writecombine(vma->vm_page_prot);
@@ -907,13 +907,14 @@ void audfops_init(void)
 static  int preallocate_dma_buffer(struct platform_device *pdev)
 {
 	unsigned int size;
+	struct device *dev = &pdev->dev;
 	  
 	aud_param.fifoInfo.pcmtx_virtAddrBase = 0;
 	aud_param.fifoInfo.mic_virtAddrBase = 0;
-    	size = DRAM_PCM_BUF_LENGTH*(NUM_FIFO_TX + NUM_FIFO_RX);
+    	size = DRAM_PCM_BUF_LENGTH * (NUM_FIFO_TX + NUM_FIFO_RX);
     	aud_param.fifoInfo.TxBuf_TotalLen = size;
 #ifdef USE_KELNEL_MALLOC
-	aud_param.fifoInfo.pcmtx_virtAddrBase = (unsigned int)dma_alloc_coherent(NULL, PAGE_ALIGN(size), \
+	aud_param.fifoInfo.pcmtx_virtAddrBase = (unsigned int)dma_alloc_coherent(dev, PAGE_ALIGN(size), \
 						&aud_param.fifoInfo.pcmtx_physAddrBase , GFP_DMA | GFP_KERNEL);
 #else
 	aud_param.fifoInfo.pcmtx_virtAddrBase = (unsigned int)gp_chunk_malloc_nocache(1,0,PAGE_ALIGN(size));
@@ -975,7 +976,6 @@ static int snd_spsoc_probe(struct platform_device *pdev)
 	ret = devm_snd_soc_register_component(&pdev->dev, &sunplus_soc_platform, NULL, 0);
 	// create & register device for file operation, used for 'ioctl'
 	//audfops_init();
-
 	memset(&aud_param,0, sizeof(struct t_auddrv_param));
 	memset(&aud_param.fifoInfo ,0, sizeof(struct t_AUD_FIFO_PARAMS));
 	memset(&aud_param.gainInfo ,0, sizeof(struct t_AUD_GAIN_PARAMS));
@@ -983,7 +983,7 @@ static int snd_spsoc_probe(struct platform_device *pdev)
 	memset(&aud_param.i2scfgInfo ,0, sizeof(struct t_AUD_I2SCFG_PARAMS));
 
 	aud_param.fsclkInfo.freq_mask = 0x0667;	//192K
-	ret=preallocate_dma_buffer(pdev);
+	ret = preallocate_dma_buffer(pdev);
 
 	return ret;
 }

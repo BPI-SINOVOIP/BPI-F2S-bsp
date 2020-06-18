@@ -1,0 +1,41 @@
+if TARGET_PENTAGRAM_I143_P
+
+config SYS_BOARD
+	default "i143"
+
+config SYS_VENDOR
+	default "sunplus"
+	
+config SYS_CPU
+	default "generic"
+	
+config SYS_CONFIG_NAME
+	default "pentagram_common_i143_p"
+	
+config SYS_TEXT_BASE
+	default 0xA1000000 
+
+config BOARD_SPECIFIC_OPTIONS # dummy
+	def_bool y
+	select GENERIC_RISCV
+	imply CMD_DHCP
+	imply CMD_EXT2
+	imply CMD_EXT4
+	imply CMD_FAT
+	imply CMD_FS_GENERIC
+	imply CMD_NET
+	imply CMD_PING
+	imply CLK_SIFIVE
+	imply CLK_SIFIVE_FU540_PRCI
+	imply DOS_PARTITION
+	imply EFI_PARTITION
+	imply IP_DYN
+	imply ISO_PARTITION
+	imply MACB
+	imply MII
+	imply NET_RANDOM_ETHADDR
+	imply PHY_LIB
+	imply PHY_MSCC
+	imply SIFIVE_SERIAL
+
+endif

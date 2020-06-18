@@ -56,28 +56,7 @@ static inline void platform_do_lowpower(unsigned int cpu, int *spurious)
 	 * we can do is put the core into WFI; this is safe as the calling
 	 * code will have already disabled interrupts
 	 */
-	for (;;) {
-		/*
-		 * here's the WFI
-		 */
-		wfi();
-
-		if (pen_release == cpu_logical_map(cpu)) {
-			/*
-			 * OK, proper wakeup, we're done
-			 */
-			break;
-		}
-
-		/*
-		 * Getting here, means that we have come out of WFI without
-		 * having been woken up - this shouldn't happen
-		 *
-		 * Just note it happening - when we're woken, we can report
-		 * its occurrence.
-		 */
-		(*spurious)++;
-	}
+	wfe();
 }
 
 /*

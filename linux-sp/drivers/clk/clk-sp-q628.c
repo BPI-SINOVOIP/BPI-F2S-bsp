@@ -14,6 +14,11 @@
 #define TRACE	pr_info("### %s:%d (%d)\n", __FUNCTION__, __LINE__, (clk->reg - REG(4, 0)) / 4)
 //#define TRACE
 
+#ifndef clk_readl
+#define clk_readl  readl
+#define clk_writel writel
+#endif
+
 #define MASK_SET(shift, width, value) \
 ({ \
 	u32 m = ((1 << (width)) - 1) << (shift); \

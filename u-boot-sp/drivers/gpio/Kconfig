@@ -7,6 +7,7 @@ menu "GPIO Support"
 config DM_GPIO
 	bool "Enable Driver Model for GPIO drivers"
 	depends on DM
+	default y
 	help
 	  Enable driver model for GPIO access. The standard GPIO
 	  interface (gpio_get_value(), etc.) is then implemented by

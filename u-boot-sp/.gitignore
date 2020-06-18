@@ -12,6 +12,7 @@
 *.dtb
 *.dtbo
 *.dtb.S
+ext_dtb
 *.elf
 *.exe
 *.gcda

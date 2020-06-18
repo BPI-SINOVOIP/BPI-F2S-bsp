@@ -45,34 +45,8 @@
 #include <linux/scatterlist.h>
 #include <linux/mm.h>
 #include <linux/dma-mapping.h>
-#if 1	/* sunplus USB driver */
-#include <asm/uaccess.h>
-#include <linux/proc_fs.h>
-#endif
 
-#include "usb.h"
-
-#ifdef CONFIG_USB_LOGO_TEST	/* sunplus USB driver */
-#include <linux/uaccess.h>
-#include <linux/proc_fs.h>
-#include <linux/usb/sp_usb.h>
-
-#define COMPARE_CHAR_NUMBER		3
-#define BASIC_VALUE			10
-#define LIMITS_OF_AUTHORITY		0666
-#define MAX_LENGTH			64
-#define DIRECTIORY_NAME			"usb_verify_test"
-#define TESET_FLAG_FILE_NAME		"specific_test_set"
-#define HUB_LEVLE_FILE_NAME		"hub_level_set"
-
-bool tid_test_flag = false;
-u8 max_topo_level = 6;
-static struct proc_dir_entry *dir_entry;
-static struct proc_dir_entry *test_flag_entry;
-static struct proc_dir_entry *hub_level_entry;
-EXPORT_SYMBOL_GPL(tid_test_flag);
-EXPORT_SYMBOL_GPL(max_topo_level);
-#endif
+#include "hub.h"
 
 const char *usbcore_name = "usbcore";
 
@@ -90,8 +64,8 @@ int usb_disabled(void)
 EXPORT_SYMBOL_GPL(usb_disabled);
 
 #ifdef	CONFIG_PM
-static int usb_autosuspend_delay = 2;		/* Default delay value,
-						 * in seconds */
+/* Default delay value, in seconds */
+static int usb_autosuspend_delay = CONFIG_USB_AUTOSUSPEND_DELAY;
 module_param_named(autosuspend, usb_autosuspend_delay, int, 0644);
 MODULE_PARM_DESC(autosuspend, "default autosuspend delay");
 
@@ -351,9 +325,9 @@ struct find_interface_arg {
 	struct device_driver *drv;
 };
 
-static int __find_interface(struct device *dev, void *data)
+static int __find_interface(struct device *dev, const void *data)
 {
-	struct find_interface_arg *arg = data;
+	const struct find_interface_arg *arg = data;
 	struct usb_interface *intf;
 
 	if (!is_usb_interface(dev))
@@ -525,11 +499,9 @@ static const struct dev_pm_ops usb_device_pm_ops = {
 	.thaw =		usb_dev_thaw,
 	.poweroff =	usb_dev_poweroff,
 	.restore =	usb_dev_restore,
-#ifdef CONFIG_PM_RUNTIME_USB	/* sunplus USB driver */
 	.runtime_suspend =	usb_runtime_suspend,
 	.runtime_resume =	usb_runtime_resume,
-	.runtime_idle = 	usb_runtime_idle,
-#endif
+	.runtime_idle =		usb_runtime_idle,
 };
 
 #endif	/* CONFIG_PM */
@@ -563,6 +535,27 @@ static unsigned usb_bus_is_wusb(struct usb_bus *bus)
 	return hcd->wireless;
 }
 
+static bool usb_dev_authorized(struct usb_device *dev, struct usb_hcd *hcd)
+{
+	struct usb_hub *hub;
+
+	if (!dev->parent)
+		return true; /* Root hub always ok [and always wired] */
+
+	switch (hcd->dev_policy) {
+	case USB_DEVICE_AUTHORIZE_NONE:
+	default:
+		return false;
+
+	case USB_DEVICE_AUTHORIZE_ALL:
+		return true;
+
+	case USB_DEVICE_AUTHORIZE_INTERNAL:
+		hub = usb_hub_to_struct_hub(dev->parent);
+		return hub->ports[dev->portnum - 1]->connect_type ==
+				USB_PORT_CONNECT_TYPE_HARD_WIRED;
+	}
+}
 
 /**
  * usb_alloc_dev - usb device constructor (usbcore-internal)
@@ -623,10 +616,6 @@ struct usb_device *usb_alloc_dev(struct usb_device *parent,
 	dev->state = USB_STATE_ATTACHED;
 	dev->lpm_disable_count = 1;
 	atomic_set(&dev->urbnum, 0);
-
-#ifdef CONFIG_RETRY_TIMES	/* sunplus USB driver */
-	dev->reset_count = 5;
-#endif
 
 	INIT_LIST_HEAD(&dev->ep0.urb_list);
 	dev->ep0.desc.bLength = USB_DT_ENDPOINT_SIZE;
@@ -694,12 +683,11 @@ struct usb_device *usb_alloc_dev(struct usb_device *parent,
 	dev->connect_time = jiffies;
 	dev->active_duration = -jiffies;
 #endif
-	if (root_hub)	/* Root hub always ok [and always wired] */
-		dev->authorized = 1;
-	else {
-		dev->authorized = !!HCD_DEV_AUTHORIZED(usb_hcd);
+
+	dev->authorized = usb_dev_authorized(dev, usb_hcd);
+	if (!root_hub)
 		dev->wusb = usb_bus_is_wusb(bus) ? 1 : 0;
-	}
+
 	return dev;
 }
 EXPORT_SYMBOL_GPL(usb_alloc_dev);
@@ -945,228 +933,6 @@ void usb_free_coherent(struct usb_device *dev, size_t size, void *addr,
 }
 EXPORT_SYMBOL_GPL(usb_free_coherent);
 
-/**
- * usb_buffer_map - create DMA mapping(s) for an urb
- * @urb: urb whose transfer_buffer/setup_packet will be mapped
- *
- * URB_NO_TRANSFER_DMA_MAP is added to urb->transfer_flags if the operation
- * succeeds. If the device is connected to this system through a non-DMA
- * controller, this operation always succeeds.
- *
- * This call would normally be used for an urb which is reused, perhaps
- * as the target of a large periodic transfer, with usb_buffer_dmasync()
- * calls to synchronize memory and dma state.
- *
- * Reverse the effect of this call with usb_buffer_unmap().
- *
- * Return: Either %NULL (indicating no buffer could be mapped), or @urb.
- *
- */
-#if 0
-struct urb *usb_buffer_map(struct urb *urb)
-{
-	struct usb_bus		*bus;
-	struct device		*controller;
-
-	if (!urb
-			|| !urb->dev
-			|| !(bus = urb->dev->bus)
-			|| !(controller = bus->sysdev))
-		return NULL;
-
-	if (controller->dma_mask) {
-		urb->transfer_dma = dma_map_single(controller,
-			urb->transfer_buffer, urb->transfer_buffer_length,
-			usb_pipein(urb->pipe)
-				? DMA_FROM_DEVICE : DMA_TO_DEVICE);
-	/* FIXME generic api broken like pci, can't report errors */
-	/* if (urb->transfer_dma == DMA_ADDR_INVALID) return 0; */
-	} else
-		urb->transfer_dma = ~0;
-	urb->transfer_flags |= URB_NO_TRANSFER_DMA_MAP;
-	return urb;
-}
-EXPORT_SYMBOL_GPL(usb_buffer_map);
-#endif  /*  0  */
-
-/* XXX DISABLED, no users currently.  If you wish to re-enable this
- * XXX please determine whether the sync is to transfer ownership of
- * XXX the buffer from device to cpu or vice verse, and thusly use the
- * XXX appropriate _for_{cpu,device}() method.  -DaveM
- */
-#if 0
-
-/**
- * usb_buffer_dmasync - synchronize DMA and CPU view of buffer(s)
- * @urb: urb whose transfer_buffer/setup_packet will be synchronized
- */
-void usb_buffer_dmasync(struct urb *urb)
-{
-	struct usb_bus		*bus;
-	struct device		*controller;
-
-	if (!urb
-			|| !(urb->transfer_flags & URB_NO_TRANSFER_DMA_MAP)
-			|| !urb->dev
-			|| !(bus = urb->dev->bus)
-			|| !(controller = bus->sysdev))
-		return;
-
-	if (controller->dma_mask) {
-		dma_sync_single_for_cpu(controller,
-			urb->transfer_dma, urb->transfer_buffer_length,
-			usb_pipein(urb->pipe)
-				? DMA_FROM_DEVICE : DMA_TO_DEVICE);
-		if (usb_pipecontrol(urb->pipe))
-			dma_sync_single_for_cpu(controller,
-					urb->setup_dma,
-					sizeof(struct usb_ctrlrequest),
-					DMA_TO_DEVICE);
-	}
-}
-EXPORT_SYMBOL_GPL(usb_buffer_dmasync);
-#endif
-
-/**
- * usb_buffer_unmap - free DMA mapping(s) for an urb
- * @urb: urb whose transfer_buffer will be unmapped
- *
- * Reverses the effect of usb_buffer_map().
- */
-#if 0
-void usb_buffer_unmap(struct urb *urb)
-{
-	struct usb_bus		*bus;
-	struct device		*controller;
-
-	if (!urb
-			|| !(urb->transfer_flags & URB_NO_TRANSFER_DMA_MAP)
-			|| !urb->dev
-			|| !(bus = urb->dev->bus)
-			|| !(controller = bus->sysdev))
-		return;
-
-	if (controller->dma_mask) {
-		dma_unmap_single(controller,
-			urb->transfer_dma, urb->transfer_buffer_length,
-			usb_pipein(urb->pipe)
-				? DMA_FROM_DEVICE : DMA_TO_DEVICE);
-	}
-	urb->transfer_flags &= ~URB_NO_TRANSFER_DMA_MAP;
-}
-EXPORT_SYMBOL_GPL(usb_buffer_unmap);
-#endif  /*  0  */
-
-#if 0
-/**
- * usb_buffer_map_sg - create scatterlist DMA mapping(s) for an endpoint
- * @dev: device to which the scatterlist will be mapped
- * @is_in: mapping transfer direction
- * @sg: the scatterlist to map
- * @nents: the number of entries in the scatterlist
- *
- * Return: Either < 0 (indicating no buffers could be mapped), or the
- * number of DMA mapping array entries in the scatterlist.
- *
- * Note:
- * The caller is responsible for placing the resulting DMA addresses from
- * the scatterlist into URB transfer buffer pointers, and for setting the
- * URB_NO_TRANSFER_DMA_MAP transfer flag in each of those URBs.
- *
- * Top I/O rates come from queuing URBs, instead of waiting for each one
- * to complete before starting the next I/O.   This is particularly easy
- * to do with scatterlists.  Just allocate and submit one URB for each DMA
- * mapping entry returned, stopping on the first error or when all succeed.
- * Better yet, use the usb_sg_*() calls, which do that (and more) for you.
- *
- * This call would normally be used when translating scatterlist requests,
- * rather than usb_buffer_map(), since on some hardware (with IOMMUs) it
- * may be able to coalesce mappings for improved I/O efficiency.
- *
- * Reverse the effect of this call with usb_buffer_unmap_sg().
- */
-int usb_buffer_map_sg(const struct usb_device *dev, int is_in,
-		      struct scatterlist *sg, int nents)
-{
-	struct usb_bus		*bus;
-	struct device		*controller;
-
-	if (!dev
-			|| !(bus = dev->bus)
-			|| !(controller = bus->sysdev)
-			|| !controller->dma_mask)
-		return -EINVAL;
-
-	/* FIXME generic api broken like pci, can't report errors */
-	return dma_map_sg(controller, sg, nents,
-			is_in ? DMA_FROM_DEVICE : DMA_TO_DEVICE) ? : -ENOMEM;
-}
-EXPORT_SYMBOL_GPL(usb_buffer_map_sg);
-#endif
-
-/* XXX DISABLED, no users currently.  If you wish to re-enable this
- * XXX please determine whether the sync is to transfer ownership of
- * XXX the buffer from device to cpu or vice verse, and thusly use the
- * XXX appropriate _for_{cpu,device}() method.  -DaveM
- */
-#if 0
-
-/**
- * usb_buffer_dmasync_sg - synchronize DMA and CPU view of scatterlist buffer(s)
- * @dev: device to which the scatterlist will be mapped
- * @is_in: mapping transfer direction
- * @sg: the scatterlist to synchronize
- * @n_hw_ents: the positive return value from usb_buffer_map_sg
- *
- * Use this when you are re-using a scatterlist's data buffers for
- * another USB request.
- */
-void usb_buffer_dmasync_sg(const struct usb_device *dev, int is_in,
-			   struct scatterlist *sg, int n_hw_ents)
-{
-	struct usb_bus		*bus;
-	struct device		*controller;
-
-	if (!dev
-			|| !(bus = dev->bus)
-			|| !(controller = bus->sysdev)
-			|| !controller->dma_mask)
-		return;
-
-	dma_sync_sg_for_cpu(controller, sg, n_hw_ents,
-			    is_in ? DMA_FROM_DEVICE : DMA_TO_DEVICE);
-}
-EXPORT_SYMBOL_GPL(usb_buffer_dmasync_sg);
-#endif
-
-#if 0
-/**
- * usb_buffer_unmap_sg - free DMA mapping(s) for a scatterlist
- * @dev: device to which the scatterlist will be mapped
- * @is_in: mapping transfer direction
- * @sg: the scatterlist to unmap
- * @n_hw_ents: the positive return value from usb_buffer_map_sg
- *
- * Reverses the effect of usb_buffer_map_sg().
- */
-void usb_buffer_unmap_sg(const struct usb_device *dev, int is_in,
-			 struct scatterlist *sg, int n_hw_ents)
-{
-	struct usb_bus		*bus;
-	struct device		*controller;
-
-	if (!dev
-			|| !(bus = dev->bus)
-			|| !(controller = bus->sysdev)
-			|| !controller->dma_mask)
-		return;
-
-	dma_unmap_sg(controller, sg, n_hw_ents,
-			is_in ? DMA_FROM_DEVICE : DMA_TO_DEVICE);
-}
-EXPORT_SYMBOL_GPL(usb_buffer_unmap_sg);
-#endif
-
 /*
  * Notifications of device and interface registration
  */
@@ -1197,190 +963,30 @@ static struct notifier_block usb_bus_nb = {
 	.notifier_call = usb_bus_notify,
 };
 
-struct dentry *usb_debug_root;
-EXPORT_SYMBOL_GPL(usb_debug_root);
+static struct dentry *usb_devices_root;
 
 static void usb_debugfs_init(void)
 {
-	usb_debug_root = debugfs_create_dir("usb", NULL);
-	debugfs_create_file("devices", 0444, usb_debug_root, NULL,
-			    &usbfs_devices_fops);
+	usb_devices_root = debugfs_create_file("devices", 0444, usb_debug_root,
+					       NULL, &usbfs_devices_fops);
 }
 
 static void usb_debugfs_cleanup(void)
 {
-	debugfs_remove_recursive(usb_debug_root);
+	debugfs_remove(usb_devices_root);
 }
 
 /*
  * Init
  */
-
-#if 1	/* sunplus USB driver */
-	#ifdef CONFIG_USB_LOGO_TEST
-static int usb_specific_test_set_show(struct seq_file *m, void *v)
-{
-	return 0;
-}
-
-static int usb_specific_test_set_write(struct file *file,
-				const char __user *buf, size_t count, loff_t *data)
-{
-	char verify_parameter[MAX_LENGTH];
-
-	if (count > MAX_LENGTH)
-		count = MAX_LENGTH;
-
-	printk(KERN_DEBUG "USB verify parameters set\n");
-	memset(verify_parameter, 0, MAX_LENGTH);
-	if (copy_from_user(verify_parameter, buf, count))
-		return -EFAULT;
-
-	if (strncmp(verify_parameter, "ORI", COMPARE_CHAR_NUMBER) == 0) {
-		printk(KERN_DEBUG "recover to origin set\n");
-		tid_test_flag = false;
-	} else if (strncmp(verify_parameter, "TID", COMPARE_CHAR_NUMBER) == 0) {
-		printk(KERN_DEBUG "comfs to comhs test set\n");
-		tid_test_flag = true;
-	} else if (strncmp(verify_parameter, "MFI", COMPARE_CHAR_NUMBER) == 0) {
-		printk(KERN_DEBUG "comfs to comhs test set\n");
-		tid_test_flag = true;
-	} else {
-		printk(KERN_DEBUG "now, not support value:%s\n",verify_parameter);
-	}
-
-	return count;
-}
-
-static int usb_specific_test_proc_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, usb_specific_test_set_show, NULL);
-}
-
-static const struct file_operations usb_specific_test_proc_fops = {
-	.owner		= THIS_MODULE,
-	.open		= usb_specific_test_proc_open,
-	.read		= seq_read,
-	.write		= usb_specific_test_set_write,
-	.release	= single_release,
-};
-
-static int usb_hub_level_set_show(struct seq_file *m, void *v)
-{
-	int len;
-	char verify_parameter[MAX_LENGTH];
-
-	printk(KERN_DEBUG "+%s\n", __FUNCTION__);
-	memset(verify_parameter, 0, sizeof(verify_parameter));
-	len = num_to_str(verify_parameter,MAX_LENGTH,max_topo_level,0);
-	if (!len)
-		printk(KERN_NOTICE "num_to_str error\n");
-	else
-		seq_printf(m, "%s\n", verify_parameter);
-
-	return 0;
-}
-
-static int usb_hub_level_set_write(struct file *file,
-				const char __user *buf, size_t count, loff_t *data)
-{
-	u64 value;
-	char verify_parameter[MAX_LENGTH];
-
-	if (count > MAX_LENGTH)
-		count = MAX_LENGTH;
-
-	printk(KERN_DEBUG "+%s\n", __FUNCTION__);
-	memset(verify_parameter, 0, MAX_LENGTH);
-	if (copy_from_user(verify_parameter, buf, count))
-		return -EFAULT;
-
-	value = simple_strtoull(verify_parameter, NULL, BASIC_VALUE);
-	max_topo_level = value;
-	printk(KERN_DEBUG "USB verify max hub level value:%d\n", max_topo_level);
-
-	return count;
-}
-
-static int usb_hub_level_proc_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, usb_hub_level_set_show, NULL);
-}
-
-static const struct file_operations hub_level_proc_fops = {
-	.owner		= THIS_MODULE,
-	.open		= usb_hub_level_proc_open,
-	.read		= seq_read,
-	.write		= usb_hub_level_set_write,
-	.release	= single_release,
-};
-
-static int proc_entry_add(void)
-{
-	dir_entry = proc_mkdir(DIRECTIORY_NAME, NULL);
-	if (!dir_entry) {
-		printk(KERN_NOTICE "can't create /proc/usb_verify_test\n");
-		return -ENOMEM;
-	}
-
-	test_flag_entry = proc_create(TESET_FLAG_FILE_NAME, LIMITS_OF_AUTHORITY,
-				      dir_entry, &usb_specific_test_proc_fops);
-	if (!test_flag_entry) {
-		printk(KERN_NOTICE
-		       "can't create /proc/usb_verify_test/specific_test_set\n");
-		remove_proc_entry(TESET_FLAG_FILE_NAME, dir_entry);
-		return -ENOMEM;
-	}
-
-	hub_level_entry = proc_create(HUB_LEVLE_FILE_NAME, LIMITS_OF_AUTHORITY,
-				      dir_entry, &hub_level_proc_fops);
-	if (!hub_level_entry) {
-		printk(KERN_NOTICE
-		       "can't create /proc/usb_verify_test/hub_level_set\n");
-		remove_proc_entry(HUB_LEVLE_FILE_NAME, dir_entry);
-		return -ENOMEM;
-	}
-
-	return 0;
-}
-
-static void proc_entry_remove(void)
-{
-	remove_proc_entry(TESET_FLAG_FILE_NAME, dir_entry);
-	remove_proc_entry(HUB_LEVLE_FILE_NAME, dir_entry);
-	remove_proc_entry(DIRECTIORY_NAME, NULL);
-}
-	#endif
-
-static void sp_get_port_state(void)
-{
-	#ifdef CONFIG_USB_PORT0
-	sp_port_enabled |= 0x01;
-	#endif
-
-	#ifdef CONFIG_USB_PORT1
-	sp_port_enabled |= 0x02;
-	#endif
-}
-#endif
-
 static int __init usb_init(void)
 {
-#if 1	/* sunplus USB driver */
-	int i;	
-#endif
 	int retval;
 	if (usb_disabled()) {
 		pr_info("%s: USB support disabled\n", usbcore_name);
 		return 0;
 	}
 	usb_init_pool_max();
-
-#ifdef CONFIG_USB_LOGO_TEST	/* sunplus USB driver */
-	retval = proc_entry_add();
-	if (retval)
-		goto out;
-#endif
 
 	usb_debugfs_init();
 
@@ -1404,22 +1010,8 @@ static int __init usb_init(void)
 	if (retval)
 		goto hub_init_failed;
 	retval = usb_register_device_driver(&usb_generic_driver, THIS_MODULE);
-	if (!retval) {
-#if 1	/* sunplus USB driver */
-		for (i = 0; i < USB_PORT_NUM; i++) {
-			sema_init(&enum_rx_active_reset_sem[i], 0);
-		}
-	#ifdef CONFIG_GADGET_USB0
-		accessory_port_id = USB_PORT0_ID;
-	#else
-		accessory_port_id = USB_PORT1_ID;
-	#endif
-		printk(KERN_NOTICE "usb acc config port= %d\n",accessory_port_id);
-		sp_get_port_state();
-#endif
-
+	if (!retval)
 		goto out;
-	}
 
 	usb_hub_cleanup();
 hub_init_failed:
@@ -1447,10 +1039,6 @@ static void __exit usb_exit(void)
 	/* This will matter if shutdown/reboot does exitcalls. */
 	if (usb_disabled())
 		return;
-
-#ifdef CONFIG_USB_LOGO_TEST	/* sunplus USB driver */
-	proc_entry_remove();
-#endif
 
 	usb_release_quirk_list();
 	usb_deregister_device_driver(&usb_generic_driver);

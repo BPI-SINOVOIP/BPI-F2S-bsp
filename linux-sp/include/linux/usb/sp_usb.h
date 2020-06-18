@@ -2,8 +2,6 @@
 #define __SP_USB_H
 
 #include <asm/io.h>
-#include <mach/irqs.h>
-#include <mach/io_map.h>
 #include <linux/semaphore.h>
 #include <linux/io.h>
 #include <linux/regulator/consumer.h>
@@ -12,74 +10,84 @@
 #include <linux/gpio.h>
 
 
-#define RF_MASK_V(_mask, _val)       (((_mask) << 16) | (_val))
-#define RF_MASK_V_SET(_mask)        (((_mask) << 16) | (_mask))
-#define RF_MASK_V_CLR(_mask)        (((_mask) << 16) | 0)
+#define RF_MASK_V(_mask, _val)			(((_mask) << 16) | (_val))
+#define RF_MASK_V_SET(_mask)			(((_mask) << 16) | (_mask))
+#define RF_MASK_V_CLR(_mask)			(((_mask) << 16) | 0)
 
-#define USB_PORT0_ID						0
-#define USB_PORT1_ID						1
-#define USB_PORT_NUM						3
+#define USB_PORT0_ID				0
+#define USB_PORT1_ID				1
+#define USB_PORT_NUM				3
 
-#define	VBUS_GPIO_CTRL_0					90
-#define	VBUS_GPIO_CTRL_1					91
+#define	VBUS_GPIO_CTRL_0			90
+#define	VBUS_GPIO_CTRL_1			91
 
-#define CDP_MODE_VALUE						0
-#define DCP_MODE_VALUE						1
-#define SDP_MODE_VALUE						2
-#define UPHY1_OTP_DISC_LEVEL_OFFSET				5
-#define OTP_DISC_LEVEL_TEMP					0x16
-#define DISC_LEVEL_DEFAULT					0x0B
-#define OTP_DISC_LEVEL_BIT					0x1F
-#define GET_BC_MODE						0xFF00
-#define APHY_PROBE_CTRL						0x38
+#define CDP_MODE_VALUE				0
+#define DCP_MODE_VALUE				1
+#define SDP_MODE_VALUE				2
+#define UPHY1_OTP_DISC_LEVEL_OFFSET		5
+#define OTP_DISC_LEVEL_TEMP			0x16
+#define DISC_LEVEL_DEFAULT			0x0B
+#define OTP_DISC_LEVEL_BIT			0x1F
+#define GET_BC_MODE				0xFF00
+#define APHY_PROBE_CTRL				0x38
 
-#define PORT0_ENABLED						(1 << 0)
-#define PORT1_ENABLED						(1 << 1)
-#define POWER_SAVING_SET					(1 << 5)
-#define ECO_PATH_SET						(1 << 6)
-#define	UPHY_DISC_0						(1 << 2)
-#define APHY_PROBE_CTRL_MASK					0x38
+#define PORT0_ENABLED				(1 << 0)
+#define PORT1_ENABLED				(1 << 1)
+#define POWER_SAVING_SET			(1 << 5)
+#define ECO_PATH_SET				(1 << 6)
+#define	UPHY_DISC_0				(1 << 2)
+#define APHY_PROBE_CTRL_MASK			0x38
 
-#define USB_RESET_OFFSET					0x5C
-#define PIN_MUX_CTRL						0x8C
-#define USBC_CTL_OFFSET						0x244
+#define USB_RESET_OFFSET			0x5C
+#ifdef CONFIG_SOC_SP7021
+#define PIN_MUX_CTRL				0x8C
+#elif defined(CONDIF_SOC_I143)
+#define PIN_MUX_CTRL				0x88
+#endif
 
-#define UPHY0_CTL0_OFFSET					0x248
-#define UPHY0_CTL1_OFFSET					0x24C
-#define UPHY0_CTL2_OFFSET					0x250
-#define UPHY0_CTL3_OFFSET					0x254
-#define UPHY1_CTL0_OFFSET					0x258
-#define UPHY1_CTL1_OFFSET					0x25C
-#define UPHY1_CTL2_OFFSET					0x260
-#define UPHY1_CTL3_OFFSET					0x264
+#define USBC_CTL_OFFSET				0x44
 
-#define CLK_REG_OFFSET						0xc
+#define UPHY0_CTL0_OFFSET			0x48
+#define UPHY0_CTL1_OFFSET			0x4C
+#define UPHY0_CTL2_OFFSET			0x50
+#define UPHY0_CTL3_OFFSET			0x54
+#define UPHY1_CTL0_OFFSET			0x58
+#define UPHY1_CTL1_OFFSET			0x5C
+#define UPHY1_CTL2_OFFSET			0x60
+#define UPHY1_CTL3_OFFSET			0x64
 
-#define	POWER_SAVING_OFFSET					0x4
+#define CLK_REG_OFFSET				0xc
 
-#define DISC_LEVEL_OFFSET					0x1c
-#define	ECO_PATH_OFFSET						0x24
-#define	UPHY_DISC_OFFSET					0x28
-#define BIT_TEST_OFFSET						0x10
-#define CDP_REG_OFFSET						0x40
-#define	DCP_REG_OFFSET						0x44
-#define	UPHY_INTR_OFFSET					0x4c
-#define APHY_PROBE_OFFSET					0x5c
-#define CDP_OFFSET						0
+#define	POWER_SAVING_OFFSET			0x4
 
-#define	UPHY_DEBUG_SIGNAL_REG_OFFSET				0x30
-#define UPHY_INTER_SIGNAL_REG_OFFSET				0xc
-#define USB_OTP_REG						0x9c00af18
+#define DISC_LEVEL_OFFSET			0x1c
+#define	ECO_PATH_OFFSET				0x24
+#define	UPHY_DISC_OFFSET			0x28
+#define BIT_TEST_OFFSET				0x10
+#define CDP_REG_OFFSET				0x40
+#define	DCP_REG_OFFSET				0x44
+#define	UPHY_INTR_OFFSET			0x4c
+#define APHY_PROBE_OFFSET			0x5c
+#ifdef CONFIG_SOC_I143
+#define SQ_CT_CTRL_OFFSET			0x64
+#define CTRL_OFFSET				0xf0
+#define PLL_PWR_CTRL_OFFSET			0xf8
+#endif
+#define CDP_OFFSET				0
 
-#define PORT_OWNERSHIP						0x00002000
-#define CURRENT_CONNECT_STATUS					0x00000001
-#define EHCI_CONNECT_STATUS_CHANGE				0x00000002
-#define OHCI_CONNECT_STATUS_CHANGE				0x00010000
+#define	UPHY_DEBUG_SIGNAL_REG_OFFSET		0x30
+#define UPHY_INTER_SIGNAL_REG_OFFSET		0xc
+#define USB_OTP_REG				0x9c00af18
 
-#define WAIT_TIME_AFTER_RESUME					25
-#define ELAPSE_TIME_AFTER_SUSPEND				15000
-#define SEND_SOF_TIME_BEFORE_SUSPEND				15000
-#define SEND_SOF_TIME_BEFORE_SEND_IN_PACKET			15000
+#define PORT_OWNERSHIP				0x00002000
+#define CURRENT_CONNECT_STATUS			0x00000001
+#define EHCI_CONNECT_STATUS_CHANGE		0x00000002
+#define OHCI_CONNECT_STATUS_CHANGE		0x00010000
+
+#define WAIT_TIME_AFTER_RESUME			25
+#define ELAPSE_TIME_AFTER_SUSPEND		15000
+#define SEND_SOF_TIME_BEFORE_SUSPEND		15000
+#define SEND_SOF_TIME_BEFORE_SEND_IN_PACKET	15000
 
 
 extern u32 bc_switch;
@@ -100,7 +108,8 @@ extern u32 usb_vbus_gpio[USB_PORT_NUM];
 
 extern u8 max_topo_level;
 extern bool tid_test_flag;
-extern u8 sp_port_enabled;
+extern u8 sp_port0_enabled;
+extern u8 sp_port1_enabled;
 extern uint accessory_port_id;
 extern bool enum_rx_active_flag[USB_PORT_NUM];
 extern struct semaphore enum_rx_active_reset_sem[USB_PORT_NUM];
@@ -170,6 +179,7 @@ static inline void uphy_force_disc(int en, int port)
 	ENABLE_VBUS_POWER(port);	\
 } while (0)
 
+#if 0
 static inline int get_uphy_swing(int port)
 {
 	int uphy_ctl_offset = port ? UPHY1_CTL2_OFFSET : UPHY0_CTL2_OFFSET;
@@ -193,6 +203,7 @@ static inline int set_uphy_swing(u32 swing, int port)
 
 	return 0;
 }
+#endif
 
 static inline int get_disconnect_level(int port)
 {
@@ -226,6 +237,7 @@ static inline int set_disconnect_level(u32 disc_level, int port)
 	return 0;
 }
 
+#if 0
 /*
  * return: 0 = device, 1 = host
  */
@@ -247,6 +259,7 @@ static inline void reset_uphy(int port){
 	writel(RF_MASK_V_SET(1 << (10 + port)), reg_addr + USB_RESET_OFFSET);
 	writel(RF_MASK_V_CLR(1 << (10 + port)), reg_addr + USB_RESET_OFFSET);
 }
+#endif
 
 static inline void reinit_uphy(int port)
 {

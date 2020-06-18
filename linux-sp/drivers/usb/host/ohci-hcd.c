@@ -40,17 +40,12 @@
 #include <linux/dmapool.h>
 #include <linux/workqueue.h>
 #include <linux/debugfs.h>
-#if 1	/* sunplus USB driver */
-#include <linux/platform_device.h>
-#endif
+#include <linux/genalloc.h>
 
 #include <asm/io.h>
 #include <asm/irq.h>
 #include <asm/unaligned.h>
 #include <asm/byteorder.h>
-#if 1	/* sunplus USB driver */
-#include <linux/usb/sp_usb.h>
-#endif
 
 
 #define DRIVER_AUTHOR "Roman Weissgaerber, David Brownell"
@@ -77,12 +72,6 @@
 /*-------------------------------------------------------------------------*/
 
 static const char	hcd_name [] = "ohci_hcd";
-#ifdef CONFIG_USB_OHCI_SPHE8700_TD_FIX	/* sunplus USB driver */
-u32 td_fix_flag = 0;
-#define set_td_fix_flag() (td_fix_flag |=  1)
-#define clr_td_fix_flag() (td_fix_flag &= ~1)
-#define get_td_fix_flag() (td_fix_flag & 0x1)
-#endif
 
 #define	STATECHANGE_DELAY	msecs_to_jiffies(300)
 #define	IO_WATCHDOG_DELAY	msecs_to_jiffies(275)
@@ -92,9 +81,6 @@ u32 td_fix_flag = 0;
 #include "pci-quirks.h"
 
 static void ohci_dump(struct ohci_hcd *ohci);
-#if 1	/* sunplus USB driver */
-static int ohci_init(struct ohci_hcd *ohci);
-#endif
 static void ohci_stop(struct usb_hcd *hcd);
 static void io_watchdog_func(struct timer_list *t);
 
@@ -433,8 +419,7 @@ static void ohci_usb_reset (struct ohci_hcd *ohci)
  * other cases where the next software may expect clean state from the
  * "firmware".  this is bus-neutral, unlike shutdown() methods.
  */
-static void
-ohci_shutdown (struct usb_hcd *hcd)
+static void _ohci_shutdown(struct usb_hcd *hcd)
 {
 	struct ohci_hcd *ohci;
 
@@ -450,6 +435,16 @@ ohci_shutdown (struct usb_hcd *hcd)
 	ohci->rh_state = OHCI_RH_HALTED;
 }
 
+static void ohci_shutdown(struct usb_hcd *hcd)
+{
+	struct ohci_hcd	*ohci = hcd_to_ohci(hcd);
+	unsigned long flags;
+
+	spin_lock_irqsave(&ohci->lock, flags);
+	_ohci_shutdown(hcd);
+	spin_unlock_irqrestore(&ohci->lock, flags);
+}
+
 /*-------------------------------------------------------------------------*
  * HC functions
  *-------------------------------------------------------------------------*/
@@ -462,7 +457,7 @@ static int ohci_init (struct ohci_hcd *ohci)
 	struct usb_hcd *hcd = ohci_to_hcd(ohci);
 
 	/* Accept arbitrarily long scatter-gather lists */
-	if (!(hcd->driver->flags & HCD_LOCAL_MEM))
+	if (!hcd->localmem_pool)
 		hcd->self.sg_tablesize = ~0;
 
 	if (distrust_firmware)
@@ -520,8 +515,15 @@ static int ohci_init (struct ohci_hcd *ohci)
 	timer_setup(&ohci->io_watchdog, io_watchdog_func, 0);
 	ohci->prev_frame_no = IO_WATCHDOG_OFF;
 
-	ohci->hcca = dma_alloc_coherent (hcd->self.controller,
-			sizeof(*ohci->hcca), &ohci->hcca_dma, GFP_KERNEL);
+	if (hcd->localmem_pool)
+		ohci->hcca = gen_pool_dma_alloc_align(hcd->localmem_pool,
+						sizeof(*ohci->hcca),
+						&ohci->hcca_dma, 256);
+	else
+		ohci->hcca = dma_alloc_coherent(hcd->self.controller,
+						sizeof(*ohci->hcca),
+						&ohci->hcca_dma,
+						GFP_KERNEL);
 	if (!ohci->hcca)
 		return -ENOMEM;
 
@@ -767,7 +769,7 @@ static void io_watchdog_func(struct timer_list *t)
  died:
 			usb_hc_died(ohci_to_hcd(ohci));
 			ohci_dump(ohci);
-			ohci_shutdown(ohci_to_hcd(ohci));
+			_ohci_shutdown(ohci_to_hcd(ohci));
 			goto done;
 		} else {
 			/* No write back because the done queue was empty */
@@ -874,9 +876,6 @@ static irqreturn_t ohci_irq (struct usb_hcd *hcd)
 	struct ohci_hcd		*ohci = hcd_to_ohci (hcd);
 	struct ohci_regs __iomem *regs = ohci->regs;
 	int			ints;
-#if 1	/* sunplus USB driver */
-	int port_status;
-#endif
 
 	/* Read interrupt status (and flush pending writes).  We ignore the
 	 * optimization of checking the LSB of hcca->done_head; it doesn't
@@ -981,54 +980,8 @@ static irqreturn_t ohci_irq (struct usb_hcd *hcd)
 	}
 	spin_unlock(&ohci->lock);
 
-#ifdef CONFIG_USB_HOST_NOT_FINISH_QTD_WHEN_DISC_WORKAROUND	/* sunplus USB driver */
-	port_status = ohci_readl(ohci, &ohci->regs->roothub.portstatus[0]);
-	if ((!(port_status & RH_PS_CCS)) || (port_status & RH_PS_CSC)) {
-		tasklet_schedule(&hcd->host_irq_tasklet);
-	}
-#endif
-
 	return IRQ_HANDLED;
 }
-
-#ifdef CONFIG_USB_HOST_NOT_FINISH_QTD_WHEN_DISC_WORKAROUND	/* sunplus USB driver */
-struct api_context {
-	struct completion done;
-	int status;
-};
-static void ohci_irq_tasklet(unsigned long data)
-{
-	int port_status;
-	struct api_context *ctx;
-	struct platform_device *pdev;
-	struct usb_hcd *hcd = (void *)data;
-	struct ohci_hcd *ohci = hcd_to_ohci(hcd);
-
-	pdev = to_platform_device(hcd->self.controller);
-	port_status = ohci_readl(ohci, &ohci->regs->roothub.portstatus[0]);
-	printk(KERN_NOTICE "ohci_irq,id:%d,ps:%x\n",pdev->id - 1,port_status);
-	if (hcd->current_active_urb && hcd->enum_msg_flag) {
-		printk(KERN_NOTICE "ohci_irq,dev disc,ps:%x\n",port_status);
-		ctx = hcd->current_active_urb->context;
-		hcd->enum_msg_flag = false;
-		hcd->current_active_urb = NULL;
-		ctx->status = -ENOTCONN_IRQ;
-		complete(&ctx->done);
-	}
-}
-#endif
-
-#if 1	/* sunplus USB driver */
-int ohci_get_port_status_from_register(struct usb_hcd *hcd)
-{
-	struct ohci_hcd *ohci = hcd_to_ohci(hcd);
-	int port_status = ohci_readl(ohci, &ohci->regs->roothub.portstatus[0]);
-
-	printk(KERN_DEBUG "o_ps:%x\n", port_status);
-
-	return port_status;
-}
-#endif
 
 /*-------------------------------------------------------------------------*/
 
@@ -1054,9 +1007,14 @@ static void ohci_stop (struct usb_hcd *hcd)
 	remove_debug_files (ohci);
 	ohci_mem_cleanup (ohci);
 	if (ohci->hcca) {
-		dma_free_coherent (hcd->self.controller,
-				sizeof *ohci->hcca,
-				ohci->hcca, ohci->hcca_dma);
+		if (hcd->localmem_pool)
+			gen_pool_free(hcd->localmem_pool,
+				      (unsigned long)ohci->hcca,
+				      sizeof(*ohci->hcca));
+		else
+			dma_free_coherent(hcd->self.controller,
+					  sizeof(*ohci->hcca),
+					  ohci->hcca, ohci->hcca_dma);
 		ohci->hcca = NULL;
 		ohci->hcca_dma = 0;
 	}
@@ -1229,7 +1187,7 @@ static const struct hc_driver ohci_hc_driver = {
 	 * generic hardware linkage
 	*/
 	.irq =                  ohci_irq,
-	.flags =                HCD_MEMORY | HCD_USB11,
+	.flags =                HCD_MEMORY | HCD_DMA | HCD_USB11,
 
 	/*
 	* basic lifecycle operations
@@ -1309,11 +1267,10 @@ MODULE_LICENSE ("GPL");
 #define TMIO_OHCI_DRIVER	ohci_hcd_tmio_driver
 #endif
 
-#ifdef CONFIG_USB_OHCI_HCD_PLATFORM	/* sunplus USB driver */
-#include "ohci-platform.c"
+#ifdef CONFIG_USB_OHCI_HCD_PLATFORM
+#include "ohci-sunplus.c"
 #endif
 
-#if 0	/* sunplus USB driver */
 static int __init ohci_hcd_mod_init(void)
 {
 	int retval = 0;
@@ -1410,4 +1367,4 @@ static void __exit ohci_hcd_mod_exit(void)
 	clear_bit(USB_OHCI_LOADED, &usb_hcds_loaded);
 }
 module_exit(ohci_hcd_mod_exit);
-#endif
+

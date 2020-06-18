@@ -120,7 +120,4 @@
 
 #define EHWPOISON	133	/* Memory page has hardware error */
 
-	#if 1	/* sunplus USB driver */
-#define ENOTCONN_IRQ    134
-	#endif
 #endif

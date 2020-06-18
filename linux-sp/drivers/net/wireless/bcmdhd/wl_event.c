@@ -13,13 +13,13 @@
 #define EVENT_TRACE(name, arg1, args...) \
 	do { \
 		if (android_msg_level & ANDROID_TRACE_LEVEL) { \
-			printk(KERN_ERR "[dhd-%s] EVENT-TRACE) %s : " arg1, name, __func__, ## args); \
+			printk(KERN_INFO "[dhd-%s] EVENT-TRACE) %s : " arg1, name, __func__, ## args); \
 		} \
 	} while (0)
 #define EVENT_DBG(name, arg1, args...) \
 	do { \
 		if (android_msg_level & ANDROID_DBG_LEVEL) { \
-			printk(KERN_ERR "[dhd-%s] EVENT-DBG) %s : " arg1, name, __func__, ## args); \
+			printk(KERN_INFO "[dhd-%s] EVENT-DBG) %s : " arg1, name, __func__, ## args); \
 		} \
 	} while (0)
 
@@ -200,6 +200,7 @@ wl_ext_event_handler(struct work_struct *work_data)
 	struct net_device *dev = NULL;
 	struct event_handler_list *evt_node;
 	dhd_pub_t *dhd;
+	unsigned long flags = 0;
 
 	BCM_SET_CONTAINER_OF(event_params, work_data, struct wl_event_params, event_work);
 	DHD_EVENT_WAKE_LOCK(event_params->pub);
@@ -210,7 +211,7 @@ wl_ext_event_handler(struct work_struct *work_data)
 		}
 		dev = event_params->dev[e->emsg.ifidx];
 		if (!dev) {
-			EVENT_ERROR("wlan", "ifidx=%d dev not ready\n", e->emsg.ifidx);
+			EVENT_DBG("wlan", "ifidx=%d dev not ready\n", e->emsg.ifidx);
 			goto fail;
 		}
 		dhd = dhd_get_pub(dev);
@@ -218,10 +219,13 @@ wl_ext_event_handler(struct work_struct *work_data)
 			EVENT_TRACE(dev->name, "Unknown Event (%d): ignoring\n", e->etype);
 			goto fail;
 		}
-		if (dhd->busstate == DHD_BUS_DOWN) {
+		DHD_GENERAL_LOCK(dhd, flags);
+		if (DHD_BUS_CHECK_DOWN_OR_DOWN_IN_PROGRESS(dhd)) {
 			EVENT_ERROR(dev->name, "BUS is DOWN.\n");
+			DHD_GENERAL_UNLOCK(dhd, flags);
 			goto fail;
 		}
+		DHD_GENERAL_UNLOCK(dhd, flags);
 		EVENT_DBG(dev->name, "event type (%d)\n", e->etype);
 		mutex_lock(&event_params->event_sync);
 		evt_node = event_params->evt_head.evt_head;
@@ -441,7 +445,7 @@ wl_ext_event_attach_netdev(struct net_device *net, int ifidx, uint8 bssidx)
 	struct wl_event_params *event_params = dhd->event_params;
 
 	EVENT_TRACE(net->name, "ifidx=%d, bssidx=%d\n", ifidx, bssidx);
-	if (event_params) {
+	if (event_params && ifidx < WL_MAX_IFS) {
 		event_params->dev[ifidx] = net;
 	}
 
@@ -455,7 +459,7 @@ wl_ext_event_dettach_netdev(struct net_device *net, int ifidx)
 	struct wl_event_params *event_params = dhd->event_params;
 
 	EVENT_TRACE(net->name, "ifidx=%d\n", ifidx);
-	if (event_params) {
+	if (event_params && ifidx < WL_MAX_IFS) {
 		event_params->dev[ifidx] = NULL;
 	}
 

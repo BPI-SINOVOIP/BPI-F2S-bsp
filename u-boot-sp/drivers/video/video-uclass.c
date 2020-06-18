@@ -57,7 +57,8 @@ static ulong alloc_fb(struct udevice *dev, ulong *addrp)
 		return 0;
 
 	align = plat->align ? plat->align : 1 << 20;
-	base = *addrp - plat->size;
+	//base = *addrp - plat->size;
+	base = *addrp - CONFIG_SYS_VIDEO_LOGO_MAX_SIZE;
 	base &= ~(align - 1);
 	plat->base = base;
 	size = *addrp - base;
@@ -111,7 +112,9 @@ int video_clear(struct udevice *dev)
 		memset(priv->fb, priv->colour_bg, priv->fb_size);
 		break;
 	}
-
+#ifdef CONFIG_VIDEO_SP7021
+	flush_cache((ulong)priv->fb, priv->fb_size);
+#endif
 	return 0;
 }
 
@@ -136,8 +139,23 @@ void video_set_default_colors(struct udevice *dev, bool invert)
 		back = temp;
 	}
 	priv->fg_col_idx = fore;
+
+#ifdef CONFIG_VIDEO_SP7021
+	switch (priv->bpix) {
+		case VIDEO_BPP8: {
+			priv->colour_fg = fore;
+			priv->colour_bg = back;
+			break;
+		}	
+		default:
+			priv->colour_fg = vid_console_color(priv, fore);
+			priv->colour_bg = vid_console_color(priv, back);
+			break;
+	}
+#else		
 	priv->colour_fg = vid_console_color(priv, fore);
 	priv->colour_bg = vid_console_color(priv, back);
+#endif
 }
 
 /* Flush video activity to the caches */
@@ -196,21 +214,26 @@ int video_get_ysize(struct udevice *dev)
 /* Set up the colour map */
 static int video_pre_probe(struct udevice *dev)
 {
+#ifdef CONFIG_VIDEO_SP7021
+#else
 	struct video_priv *priv = dev_get_uclass_priv(dev);
 
 	priv->cmap = calloc(256, sizeof(ushort));
+
 	if (!priv->cmap)
 		return -ENOMEM;
-
+#endif
 	return 0;
 }
 
 static int video_pre_remove(struct udevice *dev)
 {
+#ifdef CONFIG_VIDEO_SP7021
+#else
 	struct video_priv *priv = dev_get_uclass_priv(dev);
 
 	free(priv->cmap);
-
+#endif
 	return 0;
 }
 

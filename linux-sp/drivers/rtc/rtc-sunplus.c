@@ -30,6 +30,7 @@
 
 
 /* ---------------------------------------------------------------------------------------------- */
+//#define DEBUG           // Unmark to enable dynamic debug
 #if 0
 #define FUNC_DEBUG() printk(KERN_DEBUG "[RTC] Debug: %s(%d)\n", __FUNCTION__, __LINE__)
 #else
@@ -154,8 +155,11 @@ static int sp_rtc_resume(struct platform_device *pdev)
 	return 0;
 }
 
-static int sp_rtc_set_mmss(struct device *dev, unsigned long secs)
+static int sp_rtc_set_time(struct device *dev, struct rtc_time *tm)
 {
+	unsigned long secs;
+
+	rtc_tm_to_time(tm, &secs);
 	RTC_DEBUG("%s, secs = %lu\n", __func__, secs);
 	sp_set_seconds(secs);
 	return 0;
@@ -190,7 +194,7 @@ static int sp_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 
 static const struct rtc_class_ops sp_rtc_ops = {
 	.read_time = sp_rtc_read_time,
-	.set_mmss = sp_rtc_set_mmss,
+	.set_time = sp_rtc_set_time,
 	.set_alarm = sp_rtc_set_alarm,
 	.read_alarm = sp_rtc_read_alarm,
 };
@@ -288,8 +292,8 @@ static int sp_rtc_probe(struct platform_device *plat_dev)
 	sp_rtc_set_batt_charge_ctrl(sp_rtc.charging_mode);
 
 	device_init_wakeup(&plat_dev->dev, 1);
-
-	rtc = rtc_device_register("sp7021-rtc", &plat_dev->dev, &sp_rtc_ops, THIS_MODULE);
+	
+	rtc = devm_rtc_device_register(&plat_dev->dev, "sp7021-rtc", &sp_rtc_ops, THIS_MODULE);
 	if (IS_ERR(rtc)) {
 		ret = PTR_ERR(rtc);
 		goto free_reset_assert;
@@ -310,10 +314,8 @@ free_clk:
 
 static int sp_rtc_remove(struct platform_device *plat_dev)
 {
-	struct rtc_device *rtc = platform_get_drvdata(plat_dev);
-
+	//struct rtc_device *rtc = platform_get_drvdata(plat_dev);
 	reset_control_assert(sp_rtc.rstc);
-	rtc_device_unregister(rtc);
 	return 0;
 }
 
@@ -335,47 +337,9 @@ static struct platform_driver sp_rtc_driver = {
 	},
 };
 
-static int __init sp_rtc_init(void)
-{
-	int err;
-
-//	FUNC_DEBUG();
-
-	if ((err = platform_driver_register(&sp_rtc_driver)))
-		return err;
-
-//	if ((sp_rtc_device0 = platform_device_alloc("sp7021-rtc", 0)) == NULL) {
-//		err = -ENOMEM;
-//		goto exit_driver_unregister;
-//	}
-
-//	if ((err = platform_device_add(sp_rtc_device0)))
-//		goto exit_free_sp_rtc_device0;
-
-//	if (device_init_wakeup(&(sp_rtc_device0->dev), true)) {
-//		RTC_WARN("dev_init_wakeup() fails.\n");
-//	}
-
-	return 0;
-
-//exit_free_sp_rtc_device0:
-//	platform_device_put(sp_rtc_device0);
-
-//exit_driver_unregister:
-//	platform_driver_unregister(&sp_rtc_driver);
-//	return err;
-}
-
-static void __exit sp_rtc_exit(void)
-{
-	//platform_device_unregister(sp_rtc_device0);
-	platform_driver_unregister(&sp_rtc_driver);
-}
+module_platform_driver(sp_rtc_driver);
 
 MODULE_AUTHOR("Sunplus");
 MODULE_DESCRIPTION("Sunplus RTC driver");
 MODULE_LICENSE("GPL");
-
-module_init(sp_rtc_init);
-module_exit(sp_rtc_exit);
 

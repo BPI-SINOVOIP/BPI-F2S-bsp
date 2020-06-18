@@ -7,5 +7,6 @@ typedef enum IOP_Status_e_ {
 	IOP_ERR_IOP_BUSY,           /* IOP is busy */
 } IOP_Status_e;
 
+void sp_iop_platform_driver_poweroff(void);
 
 #endif /* __SP_IOP_H__ */

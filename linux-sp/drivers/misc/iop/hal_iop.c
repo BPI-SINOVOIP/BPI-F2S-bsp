@@ -1,19 +1,23 @@
 #include <linux/delay.h>
 #include <linux/io.h>
-#include <dt-bindings/memory/sp-q628-mem.h> 
 #include "hal_iop.h"
-//#include <mach/io_map.h> 
-#define IOP_CODE_SIZE	4096
 
 extern const unsigned char IopNormalCode[];
 extern const unsigned char IopStandbyCode[];
+extern bool iop_code_mode;
+extern unsigned int SP_IOP_RESERVE_BASE;
+extern unsigned int SP_IOP_RESERVE_SIZE;
+
+extern unsigned int RECEIVE_CODE_SIZE;
+extern unsigned char NormalCode[];
+extern unsigned char StandbyCode[];
+
+
 
 void hal_iop_init(void __iomem *iopbase)
 {
 	regs_iop_t *pIopReg = (regs_iop_t *)iopbase;
 	volatile unsigned int*   IOP_base_for_normal =(volatile unsigned int*)SP_IOP_RESERVE_BASE;
-	volatile unsigned int*   IOP_base_for_standby =(volatile unsigned int*)(SP_IOP_RESERVE_BASE+StandbyCodeStartAddr);
-		
 	unsigned char * IOP_kernel_base;
 	//unsigned int reg;
 	
@@ -22,23 +26,18 @@ void hal_iop_init(void __iomem *iopbase)
 	//reg = readl((void __iomem *)(B_SYSTEM_BASE + 32*4*0+ 4*1));
 	//reg|=0x00100010;
 	/*load normal code*/
-	IOP_kernel_base = (unsigned char *)ioremap((unsigned long)IOP_base_for_normal, IOP_CODE_SIZE);
-	memset((unsigned char *)IOP_kernel_base,0, IOP_CODE_SIZE);
-	memcpy((unsigned char *)IOP_kernel_base, IopNormalCode, IOP_CODE_SIZE);
-
-    IOP_kernel_base = (unsigned char *)ioremap((unsigned long)IOP_base_for_standby, IOP_CODE_SIZE);
-	memset((unsigned char *)IOP_kernel_base,0, IOP_CODE_SIZE);
-	memcpy((unsigned char *)IOP_kernel_base, IopStandbyCode, IOP_CODE_SIZE);
-
+	IOP_kernel_base = (unsigned char *)ioremap((unsigned long)IOP_base_for_normal, NORMAL_CODE_MAX_SIZE);
+	memset((unsigned char *)IOP_kernel_base,0, NORMAL_CODE_MAX_SIZE);
+	memcpy((unsigned char *)IOP_kernel_base, IopNormalCode, NORMAL_CODE_MAX_SIZE);
 	writel(0x00100010, (void __iomem *)(B_SYSTEM_BASE + 32*4*0+ 4*1));
 	
 	pIopReg->iop_control|=0x01;
     #if 0
-	//printk("%s(%d) iop_data0=%x  iop_data1=%x iop_data2=%x iop_data3=%x iop_data4=%x iop_data5=%x\n", __FUNCTION__, __LINE__, 
-	//	pIopReg->iop_data0,pIopReg->iop_data1,pIopReg->iop_data2,pIopReg->iop_data3,pIopReg->iop_data4,pIopReg->iop_data5);
+	printk("%s(%d) iop_data0=%x  iop_data1=%x iop_data2=%x iop_data3=%x iop_data4=%x iop_data5=%x\n", __FUNCTION__, __LINE__, 
+		pIopReg->iop_data0,pIopReg->iop_data1,pIopReg->iop_data2,pIopReg->iop_data3,pIopReg->iop_data4,pIopReg->iop_data5);
 	
-	//printk("%s(%d) iop_data6=%x  iop_data7=%x iop_data8=%x iop_data9=%x iop_data10=%x iop_data11=%x\n", __FUNCTION__, __LINE__, 
-	//	pIopReg->iop_data6,pIopReg->iop_data7,pIopReg->iop_data8,pIopReg->iop_data9,pIopReg->iop_data10,pIopReg->iop_data11);
+	printk("%s(%d) iop_data6=%x  iop_data7=%x iop_data8=%x iop_data9=%x iop_data10=%x iop_data11=%x\n", __FUNCTION__, __LINE__, 
+		pIopReg->iop_data6,pIopReg->iop_data7,pIopReg->iop_data8,pIopReg->iop_data9,pIopReg->iop_data10,pIopReg->iop_data11);
     #endif
 	
 	pIopReg->iop_control&=~(0x8000);
@@ -47,10 +46,8 @@ void hal_iop_init(void __iomem *iopbase)
 
 	pIopReg->iop_base_adr_l = (unsigned int) ((u32)(IOP_base_for_normal) & 0xFFFF);
 	pIopReg->iop_base_adr_h  =(unsigned int) ((u32)(IOP_base_for_normal) >> 16);
-	pIopReg->iop_control &=~(0x01);
-
-	
-	
+	pIopReg->iop_control &=~(0x01);	
+	iop_code_mode = 0;
 }
 EXPORT_SYMBOL(hal_iop_init);
 
@@ -62,10 +59,13 @@ void hal_gpio_init(void __iomem *iopbase, unsigned char gpio_number)
 	//gpio_master(gpio_number,0);	
 	writel(0xFE02,&pIopReg->iop_data0);	
 	writel(gpio_number,&pIopReg->iop_data1);	
+#if 1
+	printk("%s(%d) iop_data0=%x  iop_data1=%x iop_data2=%x iop_data3=%x iop_data4=%x iop_data5=%x\n", __FUNCTION__, __LINE__, 
+		pIopReg->iop_data0,pIopReg->iop_data1,pIopReg->iop_data2,pIopReg->iop_data3,pIopReg->iop_data4,pIopReg->iop_data5);
+#endif 
 }
 EXPORT_SYMBOL(hal_gpio_init);
 
-extern unsigned char SourceCode[IOP_CODE_SIZE];
 void hal_iop_load_normal_code(void __iomem *iopbase)
 {
 	regs_iop_t *pIopReg = (regs_iop_t *)iopbase;
@@ -78,9 +78,9 @@ void hal_iop_load_normal_code(void __iomem *iopbase)
 	//clock enable
 	//reg = readl((void __iomem *)(B_SYSTEM_BASE + 32*4*0+ 4*1));
 	//reg|=0x00100010;
-	IOP_kernel_base = (unsigned char *)ioremap((unsigned long)IOP_base_for_normal, IOP_CODE_SIZE);
-	memset((unsigned char *)IOP_kernel_base,0, IOP_CODE_SIZE);
-	memcpy((unsigned char *)IOP_kernel_base, SourceCode, IOP_CODE_SIZE);
+	IOP_kernel_base = (unsigned char *)ioremap((unsigned long)IOP_base_for_normal, RECEIVE_CODE_SIZE);
+	memset((unsigned char *)IOP_kernel_base,0, RECEIVE_CODE_SIZE);
+	memcpy((unsigned char *)IOP_kernel_base, NormalCode, RECEIVE_CODE_SIZE);
 
 	writel(0x00100010, (void __iomem *)(B_SYSTEM_BASE + 32*4*0+ 4*1));
 	
@@ -101,12 +101,14 @@ void hal_iop_load_normal_code(void __iomem *iopbase)
 	pIopReg->iop_base_adr_l = (unsigned int) ((u32)(IOP_base_for_normal) & 0xFFFF);
 	pIopReg->iop_base_adr_h  =(unsigned int) ((u32)(IOP_base_for_normal) >> 16);
 	pIopReg->iop_control &=~(0x01);
-	
+	#if 0
 	printk("%s(%d) iop_data0=%x  iop_data1=%x iop_data2=%x iop_data3=%x iop_data4=%x iop_data5=%x\n", __FUNCTION__, __LINE__, 
 			pIopReg->iop_data0,pIopReg->iop_data1,pIopReg->iop_data2,pIopReg->iop_data3,pIopReg->iop_data4,pIopReg->iop_data5);
 		
 	printk("%s(%d) iop_data6=%x  iop_data7=%x iop_data8=%x iop_data9=%x iop_data10=%x iop_data11=%x\n", __FUNCTION__, __LINE__, 
 			pIopReg->iop_data6,pIopReg->iop_data7,pIopReg->iop_data8,pIopReg->iop_data9,pIopReg->iop_data10,pIopReg->iop_data11);
+	#endif 
+	iop_code_mode = 0;
 }
 EXPORT_SYMBOL(hal_iop_load_normal_code);
 
@@ -114,7 +116,7 @@ EXPORT_SYMBOL(hal_iop_load_normal_code);
 void hal_iop_load_standby_code(void __iomem *iopbase)
 {
 	regs_iop_t *pIopReg = (regs_iop_t *)iopbase;
-	volatile unsigned int*   IOP_base_for_standby =(volatile unsigned int*)(SP_IOP_RESERVE_BASE+StandbyCodeStartAddr);
+	volatile unsigned int*   IOP_base_for_standby =(volatile unsigned int*)(SP_IOP_RESERVE_BASE);
 	
 	unsigned char * IOP_kernel_base;
 	//unsigned int reg;
@@ -123,9 +125,9 @@ void hal_iop_load_standby_code(void __iomem *iopbase)
 	//clock enable
 	//reg = readl((void __iomem *)(B_SYSTEM_BASE + 32*4*0+ 4*1));
 	//reg|=0x00100010;
-	IOP_kernel_base = (unsigned char *)ioremap((unsigned long)IOP_base_for_standby, IOP_CODE_SIZE);
-	memset((unsigned char *)IOP_kernel_base,0, IOP_CODE_SIZE);
-	memcpy((unsigned char *)IOP_kernel_base, SourceCode, IOP_CODE_SIZE);
+	IOP_kernel_base = (unsigned char *)ioremap((unsigned long)IOP_base_for_standby, RECEIVE_CODE_SIZE);
+	memset((unsigned char *)IOP_kernel_base,0, RECEIVE_CODE_SIZE);
+	memcpy((unsigned char *)IOP_kernel_base, StandbyCode, RECEIVE_CODE_SIZE);
 
 	writel(0x00100010, (void __iomem *)(B_SYSTEM_BASE + 32*4*0+ 4*1));
 	
@@ -147,10 +149,13 @@ void hal_iop_load_standby_code(void __iomem *iopbase)
 	pIopReg->iop_base_adr_h  =(unsigned int) ((u32)(IOP_base_for_standby) >> 16);
 	pIopReg->iop_control &=~(0x01);
 	
+	#if 0
 	printk("%s(%d) iop_data0=%x  iop_data1=%x iop_data2=%x iop_data3=%x iop_data4=%x iop_data5=%x\n", __FUNCTION__, __LINE__, 
 			pIopReg->iop_data0,pIopReg->iop_data1,pIopReg->iop_data2,pIopReg->iop_data3,pIopReg->iop_data4,pIopReg->iop_data5);
 	printk("%s(%d) iop_data6=%x  iop_data7=%x iop_data8=%x iop_data9=%x iop_data10=%x iop_data11=%x\n", __FUNCTION__, __LINE__, 
 			pIopReg->iop_data6,pIopReg->iop_data7,pIopReg->iop_data8,pIopReg->iop_data9,pIopReg->iop_data10,pIopReg->iop_data11);
+	#endif 
+	iop_code_mode = 1;
 }
 EXPORT_SYMBOL(hal_iop_load_standby_code);
 
@@ -158,15 +163,27 @@ void hal_iop_normalmode(void __iomem *iopbase)
 {
 	regs_iop_t *pIopReg = (regs_iop_t *)iopbase;
 	volatile unsigned int*   IOP_base_for_normal =(volatile unsigned int*)SP_IOP_RESERVE_BASE;
-
-	pIopReg->iop_control|=0x01;
-    #if 0
-	//printk("%s(%d) iop_data0=%x  iop_data1=%x iop_data2=%x iop_data3=%x iop_data4=%x iop_data5=%x\n", __FUNCTION__, __LINE__, 
-	//	pIopReg->iop_data0,pIopReg->iop_data1,pIopReg->iop_data2,pIopReg->iop_data3,pIopReg->iop_data4,pIopReg->iop_data5);
 	
-	//printk("%s(%d) iop_data6=%x  iop_data7=%x iop_data8=%x iop_data9=%x iop_data10=%x iop_data11=%x\n", __FUNCTION__, __LINE__, 
-	//	pIopReg->iop_data6,pIopReg->iop_data7,pIopReg->iop_data8,pIopReg->iop_data9,pIopReg->iop_data10,pIopReg->iop_data11);
-    #endif
+	unsigned char * IOP_kernel_base;
+	//unsigned int reg;
+	
+	//int wLen = IOP_CODE_SIZE;	
+	//clock enable
+	//reg = readl((void __iomem *)(B_SYSTEM_BASE + 32*4*0+ 4*1));
+	//reg|=0x00100010;
+	IOP_kernel_base = (unsigned char *)ioremap((unsigned long)IOP_base_for_normal, NORMAL_CODE_MAX_SIZE);
+	memset((unsigned char *)IOP_kernel_base,0, NORMAL_CODE_MAX_SIZE);
+	memcpy((unsigned char *)IOP_kernel_base, IopNormalCode, NORMAL_CODE_MAX_SIZE);
+	writel(0x00100010, (void __iomem *)(B_SYSTEM_BASE + 32*4*0+ 4*1));
+	pIopReg->iop_control|=0x01;
+
+	#if 0
+	printk("%s(%d) iop_data0=%x  iop_data1=%x iop_data2=%x iop_data3=%x iop_data4=%x iop_data5=%x\n", __FUNCTION__, __LINE__, 
+		pIopReg->iop_data0,pIopReg->iop_data1,pIopReg->iop_data2,pIopReg->iop_data3,pIopReg->iop_data4,pIopReg->iop_data5);
+	
+	printk("%s(%d) iop_data6=%x  iop_data7=%x iop_data8=%x iop_data9=%x iop_data10=%x iop_data11=%x\n", __FUNCTION__, __LINE__, 
+		pIopReg->iop_data6,pIopReg->iop_data7,pIopReg->iop_data8,pIopReg->iop_data9,pIopReg->iop_data10,pIopReg->iop_data11);
+    #endif 
 	
 	pIopReg->iop_control&=~(0x8000);
 	//pIopReg->iop_control&=~(0x200);
@@ -175,22 +192,45 @@ void hal_iop_normalmode(void __iomem *iopbase)
 	pIopReg->iop_base_adr_l = (unsigned int) ((u32)(IOP_base_for_normal) & 0xFFFF);
 	pIopReg->iop_base_adr_h  =(unsigned int) ((u32)(IOP_base_for_normal) >> 16);
 	pIopReg->iop_control &=~(0x01);
-}
+	
+	#if 0
+	printk("%s(%d) iop_data0=%x  iop_data1=%x iop_data2=%x iop_data3=%x iop_data4=%x iop_data5=%x\n", __FUNCTION__, __LINE__, 
+			pIopReg->iop_data0,pIopReg->iop_data1,pIopReg->iop_data2,pIopReg->iop_data3,pIopReg->iop_data4,pIopReg->iop_data5);
+		
+	printk("%s(%d) iop_data6=%x  iop_data7=%x iop_data8=%x iop_data9=%x iop_data10=%x iop_data11=%x\n", __FUNCTION__, __LINE__, 
+			pIopReg->iop_data6,pIopReg->iop_data7,pIopReg->iop_data8,pIopReg->iop_data9,pIopReg->iop_data10,pIopReg->iop_data11);
+	#endif 
+	iop_code_mode = 0;
+}	
+
 EXPORT_SYMBOL(hal_iop_normalmode);
 
 void hal_iop_standbymode(void __iomem *iopbase)
 {
 	regs_iop_t *pIopReg = (regs_iop_t *)iopbase;
-	volatile unsigned int*	 IOP_base_for_standby =(volatile unsigned int*)(SP_IOP_RESERVE_BASE+StandbyCodeStartAddr);
+	volatile unsigned int*	 IOP_base_for_standby =(volatile unsigned int*)(SP_IOP_RESERVE_BASE);
+	
+	unsigned char * IOP_kernel_base;
+	//unsigned int reg;
+	
+	//int wLen = IOP_CODE_SIZE; 
+	//clock enable
+	//reg = readl((void __iomem *)(B_SYSTEM_BASE + 32*4*0+ 4*1));
+	//reg|=0x00100010;
+	IOP_kernel_base = (unsigned char *)ioremap((unsigned long)IOP_base_for_standby, STANDBY_CODE_MAX_SIZE);
+	memset((unsigned char *)IOP_kernel_base,0, STANDBY_CODE_MAX_SIZE);
+	memcpy((unsigned char *)IOP_kernel_base, IopStandbyCode, STANDBY_CODE_MAX_SIZE);
+	writel(0x00100010, (void __iomem *)(B_SYSTEM_BASE + 32*4*0+ 4*1));
 	
 	pIopReg->iop_control|=0x01;
-    #if 0
-	//printk("%s(%d) iop_data0=%x  iop_data1=%x iop_data2=%x iop_data3=%x iop_data4=%x iop_data5=%x\n", __FUNCTION__, __LINE__, 
-	//	pIopReg->iop_data0,pIopReg->iop_data1,pIopReg->iop_data2,pIopReg->iop_data3,pIopReg->iop_data4,pIopReg->iop_data5);
+
+#if 0
+	printk("%s(%d) iop_data0=%x  iop_data1=%x iop_data2=%x iop_data3=%x iop_data4=%x iop_data5=%x\n", __FUNCTION__, __LINE__, 
+		pIopReg->iop_data0,pIopReg->iop_data1,pIopReg->iop_data2,pIopReg->iop_data3,pIopReg->iop_data4,pIopReg->iop_data5);
 	
-	//printk("%s(%d) iop_data6=%x  iop_data7=%x iop_data8=%x iop_data9=%x iop_data10=%x iop_data11=%x\n", __FUNCTION__, __LINE__, 
-	//	pIopReg->iop_data6,pIopReg->iop_data7,pIopReg->iop_data8,pIopReg->iop_data9,pIopReg->iop_data10,pIopReg->iop_data11);
-    #endif
+	printk("%s(%d) iop_data6=%x  iop_data7=%x iop_data8=%x iop_data9=%x iop_data10=%x iop_data11=%x\n", __FUNCTION__, __LINE__, 
+		pIopReg->iop_data6,pIopReg->iop_data7,pIopReg->iop_data8,pIopReg->iop_data9,pIopReg->iop_data10,pIopReg->iop_data11);
+#endif 
 	
 	pIopReg->iop_control&=~(0x8000);
 	//pIopReg->iop_control&=~(0x200);
@@ -199,6 +239,13 @@ void hal_iop_standbymode(void __iomem *iopbase)
 	pIopReg->iop_base_adr_l = (unsigned int) ((u32)(IOP_base_for_standby) & 0xFFFF);
 	pIopReg->iop_base_adr_h  =(unsigned int) ((u32)(IOP_base_for_standby) >> 16);
 	pIopReg->iop_control &=~(0x01);
+#if 0
+	printk("%s(%d) iop_data0=%x  iop_data1=%x iop_data2=%x iop_data3=%x iop_data4=%x iop_data5=%x\n", __FUNCTION__, __LINE__, 
+			pIopReg->iop_data0,pIopReg->iop_data1,pIopReg->iop_data2,pIopReg->iop_data3,pIopReg->iop_data4,pIopReg->iop_data5);
+	printk("%s(%d) iop_data6=%x  iop_data7=%x iop_data8=%x iop_data9=%x iop_data10=%x iop_data11=%x\n", __FUNCTION__, __LINE__, 
+			pIopReg->iop_data6,pIopReg->iop_data7,pIopReg->iop_data8,pIopReg->iop_data9,pIopReg->iop_data10,pIopReg->iop_data11);
+#endif 
+	iop_code_mode = 1;
 }
 EXPORT_SYMBOL(hal_iop_standbymode);
 
@@ -304,7 +351,7 @@ void hal_iop_suspend(void __iomem *iopbase, void __iomem *ioppmcbase)
 	regs_iop_pmc_t *pIopPmcReg = (regs_iop_pmc_t *)ioppmcbase;
 	//regs_iop_rtc_t *pIopRtcReg = (regs_iop_rtc_t *)ioprtcbase;
 	unsigned int reg;
-	volatile unsigned int*   IOP_base_for_standby =(volatile unsigned int*)(SP_IOP_RESERVE_BASE+StandbyCodeStartAddr);
+	volatile unsigned int*   IOP_base_for_standby =(volatile unsigned int*)(SP_IOP_RESERVE_BASE);
 	
 
 	//clock enable
@@ -448,8 +495,10 @@ void hal_iop_suspend(void __iomem *iopbase, void __iomem *ioppmcbase)
 		pIopReg->iop_data6,pIopReg->iop_data7,pIopReg->iop_data8,pIopReg->iop_data9,pIopReg->iop_data10,pIopReg->iop_data11);
     #endif 
 	
-	while((pIopReg->iop_data2&IOP_READY)!=IOP_READY);
-		pIopReg->iop_data2|=RISC_READY;
+	while((pIopReg->iop_data2&IOP_READY)!=IOP_READY)
+	{
+	}
+	pIopReg->iop_data2|=RISC_READY;
 		
 	#if 0
 	early_printk("%s(%d) iop_data0=%x  iop_data1=%x iop_data2=%x iop_data3=%x iop_data4=%x iop_data5=%x\n", __FUNCTION__, __LINE__, 
@@ -516,11 +565,10 @@ void hal_iop_shutdown(void __iomem *iopbase, void __iomem *ioppmcbase)
 	regs_iop_t *pIopReg = (regs_iop_t *)iopbase;
 	regs_iop_pmc_t *pIopPmcReg = (regs_iop_pmc_t *)ioppmcbase;
 	unsigned int reg;
-	volatile unsigned int*   IOP_base_for_standby =(volatile unsigned int*)(SP_IOP_RESERVE_BASE+StandbyCodeStartAddr);
+	volatile unsigned int*   IOP_base_for_standby =(volatile unsigned int*)(SP_IOP_RESERVE_BASE);
 	
 	writel(0x00100010, (void __iomem *)(B_SYSTEM_BASE + 32*4*0+ 4*1));
-	early_printk("hal_iop_shutdown\n");
-	
+	early_printk("%s(%d)\n", __FUNCTION__, __LINE__);	
 	pIopReg->iop_control&=~(0x8000);	
 	pIopReg->iop_control|=0x1;
 	
@@ -576,17 +624,14 @@ void hal_iop_shutdown(void __iomem *iopbase, void __iomem *ioppmcbase)
 	
 	//*iop_control &=~(0x01);
 	pIopReg->iop_control&=~(0x01);
-    #if 0
-	early_printk("%s(%d) iop_data0=%x  iop_data1=%x iop_data2=%x iop_data3=%x iop_data4=%x iop_data5=%x\n", __FUNCTION__, __LINE__, 
-		pIopReg->iop_data0,pIopReg->iop_data1,pIopReg->iop_data2,pIopReg->iop_data3,pIopReg->iop_data4,pIopReg->iop_data5);
-	
-	early_printk("%s(%d) iop_data6=%x  iop_data7=%x iop_data8=%x iop_data9=%x iop_data10=%x iop_data11=%x\n", __FUNCTION__, __LINE__, 
-		pIopReg->iop_data6,pIopReg->iop_data7,pIopReg->iop_data8,pIopReg->iop_data9,pIopReg->iop_data10,pIopReg->iop_data11);
-    #endif 
-	
-	while((pIopReg->iop_data2&IOP_READY)!=IOP_READY);
-		pIopReg->iop_data2|=RISC_READY;
-		
+
+	early_printk("%s(%d) IOP_READY=%x \n", __FUNCTION__, __LINE__, pIopReg->iop_data2);	
+	while((pIopReg->iop_data2&IOP_READY)!=IOP_READY)
+	{
+	}
+	pIopReg->iop_data2 = RISC_READY;
+	early_printk("%s(%d) RISC_READY=%x \n", __FUNCTION__, __LINE__, pIopReg->iop_data2);		
+
 	#if 0
 	early_printk("%s(%d) iop_data0=%x  iop_data1=%x iop_data2=%x iop_data3=%x iop_data4=%x iop_data5=%x\n", __FUNCTION__, __LINE__, 
 		pIopReg->iop_data0,pIopReg->iop_data1,pIopReg->iop_data2,pIopReg->iop_data3,pIopReg->iop_data4,pIopReg->iop_data5);
@@ -646,4 +691,32 @@ void hal_iop_shutdown(void __iomem *iopbase, void __iomem *ioppmcbase)
 	
 }
 EXPORT_SYMBOL(hal_iop_shutdown);
+
+void hal_iop_S1mode(void __iomem *iopbase)
+{
+	regs_iop_t *pIopReg = (regs_iop_t *)iopbase;
+	
+	early_printk("%s(%d) IOP_READY=%x \n", __FUNCTION__, __LINE__, pIopReg->iop_data2);	
+	while((pIopReg->iop_data2&IOP_READY)!=IOP_READY)
+	{
+	}
+	pIopReg->iop_data2 = RISC_READY;
+	early_printk("%s(%d) RISC_READY=%x \n", __FUNCTION__, __LINE__, pIopReg->iop_data2);		
+
+	pIopReg->iop_data5=0x00;
+	pIopReg->iop_data6=0x60;
+	while(1)
+	{
+		if(pIopReg->iop_data7==0xaaaa)
+		{   
+			break;
+		}
+	}	
+	
+	pIopReg->iop_data1=0xee; //8051 bin file call S1_mode function.	
+	printk("hal_iop_shutdown end\n");
+	
+}
+EXPORT_SYMBOL(hal_iop_S1mode);
+
 

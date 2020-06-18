@@ -153,6 +153,55 @@ U_BOOT_CMD(
 	"\t<dtb addr>    : [qk uImage header][dtb header][dtb]\n"
 );
 
+static int do_sp_nonos_go(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
+{
+	int     rcode = 0;
+	image_header_t *hdr=NULL;
+	u32 nonos_addr; /* these two addr will include headers. */
+	u32 nonos_size;
+
+	if (argc < 2 )
+		return CMD_RET_USAGE;
+
+	nonos_addr = simple_strtoul(argv[1], NULL, 16);
+
+	if (!sp_qk_uimage_verify(nonos_addr, 1)){
+		return CMD_RET_FAILURE;
+	}
+	
+	hdr = (image_header_t *)nonos_addr;
+	nonos_size = image_get_data_size(hdr);
+
+	printf("[u-boot] nonos_B address 0x%08x  nonos_size= %d \n",nonos_addr,nonos_size);
+
+	nonos_size = ALIGN(nonos_size, CONFIG_SYS_CACHELINE_SIZE);
+	flush_cache((u32)nonos_addr, nonos_size);
+
+	nonos_addr += 0x40;
+
+	// set nonos run addr to B_START_POS,and the B will start boot from this addr in iboot/xboot
+	*(volatile unsigned int *)B_START_POS = nonos_addr;
+
+	return rcode;
+}
+
+
+
+U_BOOT_CMD(
+	sp_nonos_go, CONFIG_SYS_MAXARGS, 1, do_sp_nonos_go,
+	"sunplus boot nonos command",
+	"sp_nonos_go - run nonos at address 'addr'\n"
+	"\n"
+	"sp_nonos_go [nonos addr] \n"
+	"\tnonos addr should include the 'qk_sp_header'\n"
+	"\twhich is similar as uImage header but different crc method.\n"
+	"\n"
+	"\tSo image would be like this :\n"
+	"\t<nonos addr> : [qk uImage header][nonos]\n"
+);
+
+
+
 #ifdef SPEED_UP_SPI_NOR_CLK
 
 #if 0

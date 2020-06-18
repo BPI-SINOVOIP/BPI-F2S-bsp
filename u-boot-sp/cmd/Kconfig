@@ -212,7 +212,7 @@ config CMD_BOOTZ
 
 config CMD_BOOTI
 	bool "booti"
-	depends on ARM64
+	depends on ARM64 || RISCV
 	default y
 	help
 	  Boot an AArch64 Linux Kernel image from memory.
@@ -663,6 +663,7 @@ config CMD_DFU
 config CMD_DM
 	bool "dm - Access to driver model information"
 	depends on DM
+	default y
 	help
 	  Provides access to driver model data structures and information,
 	  such as a list of devices, list of uclasses and the state of each
@@ -1344,6 +1345,7 @@ menu "Misc commands"
 config CMD_BMP
 	bool "Enable 'bmp' command"
 	depends on LCD || DM_VIDEO || VIDEO
+	default y
 	help
 	  This provides a way to obtain information about a BMP-format iamge
 	  and to display it. BMP (which presumably stands for BitMaP) is a
@@ -1404,7 +1406,7 @@ config CMD_CONITRACE
 config CMD_CLS
 	bool "Enable clear screen command 'cls'"
 	depends on CFB_CONSOLE || DM_VIDEO || LCD || VIDEO
-	default y if LCD
+	default y if LCD || DM_VIDEO
 	help
 	  Enable the 'cls' command which clears the screen contents
 	  on video frame buffer.

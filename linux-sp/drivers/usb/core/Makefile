@@ -2,7 +2,6 @@
 #
 # Makefile for USB Core files and filesystem
 #
-ccflags-$(CONFIG_USB_DEBUG) := -DDEBUG
 
 usbcore-y := usb.o hub.o hcd.o urb.o message.o driver.o
 usbcore-y += config.o file.o buffer.o sysfs.o endpoint.o

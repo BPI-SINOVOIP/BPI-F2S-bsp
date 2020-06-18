@@ -1,23 +1,7 @@
+# SPDX-License-Identifier: GPL-2.0
 #
 # USB Core configuration
 #
-config USB_DEBUG
-	bool "USB verbose debug messages"
-	depends on USB
-	help
-	  Say Y here if you want the USB core & hub drivers to produce a bunch
-	  of debug messages to the system log. Select this if you are having a
-	  problem with USB support and want to see more of what is going on.
-
-config USB_PHY_RX_ACTIVE_QUESTION_WORKAROUND
-	bool "Enable USB PHY RX Active Question Workaround"
-	depends on USB
-
-config USB_BAD_DEVICE_INFO
-	bool "support bad usb device info"
-	depends on USB
-	default n
-
 config USB_ANNOUNCE_NEW_DEVICES
 	bool "USB announce new devices"
 	help
@@ -60,7 +44,7 @@ config USB_DYNAMIC_MINORS
 
 config USB_OTG
 	bool "OTG support"
-	default n
+	depends on PM
 	help
 	  The most notable feature of USB OTG is support for a
 	  "Dual-Role" device, which can act as either a device
@@ -106,3 +90,15 @@ config USB_LEDS_TRIGGER_USBPORT
 	  This driver allows LEDs to be controlled by USB events. Enabling this
 	  trigger allows specifying list of USB ports that should turn on LED
 	  when some USB device gets connected.
+
+config USB_AUTOSUSPEND_DELAY
+	int "Default autosuspend delay"
+	depends on USB
+	default 2
+	help
+	  The default autosuspend delay in seconds.  Can be overridden
+	  with the usbcore.autosuspend command line or module parameter.
+
+	  The default value Linux has always had is 2 seconds.  Change
+	  this value if you want a different delay and cannot modify
+	  the command line or module parameter.

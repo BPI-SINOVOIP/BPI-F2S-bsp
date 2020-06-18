@@ -72,6 +72,12 @@ struct giveback_urb_bh {
 	struct usb_host_endpoint *completing_ep;
 };
 
+enum usb_dev_authorize_policy {
+	USB_DEVICE_AUTHORIZE_NONE	= 0,
+	USB_DEVICE_AUTHORIZE_ALL	= 1,
+	USB_DEVICE_AUTHORIZE_INTERNAL	= 2,
+};
+
 struct usb_hcd {
 
 	/*
@@ -92,6 +98,7 @@ struct usb_hcd {
 #ifdef CONFIG_PM
 	struct work_struct	wakeup_work;	/* for remote wakeup */
 #endif
+	struct work_struct	died_work;	/* for when the device dies */
 
 	/*
 	 * hardware info/state
@@ -103,7 +110,6 @@ struct usb_hcd {
 	 * other external phys should be software-transparent
 	 */
 	struct usb_phy		*usb_phy;
-	//struct phy		*phy;		/* sunplus USB driver */
 	struct usb_phy_roothub	*phy_roothub;
 
 	/* Flags that need to be manipulated atomically because they can
@@ -118,7 +124,6 @@ struct usb_hcd {
 #define HCD_FLAG_RH_RUNNING		5	/* root hub is running? */
 #define HCD_FLAG_DEAD			6	/* controller has died? */
 #define HCD_FLAG_INTF_AUTHORIZED	7	/* authorize interfaces? */
-#define HCD_FLAG_DEV_AUTHORIZED		8	/* authorize devices? */
 
 	/* The flags can be tested using these macros; they are likely to
 	 * be slightly faster than test_bit().
@@ -143,15 +148,13 @@ struct usb_hcd {
 	 * or they require explicit user space authorization; this bit is
 	 * settable through /sys/class/usb_host/X/authorized_default
 	 */
-#define HCD_DEV_AUTHORIZED(hcd) \
-	((hcd)->flags & (1U << HCD_FLAG_DEV_AUTHORIZED))
+	enum usb_dev_authorize_policy dev_policy;
 
 	/* Flags that get set only during HCD registration or removal. */
 	unsigned		rh_registered:1;/* is root hub registered? */
 	unsigned		rh_pollable:1;	/* may we poll the root hub? */
 	unsigned		msix_enabled:1;	/* driver has MSI-X enabled? */
 	unsigned		msi_enabled:1;	/* driver has MSI enabled? */
-	//unsigned		remove_phy:1;	/* auto-remove USB phy */	/* sunplus USB driver */
 	/*
 	 * do not manage the PHY state in the HCD core, instead let the driver
 	 * handle this (for example if the PHY can only be turned on after a
@@ -213,30 +216,8 @@ struct usb_hcd {
 #define	HC_IS_RUNNING(state) ((state) & __ACTIVE)
 #define	HC_IS_SUSPENDED(state) ((state) & __SUSPEND)
 
-#if 1	/* sunplus USB driver */
-	#ifdef CONFIG_USB_HOST_RESET_SP
-			wait_queue_head_t reset_queue;
-			u32 *ptr_flag;
-			u32 idle;
-#define RESET_UPHY_SIGN	(1<<0)
-#define	RESET_HC_SIGN	(1<<1)
-#define RESET_HC_DEAD	(1<<2)
-#define RESET_HC_CNT	(1<<3)
-#define RESET_HC_IPHONE	(1<<30)
-#define RESET_SENDER	(1<<31)
-	#endif
-		
-	u8 enum_msg_flag;
-	int uphy_irq_num;
-	int hub_port_num;
-	int enum_port_status;
-	
-	bool *enum_flag;
-	u32 *uphy_disconnect_level;
-	struct task_struct *hub_thread;
-	struct urb *current_active_urb;
-	struct tasklet_struct host_irq_tasklet;
-#endif
+	/* memory pool for HCs having local memory, or %NULL */
+	struct gen_pool         *localmem_pool;
 
 	/* more shared queuing code would be good; it should support
 	 * smarter scheduling, handle transaction translators, etc;
@@ -262,11 +243,6 @@ static inline struct usb_hcd *bus_to_hcd(struct usb_bus *bus)
 	return container_of(bus, struct usb_hcd, self);
 }
 
-struct hcd_timeout {	/* timeouts we allocate */
-	struct list_head	timeout_list;
-	struct timer_list	timer;
-};
-
 /*-------------------------------------------------------------------------*/
 
 
@@ -280,7 +256,7 @@ struct hc_driver {
 
 	int	flags;
 #define	HCD_MEMORY	0x0001		/* HC regs use memory (else I/O) */
-#define	HCD_LOCAL_MEM	0x0002		/* HC needs local memory */
+#define	HCD_DMA		0x0002		/* HC uses DMA */
 #define	HCD_SHARED	0x0004		/* Two (or more) usb_hcds share HW */
 #define	HCD_USB11	0x0010		/* USB 1.1 */
 #define	HCD_USB2	0x0020		/* USB 2.0 */
@@ -309,11 +285,6 @@ struct hc_driver {
 
 	/* shutdown HCD */
 	void	(*shutdown) (struct usb_hcd *hcd);
-
-#ifdef CONFIG_USB_LOGO_TEST	/* sunplus USB driver */
-	/*  remon add for usb logo test */
-	int 	(*usb_logo_test) (struct usb_hcd * hcd, int idProduct);
-#endif
 
 	/* return current frame number */
 	int	(*get_frame_number) (struct usb_hcd *hcd);
@@ -438,7 +409,7 @@ struct hc_driver {
 	int	(*find_raw_port_number)(struct usb_hcd *, int);
 	/* Call for power on/off the port if necessary */
 	int	(*port_power)(struct usb_hcd *hcd, int portnum, bool enable);
-	int 	(*get_port_status_from_register) (struct usb_hcd * hcd);	/* sunplus USB driver */
+
 };
 
 static inline int hcd_giveback_urb_in_bh(struct usb_hcd *hcd)
@@ -450,6 +421,11 @@ static inline bool hcd_periodic_completion_in_progress(struct usb_hcd *hcd,
 		struct usb_host_endpoint *ep)
 {
 	return hcd->high_prio_bh.completing_ep == ep;
+}
+
+static inline bool hcd_uses_dma(struct usb_hcd *hcd)
+{
+	return IS_ENABLED(CONFIG_HAS_DMA) && (hcd->driver->flags & HCD_DMA);
 }
 
 extern int usb_hcd_link_urb_to_ep(struct usb_hcd *hcd, struct urb *urb);
@@ -493,20 +469,11 @@ extern int usb_add_hcd(struct usb_hcd *hcd,
 		unsigned int irqnum, unsigned long irqflags);
 extern void usb_remove_hcd(struct usb_hcd *hcd);
 extern int usb_hcd_find_raw_port_number(struct usb_hcd *hcd, int port1);
+int usb_hcd_setup_local_mem(struct usb_hcd *hcd, phys_addr_t phys_addr,
+			    dma_addr_t dma, size_t size);
 
 struct platform_device;
 extern void usb_hcd_platform_shutdown(struct platform_device *dev);
-
-#if 1	/* sunplus USB driver */
-#include <linux/platform_device.h>
-static inline int usb_hcd_get_pl_id(struct usb_hcd *hcd)
-{
-	struct platform_device *pdev;
-
-	pdev = to_platform_device(hcd->self.controller);
-	return pdev->id;
-}
-#endif
 
 #ifdef CONFIG_USB_PCI
 struct pci_dev;
@@ -630,6 +597,10 @@ extern void usb_ep0_reinit(struct usb_device *);
 #define GetPortStatus		HUB_CLASS_REQ(USB_DIR_IN, USB_RT_PORT, USB_REQ_GET_STATUS)
 #define SetHubFeature		HUB_CLASS_REQ(USB_DIR_OUT, USB_RT_HUB, USB_REQ_SET_FEATURE)
 #define SetPortFeature		HUB_CLASS_REQ(USB_DIR_OUT, USB_RT_PORT, USB_REQ_SET_FEATURE)
+#define ClearTTBuffer		HUB_CLASS_REQ(USB_DIR_OUT, USB_RT_PORT, HUB_CLEAR_TT_BUFFER)
+#define ResetTT			HUB_CLASS_REQ(USB_DIR_OUT, USB_RT_PORT, HUB_RESET_TT)
+#define GetTTState		HUB_CLASS_REQ(USB_DIR_IN, USB_RT_PORT, HUB_GET_TT_STATE)
+#define StopTT			HUB_CLASS_REQ(USB_DIR_OUT, USB_RT_PORT, HUB_STOP_TT)
 
 
 /*-------------------------------------------------------------------------*/
@@ -696,11 +667,16 @@ extern wait_queue_head_t usb_kill_urb_queue;
 #define usb_endpoint_out(ep_dir)	(!((ep_dir) & USB_DIR_IN))
 
 #ifdef CONFIG_PM
+extern unsigned usb_wakeup_enabled_descendants(struct usb_device *udev);
 extern void usb_root_hub_lost_power(struct usb_device *rhdev);
 extern int hcd_bus_suspend(struct usb_device *rhdev, pm_message_t msg);
 extern int hcd_bus_resume(struct usb_device *rhdev, pm_message_t msg);
 extern void usb_hcd_resume_root_hub(struct usb_hcd *hcd);
 #else
+static inline unsigned usb_wakeup_enabled_descendants(struct usb_device *udev)
+{
+	return 0;
+}
 static inline void usb_hcd_resume_root_hub(struct usb_hcd *hcd)
 {
 	return;

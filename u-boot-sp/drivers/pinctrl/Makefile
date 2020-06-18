@@ -23,4 +23,4 @@ obj-$(CONFIG_PINCTRL_SINGLE)	+= pinctrl-single.o
 obj-$(CONFIG_PINCTRL_STI)	+= pinctrl-sti.o
 obj-$(CONFIG_PINCTRL_STM32)	+= pinctrl_stm32.o
 obj-y				+= broadcom/
-obj-$(CONFIG_PINCTRL_SUNPLUS)	+= sunplus/
+obj-y				+= sunplus/

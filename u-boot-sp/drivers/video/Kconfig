@@ -7,6 +7,7 @@ menu "Graphics support"
 config DM_VIDEO
 	bool "Enable driver model support for LCD/video"
 	depends on DM
+	default y
 	help
 	  This enables driver model for LCD and video devices. These support
 	  a bitmap display of various sizes and depths which can be drawn on
@@ -86,6 +87,7 @@ config CONSOLE_NORMAL
 config CONSOLE_ROTATION
 	bool "Support rotated displays"
 	depends on DM_VIDEO
+	default y if DM_VIDEO
 	help
 	  Sometimes, for example if the display is mounted in portrait
 	  mode or even if it's mounted landscape but rotated by 180degree,
@@ -120,7 +122,7 @@ config CONSOLE_TRUETYPE_SIZE
 
 config SYS_WHITE_ON_BLACK
 	bool "Display console as white on a black background"
-	default y if ARCH_AT91 || ARCH_EXYNOS || ARCH_ROCKCHIP || TEGRA || X86
+	default y if ARCH_AT91 || ARCH_EXYNOS || ARCH_ROCKCHIP || TEGRA || X86 || ARCH_PENTAGRAM
 	help
 	 Normally the display is black on a white background, Enable this
 	 option to invert this, i.e. white on a black background. This can be
@@ -517,6 +519,8 @@ config VIDEO_SANDBOX_SDL
 	  a normal bitmap display and can display images as well as text.
 
 source "drivers/video/stm32/Kconfig"
+
+source "drivers/video/sunplus/Kconfig"
 
 config VIDEO_TEGRA20
 	bool "Enable LCD support on Tegra20"

@@ -1,15 +1,19 @@
 #include <linux/irq.h>
 #include <linux/irqdomain.h>
 #include <asm/io.h>
+#ifdef CONFIG_ARM
 #include <asm/exception.h>
 #include <asm/mach/irq.h>
+#else
+#define __exception_irq_entry
+#endif
 #include <linux/irqchip.h>
 #include <linux/irqchip/chained_irq.h>
 #include <linux/of_address.h>
 #include <linux/of_irq.h>
 #include <dt-bindings/interrupt-controller/sp-intc.h>
 
-#if defined(CONFIG_MACH_PENTAGRAM_SP7021_ACHIP) || defined(CONFIG_MACH_PENTAGRAM_SP7021_BCHIP)
+#if defined(CONFIG_SOC_SP7021) || defined(CONFIG_SOC_I143)
 #define SUPPORT_IRQ_GRP_REG
 #endif
 
@@ -387,7 +391,7 @@ int __init sp_intc_init(int hwirq_start, int irqs, void __iomem *base0, void __i
 	return 0;
 }
 
-#ifdef CONFIG_MACH_PENTAGRAM_SP7021_ACHIP
+#if defined(CONFIG_MACH_PENTAGRAM_SP7021_ACHIP) || defined(CONFIG_SOC_I143)
 static cpumask_t *u2cpumask(u32 mask, cpumask_t *cpumask)
 {
 	unsigned int i;
@@ -461,7 +465,7 @@ int __init sp_intc_init_dt(struct device_node *node, struct device_node *parent)
 
 	spin_lock_init(&sp_intc.lock);
 
-        if (parent) {
+	if (parent) {
 		sp_intc.virq[0] = irq_of_parse_and_map(node, 0);
 		if (sp_intc.virq[0]) {
 			irq_set_chained_handler_and_data(sp_intc.virq[0],
@@ -481,7 +485,7 @@ int __init sp_intc_init_dt(struct device_node *node, struct device_node *parent)
 		set_handle_irq(sp_intc_handle_irq);
 	}
 
-        return 0;
+	return 0;
 }
 IRQCHIP_DECLARE(sp_intc, "sunplus,sp-intc", sp_intc_init_dt);
 #endif

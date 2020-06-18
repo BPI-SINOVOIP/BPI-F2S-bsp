@@ -1,7 +1,7 @@
 #include <linux/usb/sp_usb.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
-#include "ehci-platform.h"
+#include "ehci-sunplus.h"
 
 extern void usb_hcd_platform_shutdown(struct platform_device *dev);
 
@@ -9,11 +9,15 @@ static int ehci1_sunplus_platform_probe(struct platform_device *dev){
 
 	dev->id = 2;
 
-	return ehci_platform_probe(dev);
+	return ehci_sunplus_probe(dev);
 }
 
 static const struct of_device_id ehci1_sunplus_dt_ids[] = {
+#ifdef CONFIG_SOC_SP7021
 	{ .compatible = "sunplus,sp7021-usb-ehci1" },
+#elif defined(CONFIG_SOC_I143)
+	{ .compatible = "sunplus,sunplus-i143-usb-ehci1" },
+#endif
 	{ }
 };
 
@@ -22,7 +26,7 @@ MODULE_DEVICE_TABLE(of, ehci1_sunplus_dt_ids);
 
 static struct platform_driver ehci1_hcd_sunplus_driver = {
 	.probe			= ehci1_sunplus_platform_probe,
-	.remove			= ehci_platform_remove,
+	.remove			= ehci_sunplus_remove,
 	.shutdown		= usb_hcd_platform_shutdown,
 	.driver = {
 		.name		= "ehci1-sunplus",
@@ -37,7 +41,7 @@ static struct platform_driver ehci1_hcd_sunplus_driver = {
 
 static int __init ehci1_sunplus_init(void)
 {
-	if (sp_port_enabled & PORT1_ENABLED){
+	if (sp_port1_enabled & PORT1_ENABLED){
 		printk(KERN_NOTICE "register ehci1_hcd_sunplus_driver\n");
 		return platform_driver_register(&ehci1_hcd_sunplus_driver);
 	} else {

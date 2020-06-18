@@ -14,11 +14,7 @@
  */
 
 /*-------------------------------------------------------------------------*/
-#if 1	/* sunplus USB driver */
-#include "../phy/sunplus-otg.h"
-#else
 #include <linux/usb/otg.h>
-#endif
 
 #define	PORT_WAKE_BITS	(PORT_WKOC_E|PORT_WKDISC_E|PORT_WKCONN_E)
 
@@ -1319,17 +1315,6 @@ EXPORT_SYMBOL_GPL(ehci_hub_control);
 static void ehci_relinquish_port(struct usb_hcd *hcd, int portnum)
 {
 	struct ehci_hcd		*ehci = hcd_to_ehci(hcd);
-
-#ifdef CONFIG_RETRY_TIMES	/* sunplus USB driver */
-	u32 port_val;
-
-	port_val = ehci_readl(ehci, &ehci->regs->port_status[0]);
-	if (PORT_CONNECT & port_val) {
-		ehci_writel(ehci, 0x0, &ehci->regs->configured_flag);
-		//ehci_halt(ehci);
-		//ehci_reset(ehci);
-	}
-#endif
 
 	if (ehci_is_TDI(ehci))
 		return;

@@ -1,5 +1,6 @@
 config BCMDHD
 	tristate "Broadcom FullMAC wireless cards support"
+	depends on MAC80211
 	---help---
 	  This module adds support for wireless adapters based on
 	  Broadcom FullMAC chipset.
@@ -47,15 +48,14 @@ choice
 	prompt "Interrupt type"
 	---help---
 		Interrupt type
+config BCMDHD_SDIO_IRQ
+	depends on BCMDHD && BCMDHD_SDIO
+	bool "In-Band Interrupt"
+	---help---
+	  Interrupt from SDIO DAT[1]		
 config BCMDHD_OOB
 	depends on BCMDHD && BCMDHD_SDIO
 	bool "Out-of-Band Interrupt"
 	---help---
 		Interrupt from WL_HOST_WAKE.
-config BCMDHD_SDIO_IRQ
-	depends on BCMDHD && BCMDHD_SDIO
-	bool "In-Band Interrupt"
-	default y	
-	---help---
-	  Interrupt from SDIO DAT[1]
 endchoice

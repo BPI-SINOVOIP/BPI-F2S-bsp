@@ -14,6 +14,7 @@ config TPL_INPUT
 config DM_KEYBOARD
 	bool "Enable driver model keyboard support"
 	depends on DM
+	default y if VIDEO_SP7021
 	help
 	  This adds a uclass for keyboards and implements keyboard support
 	  using driver model. The API is implemented by keyboard.h and

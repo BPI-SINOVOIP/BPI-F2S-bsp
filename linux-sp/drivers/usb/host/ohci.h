@@ -385,6 +385,8 @@ struct ohci_hcd {
 
 	/*
 	 * memory management for queue data structures
+	 *
+	 * @td_cache and @ed_cache are %NULL if &usb_hcd.localmem_pool is used.
 	 */
 	struct dma_pool		*td_cache;
 	struct dma_pool		*ed_cache;
@@ -432,10 +434,9 @@ struct ohci_hcd {
 
 	struct dentry		*debug_dir;
 
-#if 0	/* sunplus USB driver */
 	/* platform-specific data -- must come last */
 	unsigned long           priv[0] __aligned(sizeof(s64));
-#endif
+
 };
 
 #ifdef CONFIG_USB_PCI

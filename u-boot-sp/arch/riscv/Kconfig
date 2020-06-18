@@ -17,12 +17,15 @@ config TARGET_QEMU_VIRT
 config TARGET_SIFIVE_FU540
 	bool "Support SiFive FU540 Board"
 
+config TARGET_PENTAGRAM_I143_P
+	bool "Support pentagram I143 p-chip Board"
 endchoice
 
 # board-specific options below
 source "board/AndesTech/ax25-ae350/Kconfig"
 source "board/emulation/qemu-riscv/Kconfig"
 source "board/sifive/fu540/Kconfig"
+source "board/sunplus/i143/Kconfig"
 
 # platform-specific options below
 source "arch/riscv/cpu/ax25/Kconfig"
@@ -120,4 +123,59 @@ config RISCV_RDTIME
 config SYS_MALLOC_F_LEN
 	default 0x1000
 
+config SMP
+	bool "Symmetric Multi-Processing"
+	help
+	  This enables support for systems with more than one CPU. If
+	  you say N here, U-Boot will run on single and multiprocessor
+	  machines, but will use only one CPU of a multiprocessor
+	  machine. If you say Y here, U-Boot will run on many, but not
+	  all, single processor machines.
+config NR_CPUS
+	int "Maximum number of CPUs (2-32)"
+	range 2 32
+	depends on SMP
+	default 8
+	help
+	  On multiprocessor machines, U-Boot sets up a stack for each CPU.
+	  Stack memory is pre-allocated. U-Boot must therefore know the
+	  maximum number of CPUs that may be present.
+config SBI_IPI
+	bool
+	default y if RISCV_SMODE || SPL_RISCV_SMODE
+	depends on SMP
+config XIP
+	bool "XIP mode"
+	help
+	  XIP (eXecute In Place) is a method for executing code directly
+	  from a NOR flash memory without copying the code to ram.
+	  Say yes here if U-Boot boots from flash directly.
+config STACK_SIZE_SHIFT
+	int
+	default 13
+
+config SP_TIMER
+	bool "Sunplus timer"
+	default y
+	help
+	  Support Sunplus STC timer
+
+config SYS_ZEBU_ENV
+	bool "riscv zebu environment"
+	default n
+
+config SRCADDR_KERNEL
+	hex "Linux kernel source address"
+	default 0xF8600000
+	help
+	  Linux kernel source address
+	  Linux kernel image is stored in this address.
+
+config SRCADDR_FREERTOS
+	hex "DTB source address"
+	default 0xF8180000
+	help
+	  DTB(device tree blob) source address
+	  DTB image is stored in this address.
+	  This address can be nand/emmc address.
 endmenu

@@ -14,7 +14,12 @@
 #include <mach/io_map.h>
 #include <mach/clk.h>
 #include <mach/misc.h>
-#include <dt-bindings/memory/sp-q628-mem.h> 
+#ifndef CONFIG_MACH_PENTAGRAM_I143_ACHIP
+//#include <dt-bindings/memory/sp-q628-mem.h>
+#endif
+#ifdef CONFIG_SUNPLUS_IOP
+#include <../drivers/misc/iop/sp_iop.h>
+#endif
 #include "common.h"
 
 static void sp_power_off(void)
@@ -23,12 +28,15 @@ static void sp_power_off(void)
 	void __iomem *regs = (void __iomem *)A_SYSTEM_BASE;
 	void __iomem *regs_B = (void __iomem *)B_SYSTEM_BASE;
 //	int i;
-	pr_info("%s\n", __func__);
-
-	writel(0x0000, regs_B + 0x434); /* iop_data5=0x0000 */
-	writel(0x0060, regs_B + 0x438); /* iop_data6=0x0060 */
-	writel(0x00dd, regs_B + 0x424); /* iop_data1=0x00dd */
-		
+	early_printk("%s\n", __func__);
+	#ifdef CONFIG_SUNPLUS_IOP
+    //for iop power off
+	sp_iop_platform_driver_poweroff();
+	#endif 
+	//writel(0x0000, regs_B + 0x434); /* iop_data5=0x0000 */
+	//writel(0x0060, regs_B + 0x438); /* iop_data6=0x0060 */
+	//writel(0x00dd, regs_B + 0x424); /* iop_data1=0x00dd */
+ 		
 	printk("PD RG_PLL_PDN and RG_PLLIO_PDN to save power\n");
 	writel(0, regs + 0x54); /* bit0 RG_PLLIO_PDN */
 	writel(0, regs + 0x2C); /* bit0 RG_PLL_PDN */
@@ -62,7 +70,7 @@ static void apply_partial_clken(void)
 {
 	int i;
 	const int ps_clken[] = {
-		0x67ef, 0x41ff, 0xff03, 0xfff0, 0x0004, /* G0.1~5  */
+		0x67ef, 0x43ff, 0xff03, 0xfff0, 0x0004, /* G0.1~5  */
 		0x0000, 0x8000, 0xffff, 0x0040, 0x0000, /* G0.6~10 */
 	};
 
@@ -83,7 +91,7 @@ static struct platform_device sp7021_cpuidle = {
 static void __init sp_init(void)
 {
 	unsigned int b_sysclk, io_ctrl;
-#ifdef CONFIG_MACH_PENTAGRAM_SP7021_ACHIP
+#ifdef CONFIG_MACH_PENTAGRAM_ACHIP
 	unsigned int a_pllclk, coreclk, ioclk, sysclk, clk_cfg, a_pllioclk;
 #endif
 
@@ -106,7 +114,7 @@ static void __init sp_init(void)
 	early_printk("B: b_sysclk=%uM abio_ctrl=(%ubit, %s)\n", b_sysclk / 1000000,
 		(io_ctrl & 2) ? 16 : 8, (io_ctrl & 1) ? "DDR" : "SDR");
 
-#ifdef CONFIG_MACH_PENTAGRAM_SP7021_ACHIP
+#ifdef CONFIG_MACH_PENTAGRAM_ACHIP
 	clk_cfg = readl((void __iomem *)A_SYSTEM_BASE + 0xc);
 	a_pllclk = (((readl((void __iomem *)A_SYSTEM_BASE + 0x2c) >> 16) + 1) & 0xff) * (27 * 1000 * 1000);
 	coreclk = a_pllclk / (1 + ((clk_cfg >> 10) & 1));
@@ -119,7 +127,7 @@ static void __init sp_init(void)
 #endif
 
 #ifdef CONFIG_SP_PARTIAL_CLKEN
-	apply_partial_clken();
+	//apply_partial_clken();
 #endif
 
 		sp7021_cpuidle.dev.platform_data = &cpuidle_coupled_sp7021_data;
@@ -140,7 +148,7 @@ static struct map_desc sp_io_desc[] __initdata = {
 		.length  = SIZE_B_SRAM0,
 		.type    = MT_DEVICE
 	},
-#ifdef CONFIG_MACH_PENTAGRAM_SP7021_ACHIP
+#ifdef CONFIG_MACH_PENTAGRAM_ACHIP
 	{	/* A RGST Bus */
 		.virtual = VA_A_REG,
 		.pfn     = __phys_to_pfn(PA_A_REG),
@@ -157,14 +165,14 @@ static void __init sp_map_io(void)
 	iotable_init(sp_io_desc, ARRAY_SIZE( sp_io_desc));
 
 	printk("B_REG %08x -> [%08x-%08x]\n", PA_B_REG, VA_B_REG, VA_B_REG + SIZE_B_REG);
-#ifdef CONFIG_MACH_PENTAGRAM_SP7021_ACHIP
+#ifdef CONFIG_MACH_PENTAGRAM_ACHIP
         printk("A_REG %08x -> [%08x-%08x]\n", PA_A_REG, VA_A_REG, VA_A_REG + SIZE_A_REG);
 #endif
 }
 
 static void __init sp_init_early(void)
 {
-#ifdef CONFIG_MACH_PENTAGRAM_SP7021_ACHIP
+#ifdef CONFIG_MACH_PENTAGRAM_ACHIP
 	/* enable counter before timer_init */
 	writel(3, (void __iomem *)A_SYS_COUNTER_BASE); /* CNTCR: EN=1 HDBG=1 */
 	mb();
@@ -183,7 +191,10 @@ static void __init sp_fixup(void)
 void sp_restart(enum reboot_mode mode, const char *cmd)
 {
 	void __iomem *regs = (void __iomem *)B_SYSTEM_BASE;
-
+	#ifdef CONFIG_SUNPLUS_IOP
+	unsigned int reg_value;
+	#endif 
+	early_printk("%s\n", __func__);
 	/* MOON : enable watchdog reset */
 	writel(0x00120012, regs + 0x0274); /* G4.29 misc_ctl */
 
@@ -192,6 +203,11 @@ void sp_restart(enum reboot_mode mode, const char *cmd)
 	writel(0xAB00, regs + 0x0630); /* unlock */
 	writel(0x0001, regs + 0x0634); /* counter */
 	writel(0x4A4B, regs + 0x0630); /* resume */
+
+	#ifdef CONFIG_SUNPLUS_IOP
+	reg_value = readl(regs + 0x400);
+	writel((reg_value|0x0001), regs + 0x400); 
+	#endif 
 }
 
 #ifdef CONFIG_MACH_PENTAGRAM_SP7021_BCHIP
@@ -219,6 +235,23 @@ static char const *achip_compat[] __initconst = {
 
 DT_MACHINE_START(SP7021_ACHIP_DT, "SP7021_ACHIP")
 	.dt_compat	= achip_compat,
+	.dt_fixup	= sp_fixup,
+	.reserve	= sp_reserve,
+	.map_io		= sp_map_io,
+	.init_early	= sp_init_early,
+	.init_machine	= sp_init,
+	.restart	= sp_restart,
+MACHINE_END
+#endif
+
+#ifdef CONFIG_MACH_PENTAGRAM_I143_ACHIP
+static char const *i143_compat[] __initconst = {
+	"sunplus,i143-achip",
+	NULL
+};
+
+DT_MACHINE_START(I143_ACHIP_DT, "I143_ACHIP")
+	.dt_compat	= i143_compat,
 	.dt_fixup	= sp_fixup,
 	.reserve	= sp_reserve,
 	.map_io		= sp_map_io,

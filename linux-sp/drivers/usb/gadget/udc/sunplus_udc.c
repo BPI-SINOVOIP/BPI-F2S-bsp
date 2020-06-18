@@ -12,15 +12,17 @@
 #include <linux/delay.h>
 #include <linux/kthread.h>
 #include <linux/interrupt.h>
+#include <linux/ctype.h>
 #include <linux/usb/gadget.h>
 #include <mach/io_map.h>
 #include <linux/usb/composite.h>
 #include <linux/usb/otg.h>
 #include <linux/usb/sp_usb.h>
+#include <linux/usb/gadget_chips.h>
 #include <asm/cacheflush.h>
 #include "../../../../arch/arm/mm/dma.h"
 #ifdef CONFIG_USB_SUNPLUS_OTG
-#include "../../phy/sunplus-otg.h"
+#include "../../phy/otg-sunplus.h"
 #endif
 
 #ifdef CONFIG_FIQ_GLUE
@@ -66,6 +68,14 @@ char sof_n = 0;
 static u8 bus_reset_finish_flag = false;
 bool ncm_initialize_finish_flag = false;
 EXPORT_SYMBOL_GPL(ncm_initialize_finish_flag);
+
+#ifdef CONFIG_GADGET_USB0
+uint accessory_port_id = USB_PORT0_ID;
+#else
+uint accessory_port_id = USB_PORT1_ID;
+#endif
+module_param(accessory_port_id, uint, 0644);
+EXPORT_SYMBOL_GPL(accessory_port_id);
 
 void usb_switch(int device);
 
@@ -1016,12 +1026,13 @@ static void sp_udc_handle_ep0s_idle(struct sp_udc *dev,
 	case USB_REQ_GET_STATUS:
 		DEBUG_INFO("USB_REQ_GET_STATUS ... \n");
 #ifdef CONFIG_USB_SUNPLUS_OTG
-		if((0x80 == crq->bRequestType) && (0 == crq->wValue) && (0xf000 == crq->wIndex) && (4 == crq->wLength)){
+		if ((0x80 == crq->bRequestType) && (0 == crq->wValue) && (0xf000 == crq->wIndex) && (4 == crq->wLength)){
 			u32 status = 0;
 			status = dev_otg_status;
 			udc_write(EP0_DIR | CLR_EP0_OUT_VLD, UDEP0CS);
 			udc_write(((1 << 2) - 1), UDEP0VB);
 			DEBUG_DBG("get otg status,%d,%d\n",dev_otg_status,status);
+			printk("get otg status,%d,%d\n",dev_otg_status,status);
 			memcpy((char *)(base_addr + UDEP0DP), (char *)(&status), 4);
 			udc_write(udc_read(UDLIE) | EP0I_IF, UDLIE);
 			udc_write(SET_EP0_IN_VLD | EP0_DIR, UDEP0CS);
@@ -1042,7 +1053,7 @@ static void sp_udc_handle_ep0s_idle(struct sp_udc *dev,
 	case USB_REQ_SET_FEATURE:
 #ifdef CONFIG_USB_SUNPLUS_OTG
 		if((0 == crq->bRequestType) && (3 == crq->wValue) && (0 == crq->wIndex) && (0 == crq->wLength)){
-			DEBUG_DBG("set hnp feature\n");
+			DEBUG_DBG("set hnp featrue\n");
 
 	#ifdef CONFIG_GADGET_USB0
 			otg_phy = usb_get_transceiver_sp(0);
@@ -1051,7 +1062,7 @@ static void sp_udc_handle_ep0s_idle(struct sp_udc *dev,
 	#endif
 
 			if (!otg_phy) {
-				DEBUG_ERR("Get otg control fail\n");
+				DEBUG_NOTICE("Get otg control fail\n");
 			} else {
 				sp_accept_b_hnp_en_feature(otg_phy->otg);
 			}
@@ -1119,13 +1130,14 @@ static void sp_udc_handle_ep0s(struct sp_udc *dev)
 	struct sp_request *req = NULL;
 
 	if (!cdev) {
-		DEBUG_ERR("cdev invalid\n");
+		DEBUG_DBG("cdev invalid\n");
 		return;
 	}
+
 	req_g = cdev->req;
 	req = to_sp_req(req_g);
 	if (!req) {
-		DEBUG_ERR("req invalid\n");
+		DEBUG_DBG("req invalid\n");
 		return;
 	}
 	ep0csr = udc_read(UDEP0CS);
@@ -1139,7 +1151,8 @@ static void sp_udc_handle_ep0s(struct sp_udc *dev)
 	case EP0_IN_DATA_PHASE:
 		DEBUG_DBG("EP0_IN_DATA_PHASE ... what now?\n");
 		if (req->req.length != req->req.actual) {
-			if(1 == sp_udc_write_ep0_fifo(ep, req)){
+			if (sp_udc_write_ep0_fifo(ep, req) && udc_read(EP0_IVLD)) {
+				udc_write(udc_read(UDEP0CS) | SET_EP0_IN_VLD, UDEP0CS);
 				udc_write(udc_read(UDLIE) & (~EP0I_IF), UDLIE);
 				udc_write(udc_read(UDEP0CS) & (~EP_DIR), UDEP0CS);
 				ep->dev->ep0state = EP0_IDLE;
@@ -1287,6 +1300,7 @@ static int sp_udc_write_ep0_fifo(struct sp_ep *ep,
 		is_last = 1;
 	else
 		is_last = 0;
+
 	DEBUG_DBG("Written ep%d %d.%d of %d b [last %d,z %d]\n", idx, count,
 		  req->req.actual, req->req.length, is_last, req->req.zero);
 
@@ -1932,6 +1946,7 @@ static int sp_ep1_bulkin(struct sp_ep *ep, struct sp_request *req)
 _TX_BULK_IN_DATA:
 	udc_write(EP1N_IF, UDLIF);
 	if (!(udc_read(UDEP12FS) & EP_IVLD)) {
+	//if (udc_read(UDEP12FS) & EP_IVLD) {
 		is_ping = udc_read(UDEP12PPC) & CURR_BUFF;
 		count = sp_udc_write_packet(UDEP12FDP, req, ep->ep.maxpacket, UDEP12VB);
 	} else {
@@ -1980,6 +1995,7 @@ static int sp_ep8_bulkin(struct sp_ep *ep, struct sp_request *req)
 _TX_BULK_IN8_DATA:
 	/*udc_write(EP8N_IF, UDNBIE);*/
 	if (!(udc_read(UDEP89FS) & EP_IVLD)) {
+	//if (udc_read(UDEP89FS) & EP_IVLD) {
 		is_ping = udc_read(UDEP89PPC) & CURR_BUFF;
 		count = sp_udc_write_packet(UDEP89FDP, req, ep->ep.maxpacket, UDEP89VB);
 	} else {
@@ -2148,7 +2164,7 @@ static int sp_udc_ep11_bulkout_dma(struct sp_ep *ep,
 				udc_write(udc_read(UDEPBPPC) | SWITCH_BUFF, UDEPBPPC);
 			up(&ep11_sw_sem);
 		}
-		DEBUG_DBG("dma status %x\n", udc_read(UDEPBDMACS));
+		DEBUG_DBG("dma staus %x\n", udc_read(UDEPBDMACS));
 		DEBUG_DBG("************Wait DMA Finish***************** %x\n",
 			  udc_read(UDEPBDMACS));
 		t = jiffies;
@@ -2164,7 +2180,7 @@ static int sp_udc_ep11_bulkout_dma(struct sp_ep *ep,
 			   } */
 #endif
 			if (!(udc_read(UDEPBDMACS) & DMA_EN))
-				DEBUG_ERR("dma%d status %x\n", ep->num,
+				DEBUG_ERR("dma%d staus %x\n", ep->num,
 					  udc_read(UDEPBDMACS));
 			return 0;
 		}
@@ -2175,7 +2191,7 @@ static int sp_udc_ep11_bulkout_dma(struct sp_ep *ep,
 			udc_write(udc_read(UDCIE) | EPB_DMA_IF, UDCIE);
 
 			if (!(udc_read(UDEPBDMACS) & DMA_EN))
-				DEBUG_DBG("dma%d status %x\n", ep->num,
+				DEBUG_DBG("dma%d staus %x\n", ep->num,
 					  udc_read(UDEPBDMACS));
 			return 0;
 		}
@@ -2874,8 +2890,6 @@ static void sp_udc_ep9_work(struct work_struct *work)
 	return;
 }
 
-
-
 #ifdef CONFIG_USB_SUNPLUS_EP11
 static void sp_udc_ep11_work(void)
 {
@@ -3388,6 +3402,173 @@ static void ep8_handle(struct sp_udc *dev)
 	return;
 }
 
+static unsigned epnum = 0;
+
+static int
+ep_matches (
+	struct usb_gadget		*gadget,
+	struct usb_ep			*ep,
+	struct usb_endpoint_descriptor	*desc,
+	struct usb_ss_ep_comp_descriptor *ep_comp
+)
+{
+	u8		type;
+	const char	*tmp;
+	u16		max;
+
+	int		num_req_streams = 0;
+
+	/* endpoint already claimed? */
+	if (NULL != ep->driver_data)
+		return 0;
+
+	/* only support ep0 for portable CONTROL traffic */
+	type = desc->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK;
+	if (USB_ENDPOINT_XFER_CONTROL == type)
+		return 0;
+
+	/* some other naming convention */
+	if ('e' != ep->name[0])
+		return 0;
+
+	/* type-restriction:  "-iso", "-bulk", or "-int".
+	 * direction-restriction:  "in", "out".
+	 */
+	if ('-' != ep->name[2]) {
+		tmp = strrchr (ep->name, '-');
+		if (tmp) {
+			switch (type) {
+			case USB_ENDPOINT_XFER_INT:
+				/* bulk endpoints handle interrupt transfers,
+				 * except the toggle-quirky iso-synch kind
+				 */
+				if ('s' == tmp[2])	// == "-iso"
+					return 0;
+				/* for now, avoid PXA "interrupt-in";
+				 * it's documented as never using DATA1.
+				 */
+				if (gadget_is_pxa (gadget)
+						&& 'i' == tmp [1])
+					return 0;
+				break;
+			case USB_ENDPOINT_XFER_BULK:
+				if ('b' != tmp[1])	// != "-bulk"
+					return 0;
+				break;
+			case USB_ENDPOINT_XFER_ISOC:
+				if ('s' != tmp[2])	// != "-iso"
+					return 0;
+			}
+		} else {
+			tmp = ep->name + strlen (ep->name);
+		}
+
+		/* direction-restriction:  "..in-..", "out-.." */
+		tmp--;
+		if (!isdigit (*tmp)) {
+			if (desc->bEndpointAddress & USB_DIR_IN) {
+				if ('n' != *tmp)
+					return 0;
+			} else {
+				if ('t' != *tmp)
+					return 0;
+			}
+		}
+	}
+
+	/*
+	 * Get the number of required streams from the EP companion
+	 * descriptor and see if the EP matches it
+	 */
+	if (usb_endpoint_xfer_bulk(desc)) {
+		if (ep_comp && gadget->max_speed >= USB_SPEED_SUPER) {
+			num_req_streams = ep_comp->bmAttributes & 0x1f;
+			if (num_req_streams > ep->max_streams)
+				return 0;
+		}
+
+	}
+
+	/*
+	 * If the protocol driver hasn't yet decided on wMaxPacketSize
+	 * and wants to know the maximum possible, provide the info.
+	 */
+	if (desc->wMaxPacketSize == 0)
+		desc->wMaxPacketSize = cpu_to_le16(ep->maxpacket_limit);
+
+	/* endpoint maxpacket size is an input parameter, except for bulk
+	 * where it's an output parameter representing the full speed limit.
+	 * the usb spec fixes high speed bulk maxpacket at 512 bytes.
+	 */
+	max = 0x7ff & usb_endpoint_maxp(desc);
+	switch (type) {
+	case USB_ENDPOINT_XFER_INT:
+		/* INT:  limit 64 bytes full speed, 1024 high/super speed */
+		if (!gadget_is_dualspeed(gadget) && max > 64)
+			return 0;
+		/* FALLTHROUGH */
+
+	case USB_ENDPOINT_XFER_ISOC:
+		/* ISO:  limit 1023 bytes full speed, 1024 high/super speed */
+		if (ep->maxpacket < max)
+			return 0;
+		if (!gadget_is_dualspeed(gadget) && max > 1023)
+			return 0;
+
+		/* BOTH:  "high bandwidth" works only at high speed */
+		if ((desc->wMaxPacketSize & cpu_to_le16(3<<11))) {
+			if (!gadget_is_dualspeed(gadget))
+				return 0;
+			/* configure your hardware with enough buffering!! */
+		}
+		break;
+	}
+
+	/* MATCH!! */
+
+	/* report address */
+	desc->bEndpointAddress &= USB_DIR_IN;
+	if (isdigit (ep->name [2])) {
+		u8	num = simple_strtoul (&ep->name [2], NULL, 10);
+		desc->bEndpointAddress |= num;
+#ifdef	MANY_ENDPOINTS
+	} else if (desc->bEndpointAddress & USB_DIR_IN) {
+		if (++in_epnum > 15)
+			return 0;
+		desc->bEndpointAddress = USB_DIR_IN | in_epnum;
+#endif
+	} else {
+		if (++epnum > 15)
+			return 0;
+		desc->bEndpointAddress |= epnum;
+	}
+
+	/* report (variable) full speed bulk maxpacket */
+	if ((USB_ENDPOINT_XFER_BULK == type) && !ep_comp) {
+		int size = ep->maxpacket;
+
+		/* min() doesn't work on bitfields with gcc-3.5 */
+		if (size > 64)
+			size = 64;
+		desc->wMaxPacketSize = cpu_to_le16(size);
+	}
+	ep->address = desc->bEndpointAddress;
+	return 1;
+}
+
+
+static struct usb_ep *
+find_ep (struct usb_gadget *gadget, const char *name)
+{
+	struct usb_ep	*ep;
+
+	list_for_each_entry (ep, &gadget->ep_list, ep_list) {
+		if (0 == strcmp (ep->name, name))
+			return ep;
+	}
+	return NULL;
+}
+
 static irqreturn_t sp_udc_irq(int irq, void *_dev)
 {
 	u32 udc_irq_flags;
@@ -3505,7 +3686,7 @@ static irqreturn_t sp_udc_irq(int irq, void *_dev)
 
 	if (irq_en2_flags & EP0S_IF) {
 		udc_write(EP0S_IF, UDLIF);
-		DEBUG_NOTICE("ep0 setup int\n");
+		//DEBUG_NOTICE("ep0 setup int\n");
 		if ((udc_read(UDEP0CS) & (EP0_OVLD | EP0_OUT_EMPTY)) ==
 		    (EP0_OVLD | EP0_OUT_EMPTY)) {
 			udc_write(udc_read(UDEP0CS) | CLR_EP0_OUT_VLD, UDEP0CS);
@@ -3786,16 +3967,17 @@ iap_addr:
 	/* kickstart this i/o queue? */
 	if (sp_udc_list_empty(&ep->queue, &ep->lock)) {
 		if (ep->bEndpointAddress == EP0) {
-			DEBUG_INFO("ep0 enqueue\n");
+			//DEBUG_INFO("ep0 enqueue\n");
 
 			ep_csr = udc_read(UDEP0CS);
 			if ((udc_read(UDEP0CS) & (EP0_OVLD | EP0_OUT_EMPTY)) == (EP0_OVLD | EP0_OUT_EMPTY))
 				udc_write(udc_read(UDEP0CS) | CLR_EP0_OUT_VLD,UDEP0CS);
-			DEBUG_DBG("dev->ep0state %d %x\n", dev->ep0state,
-				  udc_read(UDEP0CS));
+			//DEBUG_DBG("dev->ep0state %d %x\n", dev->ep0state,
+			//	  udc_read(UDEP0CS));
 			switch (dev->ep0state) {
 			case EP0_IN_DATA_PHASE:
-				if (sp_udc_write_ep0_fifo(ep, req)) {
+				if (sp_udc_write_ep0_fifo(ep, req) && udc_read(EP0_IVLD)) {
+					udc_write(udc_read(UDEP0CS) | SET_EP0_IN_VLD, UDEP0CS);
 					ret = 0;
 				}
 				break;
@@ -3804,7 +3986,7 @@ iap_addr:
 				if (!_req->length /*&& (!dev->req_std) */ ) {	/*NEED MODIFY */
 					udc_write(udc_read(UDLIE) | EP0I_IF, UDLIE);
 					udc_write(SET_EP0_IN_VLD | EP0_DIR, UDEP0CS);
-					DEBUG_DBG("ack 0 length => ep0 state=== %x\n", udc_read(UDEP0CS));
+					//DEBUG_DBG("ack 0 length => ep0 state=== %x\n", udc_read(UDEP0CS));
 				} else {
 					udc_write(udc_read(UDLIE) | EP0O_IF, UDLIE);
 					/*udc_write(CLR_EP0_OUT_VLD, UDEP0CS);*/
@@ -3815,13 +3997,13 @@ iap_addr:
 					dev->ep0state = EP0_IDLE;
 					ret = 0;
 				}
-				DEBUG_DBG("ep0 state => %x\n",
-					  udc_read(UDEP0CS));
+				//DEBUG_DBG("ep0 state => %x\n",
+				//	  udc_read(UDEP0CS));
 				break;
 
 			default:
-				DEBUG_ERR(" ***** ep0 failed, dev->ep0state = %d \n",
-				     dev->ep0state);
+				//DEBUG_ERR(" ***** ep0 failed, dev->ep0state = %d \n",
+				//     dev->ep0state);
 				queue_ret = -EL2HLT;
 				goto __QUEUE_BREAK;
 			}
@@ -3832,40 +4014,42 @@ iap_addr:
 			/*DEBUG_NOTICE("ep in status^^^^^^^^^^^^<<< %x\n",udc_read(UDC_LLCFS_OFST));*/
 			switch (ep->bEndpointAddress & 0x7F) {
 			case EP1:
-				DEBUG_INFO("enqueue, ep1 [%d] fifo_status:%x\n",
-					   req->req.length, udc_read(UDEP12FS));
+				//DEBUG_INFO("enqueue, ep1 [%d] fifo_status:%x\n",
+				//	   req->req.length, udc_read(UDEP12FS));
 				break;
 			case EP3:
 				udc_write(udc_read(UDLIE) | EP3I_IF, UDLIE);
 
-				DEBUG_INFO("enqueue, ep3 in [%d] %x\n",
-					   req->req.length,
-					   udc_read(UDEP3CTRL));
+				//DEBUG_INFO("enqueue, ep3 in [%d] %x\n",
+				//	   req->req.length,
+				//	   udc_read(UDEP3CTRL));
 				ep_csr = udc_read(UDEP3CTRL);
 				if ((!(ep_csr & EP3_VLD))) {
+				//if (ep_csr & EP3_VLD) {
 					if (sp_ep3_int_in(ep, req)) {
 						req = NULL;
 					}
 				} else {
-					DEBUG_ERR("[%s][%d] Why Invalid??\n",
-						  __FUNCTION__, __LINE__);
+					//DEBUG_ERR("[%s][%d] Why Invalid??\n",
+					//	  __FUNCTION__, __LINE__);
 					queue_ret = -EINVAL;
 					goto __QUEUE_BREAK;
 				}
 				break;
 
 			case EP5:
-				DEBUG_INFO("enqueue, ep5 in [%d] %x\n",
-					   req->req.length,
-					   udc_read(UDEP5CTRL));
+				//DEBUG_INFO("enqueue, ep5 in [%d] %x\n",
+				//	   req->req.length,
+				//	   udc_read(UDEP5CTRL));
 				ep_csr = udc_read(UDEP5CTRL);
 				if ((!(ep_csr & EP3_VLD)) && g_flag_ep5 < 2) {
+				//if ((ep_csr & EP3_VLD) && g_flag_ep5 < 2) {
 					if (sp_ep5_iso_in(ep, req)) {
 						req = NULL;
 					}
 				} else {
-					DEBUG_ERR("[%s][%d] Why Invalid??\n",
-						  __FUNCTION__, __LINE__);
+					//DEBUG_ERR("[%s][%d] Why Invalid??\n",
+					//	  __FUNCTION__, __LINE__);
 					queue_ret = -EINVAL;
 					goto __QUEUE_BREAK;
 				}
@@ -3874,24 +4058,25 @@ iap_addr:
 				udc_write(udc_read(UDLIE) | EP7I_IF |
 					  EP7_DMA_IF, UDLIE);
 
-				DEBUG_INFO("enqueue, ep7 in [%d] %x\n",
-					   req->req.length,
-					   udc_read(UDEP7CTRL));
+				//DEBUG_INFO("enqueue, ep7 in [%d] %x\n",
+				//	   req->req.length,
+				//	   udc_read(UDEP7CTRL));
 				ep_csr = udc_read(UDEP7CTRL);
 				if ((!(ep_csr & EP3_VLD))) {
+				//if (ep_csr & EP3_VLD) {
 					if (sp_ep7_iso_in(ep, req)) {
 						req = NULL;
 					}
 				} else {
-					DEBUG_ERR("[%s][%d] Why Invalid??\n",
-						  __FUNCTION__, __LINE__);
+					//DEBUG_ERR("[%s][%d] Why Invalid??\n",
+					//	  __FUNCTION__, __LINE__);
 					queue_ret = -EINVAL;
 					goto __QUEUE_BREAK;
 				}
 				break;
 			case EP8:
-				DEBUG_DBG("enqueue, ep8 bulk in [%d]\n",
-					  req->req.length);
+				//DEBUG_DBG("enqueue, ep8 bulk in [%d]\n",
+				//	  req->req.length);
 				if (((udc_read(UDEP89FS) & 0x11) != 0x11)
 				    && sp_ep8_bulkin(ep, req))
 					req = NULL;
@@ -3901,8 +4086,8 @@ iap_addr:
 						udc_read(UDC_EPABFS_OFST),(!(udc_read(UDC_EPABPPC_OFST)>>2)));*/
 				break;
 			default:
-				DEBUG_ERR("[%s][%d] Why Invalid??\n",
-					  __FUNCTION__, __LINE__);
+				//DEBUG_ERR("[%s][%d] Why Invalid??\n",
+				//	  __FUNCTION__, __LINE__);
 				queue_ret = -EINVAL;
 				goto __QUEUE_BREAK;
 			}
@@ -3913,21 +4098,21 @@ iap_addr:
 			    && ep->bEndpointAddress != EP9
 			    && ep->bEndpointAddress != EP12
 			    && ep->bEndpointAddress != EP5) {
-				DEBUG_ERR("ep%d not complete \n",
-					  ep->bEndpointAddress);
+				//DEBUG_ERR("ep%d not complete \n",
+				//	  ep->bEndpointAddress);
 				queue_ret = -EINVAL;
 				goto __QUEUE_BREAK;
 			} else if (ep->bEndpointAddress == EP9) {
-				DEBUG_DBG("enqueue, bulk out ep9 %x buf%d\n",
-					  udc_read(UDEP9FS),
-					  (!(udc_read(UDEP9PPC) >> 2)));
+				//DEBUG_DBG("enqueue, bulk out ep9 %x buf%d\n",
+				//	  udc_read(UDEP9FS),
+				//	  (!(udc_read(UDEP9PPC) >> 2)));
 				/*if(udc_read(UDC_EP89FS_OFST)&0x22 &&
 				   sp_ep9_bulkout(ep, req))
 				   req == NULL; */
 			} else if (ep->bEndpointAddress == EP11) {
-				DEBUG_DBG("enqueue, bulk out ep11 %x buf%d\n",
-					  udc_read(UDEPBFS),
-					  (!(udc_read(UDEPBPPC) >> 2)));
+				//DEBUG_DBG("enqueue, bulk out ep11 %x buf%d\n",
+				//	  udc_read(UDEPBFS),
+				//	  (!(udc_read(UDEPBPPC) >> 2)));
 			} else if (ep->bEndpointAddress == EP12) {
 				if (sp_epc_iso_out(ep, req)) {
 					req = NULL;
@@ -3961,7 +4146,7 @@ iap_addr:
 		}
 	}
 
-	DEBUG_INFO("<<<%s..\n", __FUNCTION__);
+	//DEBUG_INFO("<<<%s..\n", __FUNCTION__);
 
 	return 0;
 
@@ -4065,7 +4250,9 @@ static int sp_vbus_draw(struct usb_gadget *_gadget, unsigned ma)
 static int sp_udc_start(struct usb_gadget *gadget, struct usb_gadget_driver *driver)
 {
 	struct sp_udc *udc = the_controller;
+#if 0
 	int ret;
+#endif
 
 	DEBUG_NOTICE(">>> sp_udc_start...\n");
 	/* Sanity checks */
@@ -4084,6 +4271,7 @@ static int sp_udc_start(struct usb_gadget *gadget, struct usb_gadget_driver *dri
 	udc->driver = driver;
 	udc->gadget.dev.driver = &driver->driver;
 
+#if 0
 	if ((ret = device_add(&udc->gadget.dev)) != 0) {
 		DEBUG_ERR("Error in device_add() : %d\n", ret);
 		goto register_error;
@@ -4093,34 +4281,37 @@ static int sp_udc_start(struct usb_gadget *gadget, struct usb_gadget_driver *dri
 		device_del(&udc->gadget.dev);
 		goto register_error;
 	}
+#endif
 
 	sp_udc_enable(udc);
 
 	DEBUG_NOTICE("<<< sp_udc_start...\n");
 	return 0;
 
+#if 0
 register_error:
 	DEBUG_ERR("[%s][%d] fail[%d]\n", __FUNCTION__, __LINE__, ret);
 	udc->driver = NULL;
 	udc->gadget.dev.driver = NULL;
 	return ret;
+#endif
 }
 
-static int sp_udc_stop(struct usb_gadget_driver *driver){
+static int sp_udc_stop(struct usb_gadget *gadget){
 	struct sp_udc *udc = the_controller;
 
 	DEBUG_NOTICE(">>> sp_udc_stop...\n");
 	if (!udc)
 		return -ENODEV;
 
-	if (!driver || driver != udc->driver || !driver->unbind)
+	if (!udc->driver->unbind)
 		return -EINVAL;
 
 	/* report disconnect */
-	if (driver->disconnect)
-		driver->disconnect(&udc->gadget);
+	if (udc->driver->disconnect)
+		udc->driver->disconnect(&udc->gadget);
 
-	driver->unbind(&udc->gadget);
+	udc->driver->unbind(&udc->gadget);
 
 	device_del(&udc->gadget.dev);
 	udc->driver = NULL;
@@ -4129,6 +4320,49 @@ static int sp_udc_stop(struct usb_gadget_driver *driver){
 	sp_udc_disable(udc);  TODO: sp_udc_disable*/
 
 	return 0;
+}
+
+static struct usb_ep *sp_match_ep(struct usb_gadget *gadget,
+		struct usb_endpoint_descriptor *desc,
+		struct usb_ss_ep_comp_descriptor *ep_comp)
+{
+	struct usb_ep *ep;
+	u8 type;
+
+	type = desc->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK;
+
+	if (gadget_is_sp628(gadget)) {
+		ep = NULL;
+		DEBUG_NOTICE("wei ep config\n");
+
+		if (type == USB_ENDPOINT_XFER_BULK) {
+			if (desc->bInterval == 0xDC) { // Function: MSDC
+				ep = find_ep(gadget,
+					(USB_DIR_IN & desc->bEndpointAddress) ? "ep8in-bulk" : "ep8in-bulk");
+			}
+			if (desc->bInterval == 0xDB) { // Function: ADB
+				ep = find_ep(gadget,
+					(USB_DIR_IN & desc->bEndpointAddress) ? "ep8in-bulk" : "ep9out-bulk");
+			}
+			else if(desc->bInterval == 0x1) { // Function: iap
+				ep = find_ep(gadget,
+					(USB_DIR_IN & desc->bEndpointAddress) ? "ep8in-bulk" : "ep9out-bulk");
+				desc->bInterval = 0;
+			}else{ // Function:
+				ep = find_ep(gadget,
+					(USB_DIR_IN & desc->bEndpointAddress) ? "ep1in-bulk" : "ep11out-bulk");
+			}
+		} else if (USB_ENDPOINT_XFER_INT == type) {
+			    ep = find_ep(gadget, "ep3in-int");
+		} else if (USB_ENDPOINT_XFER_ISOC == type){
+			ep = find_ep(gadget, (USB_DIR_IN & desc->bEndpointAddress) ? "ep5-iso" : "ep12-iso");
+		}
+
+		if (ep && ep_matches(gadget, ep, desc,ep_comp))
+			return ep;
+	}
+
+	return NULL;
 }
 
 static const struct usb_gadget_ops sp_ops = {
@@ -4140,6 +4374,7 @@ static const struct usb_gadget_ops sp_ops = {
 	.vbus_draw = sp_vbus_draw,
 	.udc_start = sp_udc_start,
 	.udc_stop = sp_udc_stop,
+	.match_ep = sp_match_ep,
 };
 
 static const struct usb_ep_ops sp_ep_ops = {
@@ -4521,7 +4756,8 @@ static int sp_udc_probe(struct platform_device *pdev)
 	int sp3502_udc_probe(void);
 	sp3502_udc_probe();
 #endif
-	device_initialize(&udc->gadget.dev);
+
+	//device_initialize(&udc->gadget.dev);
 	udc->gadget.dev.parent = dev;
 	udc->gadget.dev.dma_mask = dev->dma_mask;
 	udc->qwork_ep3 = create_singlethread_workqueue("sp-udc-ep3");
@@ -4537,9 +4773,10 @@ static int sp_udc_probe(struct platform_device *pdev)
 		ret = -ENOMEM;
 	}
 	INIT_WORK(&udc->work_ep9, sp_udc_ep9_work);
+
 	the_controller = udc;
-	platform_set_drvdata(pdev, udc);
 	sp_udc_reinit(udc);
+
 #ifdef CONFIG_FIQ_GLUE
 	udc->handler.isr = fiq_isr;
 	ret = fiq_glue_register_handler(&udc->handler);
@@ -4547,10 +4784,9 @@ static int sp_udc_probe(struct platform_device *pdev)
 		DEBUG_NOTICE("udc fiq fail\n");
 
 	ret = request_threaded_irq(irq_num, 0, udcThreadHandler,
-	                           IRQF_DISABLED , gadget_name, udc);/*udcThreadHandler*/
-
+	                           IRQF_SHARED , gadget_name, udc);/*udcThreadHandler*/
 #else
-	ret = request_irq(irq_num, sp_udc_irq, IRQF_DISABLED, gadget_name, udc);
+	ret = request_irq(irq_num, sp_udc_irq, IRQF_SHARED, gadget_name, udc);
 #endif
 	if (ret != 0) {
 		DEBUG_ERR("cannot get irq %i, err %d\n", irq_num, ret);
@@ -4573,13 +4809,13 @@ static int sp_udc_probe(struct platform_device *pdev)
 	}
 #endif
 
-	DEBUG_DBG("udc-line:%d\n", __LINE__);
+	DEBUG_ERR("udc-line:%d\n", __LINE__);
 	ret = usb_add_gadget_udc(&pdev->dev, &udc->gadget);
 	if (ret) {
 		goto err_add_udc;
 	}
 
-	DEBUG_DBG("probe sp udc ok %x\n", udc_read(VERSION));
+	DEBUG_ERR("probe sp udc ok %x\n", udc_read(VERSION));
 	/*iap debug */
 	udc_write(udc_read(UDNBIE) | EP8N_IF | EP8I_IF, UDNBIE);
 	udc_write(EP_ENA | EP_DIR, UDEP89C);
@@ -4651,7 +4887,6 @@ static int sp_udc_resume(struct platform_device *pdev)
 #define sp_udc_resume	NULL
 #endif
 
-#ifdef CONFIG_USB_HOST_RESET_SP
 static int udc_init_c(void)
 {
 	sp_udc_enable(NULL);
@@ -4667,7 +4902,6 @@ static int udc_init_c(void)
 	
 	return 0;
 }
-#endif
 
 void sp_udc_state_polling(struct timer_list *t)
 {
@@ -4746,7 +4980,7 @@ void usb_switch(int device)
 		}
 		writel(value, USBC_CTL);
 #endif
-		DEBUG_INFO("host to device\n");
+		DEBUG_ERR("host to device\n");
 	} else {
 		udc_write(udc_read(UDLCSET) | SOFT_DISC, UDLCSET);
 		if (is_config) {
@@ -4764,7 +4998,7 @@ void usb_switch(int device)
 		}
 		bus_reset_finish_flag = false;
 		platform_device_handle_flag = false;
-		DEBUG_INFO("device to host!\n");
+		DEBUG_ERR("device to host!\n");
 	}
 }
 
@@ -4772,7 +5006,7 @@ void ctrl_rx_squelch(void)/*Controlling squelch signal to slove the uphy bad sig
 {
 	udc_write(udc_read(UEP12DMACS) | RX_STEP7, UEP12DMACS);	/*control rx signal */
 
-	DEBUG_DBG("ctrl_rx_squelch UEP12DMACS: %x\n",udc_read(UEP12DMACS));
+	DEBUG_NOTICE("ctrl_rx_squelch UEP12DMACS: %x\n",udc_read(UEP12DMACS));
 }
 
 EXPORT_SYMBOL(usb_switch);
@@ -4780,17 +5014,25 @@ EXPORT_SYMBOL(ctrl_rx_squelch);
 
 void detech_start(void)
 {
-#ifdef	CONFIG_USB_HOST_RESET_SP
 	udc_init_c();
-#endif
+
 	platform_device_handle_flag = true;
 	first_enter_polling_timer_flag = true;
 	reset_global_value();
 	/*mod_timer(&vbus_polling_timer, jiffies + d_time0);*/
 	/*mod_timer(&sof_polling_timer, jiffies + HZ / 10);*/
-	DEBUG_DBG("detech_start......\n");
+	DEBUG_ERR("detech_start......\n");
 }
 EXPORT_SYMBOL(detech_start);
+
+void udc_otg_ctrl(void)
+{
+	u32 val;
+
+	val = USB_CLK_EN | UPHY_CLK_CSS;
+	udc_write(val, UDCCS);
+}
+EXPORT_SYMBOL(udc_otg_ctrl);
 
 static const struct of_device_id sunplus_udc0_ids[] = {
 	{ .compatible = "sunplus,sp7021-usb-udc0" },
@@ -4860,7 +5102,7 @@ static int __init udc_init(void)
 	if (readl((void *)MO_STAMP) == IC_VERSION_A) {
 		is_vera = 1;
 		dma_fail = 1;
-		DEBUG_INFO("IC VerA\n");
+		DEBUG_ERR("IC VerA\n");
 	}
 #endif
 

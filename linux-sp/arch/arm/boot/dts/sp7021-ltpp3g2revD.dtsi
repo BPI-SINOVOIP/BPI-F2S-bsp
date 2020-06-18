@@ -1,15 +1,13 @@
 /dts-v1/;
 
-#include "pentagram-sp7021-achip.dtsi"
-
-#include <dt-bindings/interrupt-controller/arm-gic.h>
+#include "sp7021-common.dtsi"
 
 / {
 	model = "SP7021 LTPP3G2 Rev. D";
-	compatible = "sunplus,sp7021-achip";
 
 	chosen {
 		bootargs = "console=ttyS0,115200 root=/dev/ram rw loglevel=8 earlyprintk";
+		stdout-path = "serial0:115200n8";
 	};
 
 	memory {
@@ -22,6 +20,7 @@
 &sp_spinor0 {  status = "disabled";  };
 
 &sdio {
+ pinctrl-names = "default";
  pinctrl-0 = <&pins_sdio &pins_sdio_reset>;
  bus-width = <4>;
  max-frequency = <40000000>; /* up to 52 */
@@ -35,9 +34,9 @@
 };
 
 &sp_uphy0 {
-  pinctrl-names = "default";
-  pinctrl-0 = <&pins_vbus_usb0>;
-  vbus-gpio = <&pctl 90 GPIO_ACTIVE_HIGH>;
+ pinctrl-names = "default";
+ pinctrl-0 = <&pins_vbus_usb0>;
+ vbus-gpio = <&pctl 90 GPIO_ACTIVE_HIGH>;
 };
 
 &sp_uphy1 {
@@ -52,7 +51,7 @@
 };
 
 &mmc1 {
- cd-gpio = <&pctl 0 GPIO_ACTIVE_LOW>;
+ cd-gpios = <&pctl 0 GPIO_ACTIVE_LOW>;
 };
 
 &hdmitx {
@@ -86,6 +85,11 @@
  // this: enable (bt) | enable (uart4), pins_uart4
 };
 
+&i2cm0 {  status = "disabled";  };
+&i2cm1 {  status = "disabled";  };
+&i2cm2 {  status = "disabled";  };
+&i2cm3 {  status = "disabled";  };
+
 &pctl {
  /*** all non-device binded that you want to set mode ***/
  pinctrl-names = "default";
@@ -111,7 +115,7 @@
  pins_gpio_nobinded: pins_gpio_nobinded {
     sppctl,pins = <
       SP7021_IOPAD(42,SP7021_PCTL_G_GPIO,0,0)   /* was L2SW_LED_FLASH0 */
-      SP7021_IOPAD(51,SP7021_PCTL_G_GPIO,0,0)   /* was L2SW_LED_ON0 */
+      /*SP7021_IOPAD(51,SP7021_PCTL_G_GPIO,0,0)*/   /* was L2SW_LED_ON0 */
       SP7021_IOPAD(30,SP7021_PCTL_G_GPIO,0,0)   /* was L2SW_LED_FLASH1 */
       SP7021_IOPAD(39,SP7021_PCTL_G_GPIO,0,0)   /* was L2SW_LED_ON1  */
     >;

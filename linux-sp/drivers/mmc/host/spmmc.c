@@ -415,7 +415,7 @@ static void spmmc_prepare_cmd(struct spmmc_host *host, struct mmc_command *cmd)
 static void spmmc_prepare_data(struct spmmc_host *host, struct mmc_data *data)
 {
 	u32 value, srcdst;
-	struct mmc_command *cmd = data->mrq->cmd;
+	//struct mmc_command *cmd = data->mrq->cmd;
 
 	writel(data->blocks - 1, &host->base->sd_page_num);
 	writel(data->blksz - 1, &host->base->sd_blocksize);

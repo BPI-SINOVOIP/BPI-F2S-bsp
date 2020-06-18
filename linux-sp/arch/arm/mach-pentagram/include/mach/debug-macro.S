@@ -1,4 +1,4 @@
-#include <mach/sp_uart.h>
+#include <soc/sunplus/sp_uart.h>
 
 		.macro	addruart, rp, rv, tmp
 		ldr	\rp, =LL_UART_PADDR @ physical

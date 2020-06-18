@@ -16,8 +16,10 @@
 #include <linux/kthread.h>
 #include <linux/uaccess.h>
 #include <linux/delay.h>
+
 //#include "sp_cbdma.h"
-#include <mach/sp_ipc.h>
+//#include <mach/sp_ipc.h>
+#include "sp_ipc.h"
 
 //#define IPC_TIMEOUT_DEBUG
 //#define IPC_REG_OVERWRITE
@@ -25,13 +27,43 @@
 #ifdef CONFIG_ARCH_ZYNQ
 #define LOCAL_TEST
 #endif
+
+/***************** * PA (B) *****************/
+//#define	PA_B_REG		0x9C000000
+#define	SIZE_B_REG		SZ_32M
+//#define PA_B_SRAM0		0x9E800000
+//#define SIZE_B_SRAM0		(40 * SZ_1K)
+//#define PA_IOB_ADDR(x)		((x) + PA_B_REG)
+/***************** * PA (A) *****************/
+//#define	PA_A_REG		0x9EC00000
+//#define	SIZE_A_REG		SZ_4M
+//#define PA_A_WORKMEM_SRAM0_BASE	0x9E000000
+//#define SIZE_A_WORKMEM_SRAM0	(SZ_512K)
+//#define PA_IOA_ADDR(x)		((x) + PA_A_REG)
+/***************** * VA chain *****************/
+#define VA_B_REG		0xF8000000
+#define VA_A_REG		(VA_B_REG + SIZE_B_REG)
+//#define VA_B_SRAM0		(VA_A_REG + SIZE_A_REG)
+//#define VA_A_WORKMEM_SRAM0	(VA_B_SRAM0 + SIZE_B_SRAM0)
+#define VA_IOB_ADDR(x)		((x) + VA_B_REG)
+//#define VA_IOA_ADDR(x)		((x) + VA_A_REG)
+/***************** * Global VA *****************/
+//#define B_SYSTEM_BASE           VA_IOB_ADDR(0 * 32 * 4)
+//#define A_SYSTEM_BASE           VA_IOA_ADDR(0 * 32 * 4)
+//#define A_SYS_COUNTER_BASE      (A_SYSTEM_BASE + 0x10a000) /* 9ed0_a000 */
+
+
+
+
+
+
+
 /**************************************************************************
  *                           C O N S T A N T S                            *
  **************************************************************************/
-
 /* IPC Reg Group */
 #ifndef CONFIG_ARCH_ZYNQ
-#include <mach/io_map.h>
+//#include <mach/io_map.h>  //need remove tonyh test
 #define REG_GROUP(g)		VA_IOB_ADDR((g)*32*4)
 #endif
 #ifdef LOCAL_TEST
@@ -53,11 +85,15 @@
 #endif
 #define IPC_SEQ_LEN         (4)
 /* IPC Interrupt Number */
+#if 0 //tonyh test
 #ifdef CONFIG_ARCH_ZYNQ
 #define CA9_DIRECT_INT0		(60)
 #else
 #define CA9_DIRECT_INT0		(182)
 #endif
+#else
+#define CA9_DIRECT_INT0		(84)
+#endif 
 #define CA9_DIRECT_INT1		(CA9_DIRECT_INT0 + 1)
 #define CA9_DIRECT_INT2		(CA9_DIRECT_INT0 + 2)
 #define CA9_DIRECT_INT3		(CA9_DIRECT_INT0 + 3)
@@ -65,16 +101,17 @@
 #define CA9_DIRECT_INT5		(CA9_DIRECT_INT0 + 5)
 #define CA9_DIRECT_INT6		(CA9_DIRECT_INT0 + 6)
 #define CA9_DIRECT_INT7		(CA9_DIRECT_INT0 + 7)
-#define A926_DIRECT_INT0	(CA9_DIRECT_INT0 + 8)
-#define A926_DIRECT_INT1	(CA9_DIRECT_INT0 + 9)
-#define A926_DIRECT_INT2	(CA9_DIRECT_INT0 + 10)
-#define A926_DIRECT_INT3	(CA9_DIRECT_INT0 + 11)
-#define A926_DIRECT_INT4	(CA9_DIRECT_INT0 + 12)
-#define A926_DIRECT_INT5	(CA9_DIRECT_INT0 + 13)
-#define A926_DIRECT_INT6	(CA9_DIRECT_INT0 + 14)
-#define A926_DIRECT_INT7	(CA9_DIRECT_INT0 + 15)
-#define CA9_INT				(CA9_DIRECT_INT0 + 16)
-#define A926_INT			(CA9_DIRECT_INT0 + 17)
+#define CA9_INT				(CA9_DIRECT_INT0 + 8)
+
+#define A926_DIRECT_INT0	(2)
+#define A926_DIRECT_INT1	(A926_DIRECT_INT0 + 1)
+#define A926_DIRECT_INT2	(A926_DIRECT_INT0 + 2)
+#define A926_DIRECT_INT3	(A926_DIRECT_INT0 + 3)
+#define A926_DIRECT_INT4	(A926_DIRECT_INT0 + 4)
+#define A926_DIRECT_INT5	(A926_DIRECT_INT0 + 5)
+#define A926_DIRECT_INT6	(A926_DIRECT_INT0 + 6)
+#define A926_DIRECT_INT7	(A926_DIRECT_INT0 + 7)
+#define A926_INT			(A926_DIRECT_INT0 + 8)
 
 #define IRQ_RPC				CA9_INT
 
@@ -236,7 +273,7 @@ void DCACHE_CLEAN(u32 pa, void *start, int size)
 	unsigned long oldIrq;
 
 	local_irq_save(oldIrq);
-	arm_dma_ops.sync_single_for_device(NULL, pa, size, DMA_TO_DEVICE);
+	//arm_dma_ops.sync_single_for_device(NULL, pa, size, DMA_TO_DEVICE); tonyh test
 	local_irq_restore(oldIrq);
 }
 
@@ -245,7 +282,7 @@ void DCACHE_INVALIDATE(u32 pa, void *start, int size)
 	unsigned long oldIrq;
 
 	local_irq_save(oldIrq);
-	arm_dma_ops.sync_single_for_cpu(NULL, pa, size, DMA_FROM_DEVICE);
+	//arm_dma_ops.sync_single_for_cpu(NULL, pa, size, DMA_FROM_DEVICE); tonyh test
 	local_irq_restore(oldIrq);
 }
 
@@ -427,7 +464,7 @@ static void rpc_copy(rpc_t *dst, rpc_t *src)
 			u32 pa = (u32) src->DATA_PTR;
 			dst->DATA_PTR = __VA(pa);
 			print("pa->va: %08x -> %p\n", pa, dst->DATA_PTR);
-			DCACHE_INVALIDATE(pa, dst->DATA_PTR, CACHE_ALIGN(len + IPC_SEQ_LEN));
+	//		DCACHE_INVALIDATE(pa, dst->DATA_PTR, CACHE_ALIGN(len + IPC_SEQ_LEN)); //tonyh test
 		} else {
 			ipc_memcpy(dst->DATA, src->DATA, REG_ALIGN(len));
 		}
@@ -438,7 +475,7 @@ static void rpc_copy(rpc_t *dst, rpc_t *src)
 			dst->DATA_PTR = (void *)pa;
 			print("va->pa: %p -> %08x\n", src->DATA_PTR, pa);
 #ifndef IPC_USE_CBDMA
-			DCACHE_CLEAN(pa, src->DATA_PTR, CACHE_ALIGN(len + IPC_SEQ_LEN));
+			//DCACHE_CLEAN(pa, src->DATA_PTR, CACHE_ALIGN(len + IPC_SEQ_LEN)); //tonyh test
 #endif
 		} else {
 			ipc_memcpy(dst->DATA, src->DATA, REG_ALIGN(len));
@@ -1093,9 +1130,19 @@ static struct file_operations sp_ipc_fops = {
 /**
  * @brief   IPC driver probe function
  */
+
+struct sp_ipc_test_dev {
+	volatile u32 *reg;
+};
+static struct sp_ipc_test_dev sp_ipc_test;
+
 static int sp_ipc_probe(struct platform_device *pdev)
 {
 	int ret = -ENXIO;
+	int i;
+	struct sp_ipc_test_dev *dev = &sp_ipc_test;
+	struct resource *res_mem, *res_irq;
+	
 
 	ipc = (sp_ipc_t *)devm_kzalloc(&pdev->dev, sizeof(sp_ipc_t), GFP_KERNEL);
 	if (ipc == NULL) {
@@ -1103,16 +1150,44 @@ static int sp_ipc_probe(struct platform_device *pdev)
 		ret	= -ENOMEM;
 		goto fail_kmalloc;
 	}
+	printf("sp_ipc_probe_00\n");
+	printf("sp_ipc_probe_01\n");
 
 	/* init */
     mutex_init(&ipc->write_lock);
 	ipc->rpc_res = kthread_run(rpc_res_thread, NULL, "RpcRes");
 
+
+	res_mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	if (!res_mem)
+		return -ENODEV;
+
+#if 1
+	
+	dev->reg = devm_ioremap_resource(&pdev->dev, res_mem);
+	if (IS_ERR((void *)dev->reg))
+		return PTR_ERR((void *)dev->reg);
+	
+	for (i = 0; i < 18; i++) {
+		res_irq = platform_get_resource(pdev, IORESOURCE_IRQ, i);
+		if (!res_irq) {
+			return -ENODEV;
+		}
+		ret = devm_request_irq(&pdev->dev, res_irq->start, rpc_isr, 0, "rpc", NULL);
+		printk("%s:%d %d\n", __FUNCTION__, __LINE__, ret);
+	}
+
+
+#else
 	ret = devm_request_irq(&pdev->dev, IRQ_RPC, rpc_isr, IRQF_TRIGGER_RISING, "rpc", NULL);
 	if (ret != 0) {
 		printf("sp_ipc request_irq fail!\n");
 		goto fail_reqirq;
 	}
+#endif 
+
+	
+
 	#if 0
 	ret = devm_request_irq(&pdev->dev, IRQ_A926, rpc_isr_926, IRQF_TRIGGER_RISING, "rpc", NULL);
 	if (ret != 0) {
@@ -1120,6 +1195,7 @@ static int sp_ipc_probe(struct platform_device *pdev)
 		goto fail_reqirq;
 	}
     #endif 
+	
 	/* register device */
 	ipc->dev.name  = "sp_ipc";
 	ipc->dev.minor = MISC_DYNAMIC_MINOR;
@@ -1129,6 +1205,7 @@ static int sp_ipc_probe(struct platform_device *pdev)
 		printf("sp_ipc device register fail\n");
 		goto fail_regdev;
 	}
+
 #ifdef IPC_USE_CBDMA
 	printk("[ipc info] use cbdma \n");
 	ipc->cbdma.cbdma_device = sp_cbdma_getbyname(IPC_CBDMA_NAME);

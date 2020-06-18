@@ -143,9 +143,15 @@ u32 vid_console_color(struct video_priv *priv, unsigned int idx)
 		       ((colors[idx].g >> 2) <<  5) |
 		       ((colors[idx].b >> 3) <<  0);
 	case VIDEO_BPP32:
+#ifdef CONFIG_VIDEO_SP7021
+		return (colors[idx].r << 24) |
+		       (colors[idx].g <<  16) |
+		       (colors[idx].b <<  8) | 0xff;
+#else
 		return (colors[idx].r << 16) |
 		       (colors[idx].g <<  8) |
 		       (colors[idx].b <<  0);
+#endif
 	default:
 		/*
 		 * For unknown bit arrangements just support

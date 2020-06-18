@@ -98,7 +98,7 @@ endif # USB_XHCI_HCD
 
 config USB_EHCI_HCD
 	bool "EHCI HCD (USB 2.0) support"
-	default y if ARCH_PENTAGRAM
+	default y
 	select USB_HOST
 	---help---
 	  The Enhanced Host Controller Interface (EHCI) is standard for USB 2.0
@@ -211,6 +211,8 @@ endif # USB_EHCI_HCD
 
 config USB_OHCI_HCD
 	bool "OHCI HCD (USB 1.1) support"
+	default y
+	select USB_HOST
 	---help---
 	  The Open Host Controller Interface (OHCI) is a standard for accessing
 	  USB 1.1 host controller hardware.  It does more in hardware than Intel's

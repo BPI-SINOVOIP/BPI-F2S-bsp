@@ -453,11 +453,11 @@ static long sp_bch_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
 	size = (cmd & IOCSIZE_MASK) >> IOCSIZE_SHIFT;
 	if (cmd & IOC_IN) {
-		if (!access_ok(VERIFY_READ, argp, size))
+		if (!access_ok(argp, size))
 			return -EFAULT;
 	}
 	if (cmd & IOC_OUT) {
-		if (!access_ok(VERIFY_WRITE, argp, size))
+		if (!access_ok(argp, size))
 			return -EFAULT;
 	}
 

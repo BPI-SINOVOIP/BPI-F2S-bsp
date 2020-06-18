@@ -20,7 +20,7 @@ static int image_check_params(struct image_tool_params *params)
 		(params->lflag && (params->dflag || params->fflag)));
 }
 
-static uint32_t sum32(uint32_t sum, uint8_t *data, uint32_t len)
+static uint32_t sum32(uint32_t sum, const uint8_t *data, uint32_t len)
 {
 	uint32_t val = 0, pos =0;
 

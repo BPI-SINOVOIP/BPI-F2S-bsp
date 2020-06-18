@@ -92,6 +92,7 @@ config USB_STORAGE
 config USB_KEYBOARD
 	bool "USB Keyboard support"
 	select SYS_STDIO_DEREGISTER
+	default y if DM_KEYBOARD
 	---help---
 	  Say Y here if you want to use a USB keyboard for U-Boot command line
 	  input.

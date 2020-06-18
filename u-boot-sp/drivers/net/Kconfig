@@ -529,12 +529,21 @@ config MEDIATEK_ETH
 	  Say Y to enable support for the MediaTek Ethernet GMAC.
 
 config SUNPLUS_L2SW
-	bool "Sunplus L2SW Ethernet MAC support"
-	depends on DM_ETH
+	bool "Sunplus Ethernet MAC (L2SW) support"
+	depends on DM_ETH && (ARCH_PENTAGRAM && !TARGET_PENTAGRAM_I143_C)
 	select PHYLIB
 	select PHY_GIGE
 	help
-	  This driver supports the Sunplus L2SW Ethernet MAC.
+	  This driver supports the Sunplus Ethernet MAC (L2SW).
+	  Say Y to enable support for the Sunplus Ethernet MAC.
 
+config SUNPLUS_GL2SW
+	bool "Sunplus Giga Ethernet MAC (GL2SW) support"
+	depends on DM_ETH && (TARGET_PENTAGRAM_I143_P || TARGET_PENTAGRAM_I143_C)
+	select PHYLIB
+	select PHY_GIGE
+	help
+	  This driver supports the Sunplus Giga Ethernet MAC (GL2SW).
+	  Say Y to enable support for the Sunplus Giga Ethernet MAC.
 
 endif # NETDEVICES
