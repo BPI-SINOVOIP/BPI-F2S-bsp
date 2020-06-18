@@ -2,6 +2,7 @@
  * SPDX-License-Identifier:	GPL-2.0+
  */
 #include <common.h>
+#include <asm/arch/sp7021_common.h>
 
 #ifdef CONFIG_SP_SPINAND
 extern void board_spinand_init(void);
@@ -10,6 +11,11 @@ extern void board_spinand_init(void);
 #define Q628_REG_BASE 				(0x9c000000)
 #define Q628_RF_GRP(_grp, _reg)		((((_grp)*32+(_reg))*4)+Q628_REG_BASE)
 #define Q628_RF_MASK_V_CLR(_mask)	(((_mask)<<16)| 0)
+
+#define A_REG_BASE 					(0x9ec00000)
+#define A_RF_GRP(_grp, _reg)		((((_grp)*32+(_reg))*4)+A_REG_BASE)
+
+typedef volatile u32 * reg_ptr;
 
 struct Q628_moon0_regs{
 	unsigned int stamp;
@@ -43,6 +49,16 @@ DECLARE_GLOBAL_DATA_PTR;
 
 int board_init(void)
 {
+#ifdef A_SYS_COUNTER
+	*(reg_ptr)A_SYS_COUNTER = 3; // enable A_SYS_COUNTER
+#endif
+#ifdef CONFIG_CPU_V7_HAS_NONSEC
+	/* set Achip RGST,AMBA to NonSec state */
+	for (int i = 502; i < 504; i++)
+		for (int j = 0; j < 32; j++)
+			*(reg_ptr)A_RF_GRP(i, j) = 0;
+#endif
+
 	return 0;
 }
 
@@ -92,3 +108,27 @@ void board_nand_init(void)
 #endif
 }
 
+#ifdef CONFIG_BOARD_LATE_INIT
+int board_late_init(void)
+{
+#ifdef CONFIG_DM_VIDEO
+	sp7021_video_show_board_info();
+#endif
+	return 0;
+}
+#endif
+
+#ifdef CONFIG_ARMV7_NONSEC
+//void smp_kick_all_cpus(void) {}
+void smp_set_core_boot_addr(unsigned long addr, int corenr)
+{
+	reg_ptr cpu_boot_regs = (void *)(CONFIG_SMP_PEN_ADDR - 12);
+
+	/* wakeup core 1~3 */
+	cpu_boot_regs[0] = addr;
+	cpu_boot_regs[1] = addr;
+	cpu_boot_regs[2] = addr;
+
+	__asm__ __volatile__ ("dsb ishst; sev");
+}
+#endif

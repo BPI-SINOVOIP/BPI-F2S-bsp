@@ -285,6 +285,10 @@ static const struct ov5647_mode supported_modes[] = {
 
 };
 
+static int mode = 1; // default mode: 1280x720
+module_param(mode, int, 0);
+MODULE_PARM_DESC(mode, "0:640x480 1:1280x720 2:1280x960 3:2592x1944");
+
 /* Read registers up to 4 at a time */
 static int ov5647_read_reg(struct i2c_client *client, u16 reg, unsigned int len, u32 *val)
 {
@@ -495,22 +499,9 @@ static int ov5647_probe(struct i2c_client *client, const struct i2c_device_id *i
 
 	ov5647->client = client;
 
-#ifdef CONFIG_OV5647_640x480
-	ov5647->sensor_data.mode = 0;
-#else
-	#ifdef CONFIG_OV5647_1280x720
-		ov5647->sensor_data.mode = 1;
-	#else
-		#ifdef CONFIG_OV5647_1280x960
-			ov5647->sensor_data.mode = 2;
-		#else
-			ov5647->sensor_data.mode = 3;
-		#endif
-	#endif
-#endif
-
-	ov5647->sensor_data.fourcc = V4L2_PIX_FMT_SRGGB8;
-	ov5647->cur_mode = &supported_modes[ov5647->sensor_data.mode];
+	ov5647->sensor_data.fourcc = V4L2_PIX_FMT_SBGGR8;
+	ov5647->cur_mode = &supported_modes[mode];
+	DBG_INFO("Sensor mode: %d\n", mode);
 
 	mutex_init(&ov5647->mutex);
 

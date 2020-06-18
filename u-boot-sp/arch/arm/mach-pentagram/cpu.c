@@ -1,4 +1,5 @@
 #include <common.h>
+#include <fdtdec.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -52,6 +53,7 @@ typedef struct {
 #define WATCHDOG_CMD_PAUSE		0x3877
 #define WATCHDOG_CMD_RESUME		0x4A4B
 #define WATCHDOG_CMD_INTR_CLR		0x7482
+
 
 void s_init(void)
 {
@@ -158,12 +160,22 @@ int dram_get_size(void)
 int dram_init(void)
 {
 #ifdef CONFIG_BOOTARGS_WITH_MEM
-	int dramsize = dram_get_size();
-	gd->ram_size = dramsize;
-#else
+	gd->ram_size = dram_get_size();
+#elif defined(CONFIG_SYS_ENV_ZEBU)
 	gd->ram_size = CONFIG_SYS_SDRAM_SIZE;
+#else
+	if(fdtdec_setup_mem_size_base() != 0)
+	{
+		gd->ram_size = CONFIG_SYS_SDRAM_SIZE;
+	}
 #endif
-	return 0;
+
+
+return 0;
+}
+int dram_init_banksize(void)
+{
+	return fdtdec_setup_memory_banksize();
 }
 
 #ifdef CONFIG_DISPLAY_CPUINFO
@@ -179,6 +191,29 @@ int arch_misc_init(void)
 {
 	volatile unsigned int *ptr;
 
+#ifdef CONFIG_VIDEO_SP7021
+#ifdef CONFIG_DM_VIDEO_SP7021_LOGO
+#else
+#ifdef CONFIG_OF_CONTROL
+	const char *model;
+#endif
+	unsigned long long size;
+	char buf[DISPLAY_OPTIONS_BANNER_LENGTH];
+	display_options_get_banner(true, buf, sizeof(buf));
+	printf("%s",buf);
+
+#ifdef CONFIG_OF_CONTROL
+	model = fdt_getprop(gd->fdt_blob, 0, "model", NULL);
+
+	if (model)
+		printf("Model: %s\n", model);
+#endif
+	size = gd->ram_size;
+	printf("DRAM: ");
+	print_size(size,"");
+	printf("\n");
+#endif
+#endif
 	ptr = (volatile unsigned int *)(PENTAGRAM_RTC_ADDR + (22 << 2));
 	printf("\nReason(s) of reset: REG(116, 22): 0x%04x\n", *ptr);
 	*ptr = 0xFFFF0000;
@@ -189,10 +224,12 @@ int arch_misc_init(void)
 }
 #endif
 
+#ifdef CONFIG_HAS_THUMB2
 #ifndef CONFIG_SYS_DCACHE_OFF
 void enable_caches(void)
 {
 	/* Enable D-cache. I-cache is already enabled in start.S */
 	dcache_enable();
 }
+#endif
 #endif

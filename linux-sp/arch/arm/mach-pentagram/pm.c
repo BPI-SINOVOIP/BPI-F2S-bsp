@@ -116,7 +116,7 @@ void sp7021_cpu_power_down(int cpu)
 	                               b8=CA7DBG3_RST_B=0                 
 	                               b7=CA7DBG2_RST_B=0     */
 }
-
+#if 0
 static int sp7021_wfi_finisher(unsigned long flags)
 {
 //	if (soc_is_exynos3250())
@@ -125,6 +125,7 @@ static int sp7021_wfi_finisher(unsigned long flags)
 
 	return -1;
 }
+#endif
 //static int sp7021_cpu0_enter_aftr(void)
 //{
 //	return 0;

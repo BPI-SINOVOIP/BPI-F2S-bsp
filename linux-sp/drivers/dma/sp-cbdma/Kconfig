@@ -6,11 +6,13 @@ menu "Sunplus CBDMA"
 
 config SUNPLUS_CBDMA
 	tristate "CBDMA driver support"
+	depends on ARCH_PENTAGRAM
 	help
 	  This is a option to support Sunplus CBDMA device.
 
 config SUNPLUS_CBDMA_PROXY
 	tristate "CBDMA proxy driver support"
+	depends on ARCH_PENTAGRAM
 	help
 	  This is a option to support Sunplus CBDMA proxy device.
 

@@ -14,15 +14,17 @@ config MMC_DEBUG
 	  debugging.
 	  
 config SP_SDV2
-    tristate "Sunplus Gemini SoC SD Host Controller support"
-    default m
-    help
+	tristate "Sunplus Gemini SoC SD Host Controller support"
+	depends on ARCH_PENTAGRAM
+	default m
+	help
 	  If you say yes here, you will get support for the Secure Digital Host
 	  Interface on Sunplus SoCs. This includes support for SD cards.
 	  If unsure, say N.	  
 	  
 config SP_EMMC
 	tristate "Sunplus Gemini eMMC Host Controller v4.51 support"
+	depends on ARCH_PENTAGRAM
 	default y
 	help
 		If you say yes here, you will get support for eMMC host interface 

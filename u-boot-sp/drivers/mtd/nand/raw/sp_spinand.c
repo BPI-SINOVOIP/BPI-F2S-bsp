@@ -1556,37 +1556,36 @@ err_out:
 
 static int sp_spinand_probe(struct udevice *dev)
 {
-	struct resource res;
-	int ret;
 	struct sp_spinand_info *info;
-
 	info = our_spinfc = dev_get_priv(dev);
+	const void *blob = gd->fdt_blob;
+	int node;
+	int ret;
+
+	printk(KERN_INFO "\n");     // used for message alignment
 
 	/* get spi-nand reg */
-	ret = dev_read_resource_byname(dev, "spinand_reg", &res);
-	if (ret)
-		return ret;
-
-	info->regs = devm_ioremap(dev, res.start, resource_size(&res));
+	info->regs = (void __iomem*)devfdt_get_addr(dev);
 	SPINAND_LOGI("sp_spinand: regs@0x%p\n", info->regs);
 
 	/* get bch reg */
-	ret = dev_read_resource_byname(dev, "bch_reg", &res);
-	if (ret)
-		return ret;
+	node = fdt_node_offset_by_compatible(blob, 0, "sunplus,sp7021-bch");
+	info->bch_regs = (void __iomem *)fdtdec_get_addr_size_auto_parent(blob,
+		dev_of_offset(dev->parent), node, "reg", 0, NULL, false);
 
-	info->bch_regs = devm_ioremap(dev, res.start, resource_size(&res));
 	SPINAND_LOGI("sp_bch    : regs@0x%p\n", info->bch_regs);
+	SPINAND_LOGI("node: %s, offset: 0x%08x\n", fdt_get_name(blob, node, NULL), node);
 
+	/* do sp_spinand initialization */
 	ret = sp_spinand_init(info);
-	return ret;
 
+	return ret;
 }
 
 static const struct udevice_id sunplus_spinand[] = {
-	{
-		.compatible = "sunplus,sunplus-q628-spinand",
-	},
+	{ .compatible = "sunplus,sp7021-spinand"},
+	{ .compatible = "sunplus,sunplus-q628-spinand"},
+	{}
 };
 
 

@@ -266,10 +266,11 @@ config COMMON_CLK_VC5
 	  programmable clock generators.
 
 config COMMON_CLK_SP7021
-    bool "Clock driver for the Sunplus SP7021 SoC"
-    depends on OF
-    ---help---
-      Support for the Sunplus SP7021 SoC clocks.
+	bool "Clock driver for the Sunplus SP7021 SoC"
+	depends on OF
+	depends on ARCH_PENTAGRAM
+	---help---
+	  Support for the Sunplus SP7021 SoC clocks.
 
 config COMMON_CLK_STM32MP157
 	def_bool COMMON_CLK && MACH_STM32MP157

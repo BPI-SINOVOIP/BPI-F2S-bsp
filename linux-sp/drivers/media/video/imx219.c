@@ -273,7 +273,7 @@ static int imx219_probe(struct i2c_client *client, const struct i2c_device_id *i
 	imx219->sensor_data.mode = 1;	//CONFIG_IMX219_1920x1080
 #endif
 
-	imx219->sensor_data.fourcc = V4L2_PIX_FMT_SRGGB8;
+	imx219->sensor_data.fourcc = V4L2_PIX_FMT_SBGGR8;
 	imx219->cur_mode = &supported_modes[imx219->sensor_data.mode];
 
 	mutex_init(&imx219->mutex);

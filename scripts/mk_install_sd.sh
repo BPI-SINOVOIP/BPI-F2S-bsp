@@ -6,10 +6,11 @@ BOARD=
 TARGET=
 
 echo "--------------------------------------------------------------------------------"
-echo "  1. F2S"
+echo "  1. bpi-f2s"
+echo "  2. bpi-f2p"
 echo "--------------------------------------------------------------------------------"
 
-read -p "Please choose a target to install(1): " board
+read -p "Please choose a target to install(1-2): " board
 echo
 
 if [ -z "${board}" ]; then
@@ -18,31 +19,16 @@ if [ -z "${board}" ]; then
 fi
 
 case ${board} in
-	1) BOARD="F2S";;
+	1) BOARD="f2s";;
+	2) BOARD="f2p"
 esac
 
-TARGET=SD/bpi-$(echo ${BOARD} | tr '[A-Z]' '[a-z]')
+TARGET=SD/bpi-${BOARD}
 
 if [ ! -d ${TARGET} ]; then
 	echo -e "\033[31mtarget install files does not exist, please check the build. \033[0m"
 	exit 1
 fi
-
-echo "--------------------------------------------------------------------------------"
-echo "  1. HDMI 720P"
-echo "--------------------------------------------------------------------------------"
-
-read -p "Please choose a type to install(1): " type
-echo
-
-if [ -z "${type}" ]; then
-        echo -e "\033[31mNo install type choose \033[0m"
-	exit 1
-fi
-
-case ${type} in
-        1) VARIANT="720P";;
-esac
 
 read -p "Please type the SD device(/dev/sdX): " DEVICE
 echo
@@ -66,20 +52,20 @@ esac
 
 echo
 
-BOOTLOADER=${TARGET}/100MB/BPI-${BOARD}-${VARIANT}-2k.img.gz
+#BOOTLOADER=${TARGET}/100MB/bpi-${BOARD}-2k.img.gz
 
 ## download bootloader
-if [ ! -f ${BOOTLOADER} ]; then
-	echo -e "\033[31mbootloader download file not exist, please check you build. \033[0m"
-	exit 1
-fi
+#if [ ! -f ${BOOTLOADER} ]; then
+#	echo -e "\033[31mbootloader download file not exist, please check you build. \033[0m"
+#	exit 1
+#fi
 
-echo "sudo gunzip -c ${BOOTLOADER} | dd of=${DEVICE} bs=1024 seek=2"
-sudo gunzip -c ${BOOTLOADER} | sudo dd of=${DEVICE} bs=1024 seek=2
-sync
-echo
-echo "bootloader download finished"
-echo
+#echo "sudo gunzip -c ${BOOTLOADER} | dd of=${DEVICE} bs=1024 seek=2"
+#sudo gunzip -c ${BOOTLOADER} | sudo dd of=${DEVICE} bs=1024 seek=2
+#sync
+#echo
+#echo "bootloader download finished"
+#echo
 
 ## boot and root
 cd ${TARGET}

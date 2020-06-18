@@ -14,7 +14,6 @@
 #include "sp_axi.h"
 #include "axi_ioctl.h"
 
-#include <dt-bindings/memory/sp-q628-mem.h> 
 #include <linux/delay.h>
 #include <linux/of_irq.h>
 #include <linux/kthread.h>
@@ -195,8 +194,8 @@ struct sunplus_axi sp_axi;
 #define CBDMA_TEST_SIZE       0x1000
 void cbdma_memcpy(void __iomem *axi_cbdma_regs, int id, void *dst, void *src, unsigned length)
 {	
-	printk("[CBDMA:%d]: Copy %d KB from 0x%08x to 0x%08x\n", id, length>>10, (unsigned) src, (unsigned)dst);	
 	regs_axi_cbdma_t *axi_cbdma = (regs_axi_cbdma_t *)axi_cbdma_regs;	
+	printk("[CBDMA:%d]: Copy %d KB from 0x%08x to 0x%08x\n", id, length>>10, (unsigned) src, (unsigned)dst);	
 	//volatile struct cbdma_regs *cbdma;	
 	//if (id)	
 	//	cbdma = CBDMA1_REG;	
@@ -221,8 +220,8 @@ void cbdma_memcpy(void __iomem *axi_cbdma_regs, int id, void *dst, void *src, un
 
 void cbdma_kick_go(void __iomem *axi_cbdma_regs, int id)
 {	
+	regs_axi_cbdma_t *axi_cbdma = (regs_axi_cbdma_t *)axi_cbdma_regs;
 	printk("[CBDMA:%d]: Start\n", id);	
-	regs_axi_cbdma_t *axi_cbdma = (regs_axi_cbdma_t *)axi_cbdma_regs;	
 	//volatile struct cbdma_regs *cbdma;	
 	//if (id)	
 	//	cbdma = CBDMA1_REG;	
@@ -234,7 +233,8 @@ void cbdma_kick_go(void __iomem *axi_cbdma_regs, int id)
 
 void cbdma_test(void __iomem *axi_cbdma_regs)
 {	
-	regs_axi_cbdma_t *axi_cbdma = (regs_axi_cbdma_t *)axi_cbdma_regs;	
+	regs_axi_cbdma_t *axi_cbdma = (regs_axi_cbdma_t *)axi_cbdma_regs;
+	
 	//create_sequential_pattern(CBDMA_TEST_SOURCE, CBDMA_TEST_SIZE);	
 	//dcache_disable();	
 	// cbdma 0 test	
@@ -250,7 +250,7 @@ void cbdma_test(void __iomem *axi_cbdma_regs)
 	printk("[DBG] cbdma_get_interrupt_status(0) : 0x%08x\n", readl(&axi_cbdma->int_flag));	
 	printk("[DBG] cbdma_get_interrupt_status(0) : 0x%08x\n", readl(&axi_cbdma->int_flag));	
 	printk("[DBG] cbdma_get_interrupt_status(0) : 0x%08x\n", readl(&axi_cbdma->int_flag));	
-	while(readl(&axi_cbdma->int_flag) & 0x1 == 0)	
+	while((readl(&axi_cbdma->int_flag) & 0x1) == 0)	
 	{		
 		printk(".");	
 	}		

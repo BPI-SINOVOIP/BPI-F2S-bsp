@@ -57,6 +57,7 @@ MODULE_PARM_DESC(video_nr, " videoX start number, -1 is autodetect");
 	Constants
    ------------------------------------------------------------------*/
 static const struct sp_fmt gc0310_formats[] = {
+#ifdef CONFIG_GC0310_RAW8
 	{
 		.name     = "BAYER, RAW8",
 		.fourcc   = V4L2_PIX_FMT_SRGGB8,
@@ -68,6 +69,7 @@ static const struct sp_fmt gc0310_formats[] = {
 		.mipi_lane = 1,
 		.sol_sync = SYNC_RAW8,
 	},
+#else
 	{
 		.name     = "YUYV/YUY2, YUV422",
 		.fourcc   = V4L2_PIX_FMT_YUYV,
@@ -79,12 +81,13 @@ static const struct sp_fmt gc0310_formats[] = {
 		.mipi_lane = 1,
 		.sol_sync = SYNC_YUY2,
 	},
+#endif
 };
 
 static const struct sp_fmt imx219_formats[] = {
 	{
 		.name     = "BAYER, RAW10",
-		.fourcc   = V4L2_PIX_FMT_SRGGB8,
+		.fourcc   = V4L2_PIX_FMT_SBGGR8,
 		.width    = 3280,
 		.height   = 2464,
 		.depth    = 8,
@@ -98,7 +101,7 @@ static const struct sp_fmt imx219_formats[] = {
 static const struct sp_fmt ov5647_formats[] = {
 	{
 		.name     = "BAYER, RAW8",
-		.fourcc   = V4L2_PIX_FMT_SRGGB8,
+		.fourcc   = V4L2_PIX_FMT_SBGGR8,
 		.width    = 2592,
 		.height   = 1944,
 		.depth    = 8,
@@ -692,12 +695,47 @@ static int vidioc_g_fmt_vid_cap(struct file *file, void *priv, struct v4l2_forma
 	return 0;
 }
 
+static int vidioc_enum_input(struct file *file, void *priv,
+							struct v4l2_input *inp)
+{
+	DBG_INFO("%s\n", __FUNCTION__);
+
+	if (inp->index > 0)
+		return -EINVAL;
+
+	inp->type = V4L2_INPUT_TYPE_CAMERA;
+	strlcpy(inp->name, "Camera", sizeof(inp->name));
+
+	return 0;
+}
+
+static int vidioc_g_input(struct file *file, void *priv, unsigned int *i)
+{
+	DBG_INFO("%s\n", __FUNCTION__);
+
+	*i = 0;
+	return 0;
+}
+
+static int vidioc_s_input(struct file *file, void *priv, unsigned int i)
+{
+	DBG_INFO("%s\n", __FUNCTION__);
+
+	if (i > 0)
+		return -EINVAL;
+
+	return 0;
+}
+
 static const struct v4l2_ioctl_ops sp_mipi_ioctl_ops = {
 	.vidioc_querycap                = vidioc_querycap,
 	.vidioc_enum_fmt_vid_cap        = vidioc_enum_fmt_vid_cap,
 	.vidioc_try_fmt_vid_cap         = vidioc_try_fmt_vid_cap,
 	.vidioc_s_fmt_vid_cap           = vidioc_s_fmt_vid_cap,
 	.vidioc_g_fmt_vid_cap           = vidioc_g_fmt_vid_cap,
+	.vidioc_enum_input              = vidioc_enum_input,
+	.vidioc_g_input 				= vidioc_g_input,
+	.vidioc_s_input                 = vidioc_s_input,
 	.vidioc_reqbufs                 = vb2_ioctl_reqbufs,
 	.vidioc_querybuf                = vb2_ioctl_querybuf,
 	.vidioc_create_bufs             = vb2_ioctl_create_bufs,

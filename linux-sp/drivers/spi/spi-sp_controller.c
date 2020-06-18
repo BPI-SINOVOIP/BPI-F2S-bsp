@@ -164,58 +164,58 @@ enum SPI_MODE
 
 typedef struct{
 	// Group 091 : SPI_MASTER
-    unsigned int  MST_TX_DATA_ADDR                      ; // 00  (ADDR : 0x9C00_2D80)
-    unsigned int  MST_TX_DATA_3_2_1_0                   ; // 01  (ADDR : 0x9C00_2D84)
-    unsigned int  MST_TX_DATA_7_6_5_4                   ; // 02  (ADDR : 0x9C00_2D88)
-    unsigned int  MST_TX_DATA_11_10_9_8                 ; // 03  (ADDR : 0x9C00_2D8C)
-    unsigned int  MST_TX_DATA_15_14_13_12               ; // 04  (ADDR : 0x9C00_2D90)
-    unsigned int  G091_RESERVED_0[4]                    ; //     (ADDR : 0x9C00_2D94) ~ (ADDR : 0x9C00_2DA0)
-    unsigned int  MST_RX_DATA_3_2_1_0                   ; // 09  (ADDR : 0x9C00_2DA4)
-    unsigned int  MST_RX_DATA_7_6_5_4                   ; // 10  (ADDR : 0x9C00_2DA8)
-    unsigned int  MST_RX_DATA_11_10_9_8                 ; // 11  (ADDR : 0x9C00_2DAC)
-    unsigned int  MST_RX_DATA_15_14_13_12               ; // 12  (ADDR : 0x9C00_2DB0)
-	  unsigned int  FIFO_DATA                             ; // 13  (ADDR : 0x9C00_2DB4)
-  	unsigned int  SPI_FD_STATUS                         ; // 14  (ADDR : 0x9C00_2DB8)
-  	unsigned int  SPI_FD_CONFIG                         ; // 15  (ADDR : 0x9C00_2DBC)
-	  unsigned int  G091_RESERVED_1                       ; // 16  (ADDR : 0x9C00_2DC0)
-    unsigned int  SPI_CTRL_CLKSEL                       ; // 17  (ADDR : 0x9C00_2DC4)
-    unsigned int  BYTE_NO                               ; // 18  (ADDR : 0x9C00_2DC8)
-    unsigned int  SPI_INT_BUSY                          ; // 19  (ADDR : 0x9C00_2DCC)
-    unsigned int  DMA_CTRL                              ; // 20  (ADDR : 0x9C00_2DD0)
-    unsigned int  DMA_LENGTH                            ; // 21  (ADDR : 0x9C00_2DD4)
-    unsigned int  DMA_ADDR                              ; // 22  (ADDR : 0x9C00_2DD8)
-    unsigned int  G091_RESERVED_2[1]                    ; // 23  (ADDR : 0x9C00_2DDC)
-    unsigned int  DMA_ADDR_STAT                         ; // 24  (ADDR : 0x9C00_2DE0)
-    unsigned int  G091_RESERVED_3[1]                    ; // 25  (ADDR : 0x9C00_2DE4)
-    unsigned int  UART_DMA_CTRL                         ; // 26  (ADDR : 0x9C00_2DE8)
-    unsigned int  G091_RESERVED_4[1]                    ; // 27  (ADDR : 0x9C00_2DEC)
-    unsigned int  SPI_MST_DEBUG_SEL                     ; // 28  (ADDR : 0x9C00_2DF0) 
-    unsigned int  SPI_COM_DEBUG_SEL                     ; // 29  (ADDR : 0x9C00_2DF4)
-    unsigned int  SPI_EXTRA_CYCLE                       ; // 30  (ADDR : 0x9C00_2DF8)
-    unsigned int  MST_DMA_DATA_RDY                      ; // 31  (ADDR : 0x9C00_2DFC)
+	volatile unsigned int MST_TX_DATA_ADDR                      ; // 00  (ADDR : 0x9C00_2D80)
+	volatile unsigned int MST_TX_DATA_3_2_1_0                   ; // 01  (ADDR : 0x9C00_2D84)
+	volatile unsigned int MST_TX_DATA_7_6_5_4                   ; // 02  (ADDR : 0x9C00_2D88)
+	volatile unsigned int MST_TX_DATA_11_10_9_8                 ; // 03  (ADDR : 0x9C00_2D8C)
+	volatile unsigned int MST_TX_DATA_15_14_13_12               ; // 04  (ADDR : 0x9C00_2D90)
+	volatile unsigned int G091_RESERVED_0[4]                    ; //     (ADDR : 0x9C00_2D94) ~ (ADDR : 0x9C00_2DA0)
+	volatile unsigned int MST_RX_DATA_3_2_1_0                   ; // 09  (ADDR : 0x9C00_2DA4)
+	volatile unsigned int MST_RX_DATA_7_6_5_4                   ; // 10  (ADDR : 0x9C00_2DA8)
+	volatile unsigned int MST_RX_DATA_11_10_9_8                 ; // 11  (ADDR : 0x9C00_2DAC)
+	volatile unsigned int MST_RX_DATA_15_14_13_12               ; // 12  (ADDR : 0x9C00_2DB0)
+	volatile unsigned int FIFO_DATA                             ; // 13  (ADDR : 0x9C00_2DB4)
+	volatile unsigned int SPI_FD_STATUS                         ; // 14  (ADDR : 0x9C00_2DB8)
+	volatile unsigned int SPI_FD_CONFIG                         ; // 15  (ADDR : 0x9C00_2DBC)
+	volatile unsigned int G091_RESERVED_1                       ; // 16  (ADDR : 0x9C00_2DC0)
+	volatile unsigned int SPI_CTRL_CLKSEL                       ; // 17  (ADDR : 0x9C00_2DC4)
+	volatile unsigned int BYTE_NO                               ; // 18  (ADDR : 0x9C00_2DC8)
+	volatile unsigned int SPI_INT_BUSY                          ; // 19  (ADDR : 0x9C00_2DCC)
+	volatile unsigned int DMA_CTRL                              ; // 20  (ADDR : 0x9C00_2DD0)
+	volatile unsigned int DMA_LENGTH                            ; // 21  (ADDR : 0x9C00_2DD4)
+	volatile unsigned int DMA_ADDR                              ; // 22  (ADDR : 0x9C00_2DD8)
+	volatile unsigned int G091_RESERVED_2[1]                    ; // 23  (ADDR : 0x9C00_2DDC)
+	volatile unsigned int DMA_ADDR_STAT                         ; // 24  (ADDR : 0x9C00_2DE0)
+	volatile unsigned int G091_RESERVED_3[1]                    ; // 25  (ADDR : 0x9C00_2DE4)
+	volatile unsigned int UART_DMA_CTRL                         ; // 26  (ADDR : 0x9C00_2DE8)
+	volatile unsigned int G091_RESERVED_4[1]                    ; // 27  (ADDR : 0x9C00_2DEC)
+	volatile unsigned int SPI_MST_DEBUG_SEL                     ; // 28  (ADDR : 0x9C00_2DF0) 
+	volatile unsigned int SPI_COM_DEBUG_SEL                     ; // 29  (ADDR : 0x9C00_2DF4)
+	volatile unsigned int SPI_EXTRA_CYCLE                       ; // 30  (ADDR : 0x9C00_2DF8)
+	volatile unsigned int MST_DMA_DATA_RDY                      ; // 31  (ADDR : 0x9C00_2DFC)
 }SPI_MAS;
 
 
 typedef struct{
 	// Group 092 : SPI_SLAVE
-	unsigned int SLV_TX_DATA_2_1_0                     ; // 00  (ADDR : 0x9C00_2E00) 
-	unsigned int SLV_TX_DATA_6_5_4_3                   ; // 01  (ADDR : 0x9C00_2E04)
-	unsigned int SLV_TX_DATA_10_9_8_7                  ; // 02  (ADDR : 0x9C00_2E08)
-	unsigned int SLV_TX_DATA_14_13_12_11               ; // 03  (ADDR : 0x9C00_2E0C)
-	unsigned int SLV_TX_DATA_15                        ; // 04  (ADDR : 0x9C00_2E10)
-	unsigned int G092_RESERVED_0[4]                    ; //     (ADDR : 0x9C00_2E14) ~ (ADDR : 0x9C00_2E20)
-	unsigned int SLV_RX_DATA_3_2_1_0                   ; // 09  (ADDR : 0x9C00_2E24)
-	unsigned int SLV_RX_DATA_7_6_5_4                   ; // 10  (ADDR : 0x9C00_2E28)
-	unsigned int SLV_RX_DATA_11_10_9_8                 ; // 11  (ADDR : 0x9C00_2E2C)
-	unsigned int SLV_RX_DATA_15_14_13_12               ; // 12  (ADDR : 0x9C00_2E30)
-	unsigned int G092_RESERVED_1[4]                    ; //     (ADDR : 0x9C00_2E34) ~ (ADDR : 0x9C00_2E40)
-	unsigned int RISC_INT_DATA_RDY                     ; // 17  (ADDR : 0x9C00_2E44)
-	unsigned int SLV_DMA_CTRL                          ; // 18  (ADDR : 0x9C00_2E48)
-	unsigned int SLV_DMA_LENGTH                        ; // 19  (ADDR : 0x9C00_2E4C)
-	unsigned int SLV_DMA_INI_ADDR                      ; // 20  (ADDR : 0x9C00_2E50)
-	unsigned int G092_RESERVED_2[2]                    ; //     (ADDR : 0x9C00_2E54) ~ (ADDR : 0x9C00_2E58)
-	unsigned int ADDR_SPI_BUSY                         ; // 23  (ADDR : 0x9C00_2E5C)
-	unsigned int G092_RESERVED_3[8]                    ; //     (ADDR : 0x9C00_2E60) ~ (ADDR : 0x9C00_2E7C)
+	volatile unsigned int SLV_TX_DATA_2_1_0                     ; // 00  (ADDR : 0x9C00_2E00) 
+	volatile unsigned int SLV_TX_DATA_6_5_4_3                   ; // 01  (ADDR : 0x9C00_2E04)
+	volatile unsigned int SLV_TX_DATA_10_9_8_7                  ; // 02  (ADDR : 0x9C00_2E08)
+	volatile unsigned int SLV_TX_DATA_14_13_12_11               ; // 03  (ADDR : 0x9C00_2E0C)
+	volatile unsigned int SLV_TX_DATA_15                        ; // 04  (ADDR : 0x9C00_2E10)
+	volatile unsigned int G092_RESERVED_0[4]                    ; //     (ADDR : 0x9C00_2E14) ~ (ADDR : 0x9C00_2E20)
+	volatile unsigned int SLV_RX_DATA_3_2_1_0                   ; // 09  (ADDR : 0x9C00_2E24)
+	volatile unsigned int SLV_RX_DATA_7_6_5_4                   ; // 10  (ADDR : 0x9C00_2E28)
+	volatile unsigned int SLV_RX_DATA_11_10_9_8                 ; // 11  (ADDR : 0x9C00_2E2C)
+	volatile unsigned int SLV_RX_DATA_15_14_13_12               ; // 12  (ADDR : 0x9C00_2E30)
+	volatile unsigned int G092_RESERVED_1[4]                    ; //     (ADDR : 0x9C00_2E34) ~ (ADDR : 0x9C00_2E40)
+	volatile unsigned int RISC_INT_DATA_RDY                     ; // 17  (ADDR : 0x9C00_2E44)
+	volatile unsigned int SLV_DMA_CTRL                          ; // 18  (ADDR : 0x9C00_2E48)
+	volatile unsigned int SLV_DMA_LENGTH                        ; // 19  (ADDR : 0x9C00_2E4C)
+	volatile unsigned int SLV_DMA_INI_ADDR                      ; // 20  (ADDR : 0x9C00_2E50)
+	volatile unsigned int G092_RESERVED_2[2]                    ; //     (ADDR : 0x9C00_2E54) ~ (ADDR : 0x9C00_2E58)
+	volatile unsigned int ADDR_SPI_BUSY                         ; // 23  (ADDR : 0x9C00_2E5C)
+	volatile unsigned int G092_RESERVED_3[8]                    ; //     (ADDR : 0x9C00_2E60) ~ (ADDR : 0x9C00_2E7C)
 	
 }SPI_SLA;
 
@@ -295,14 +295,11 @@ struct pentagram_spi_master {
     u8 rx_data_buf[SPI_MSG_DATA_SIZE];	
 	
 	int isr_flag;
+
+  unsigned int  data_unit;	
+
 };
 
-
-
-
-
-
-unsigned int  data_unit;
 
 
 
@@ -528,7 +525,7 @@ static irqreturn_t pentagram_spi_master_mas_irq(int irq, void *dev)
 		DBG_INFO("FINISH_FLAG");
 
 		    if((readl(&spim_reg->SPI_FD_STATUS) & RX_FULL_FLAG) == RX_FULL_FLAG){
-		        for(i=0;i<data_unit;i++){	 // if READ_BYTE(0) i<16  can set the condition at here
+		        for(i=0;i<pspim->data_unit;i++){	 // if READ_BYTE(0) i<16  can set the condition at here
 		 	       pspim->rx_data_buf[pspim->rx_cur_len] = readl(&spim_reg->FIFO_DATA);
 		 	       DBG_INFO("RXcnt492 data 0x%x  rx_cur_len = %d \n",pspim->rx_data_buf[pspim->rx_cur_len],pspim->rx_cur_len);		   
 		 	       pspim->rx_cur_len++;
@@ -549,7 +546,7 @@ static irqreturn_t pentagram_spi_master_mas_irq(int irq, void *dev)
 	DBG_INFO("TX_EMP_FLAG");
 
 	   if((readl(&spim_reg->SPI_FD_STATUS) & RX_FULL_FLAG) == RX_FULL_FLAG){
-			for(i=0;i<data_unit;i++){	 // if READ_BYTE(0) i<16  can set the condition at here
+			for(i=0;i<pspim->data_unit;i++){	 // if READ_BYTE(0) i<16  can set the condition at here
 			    pspim->rx_data_buf[pspim->rx_cur_len] = readl(&spim_reg->FIFO_DATA);
 			    DBG_INFO("RXcnt533 data 0x%x  rx_cur_len = %d \n",pspim->rx_data_buf[pspim->rx_cur_len],pspim->rx_cur_len);		   
 			    pspim->rx_cur_len++;
@@ -588,7 +585,7 @@ static irqreturn_t pentagram_spi_master_mas_irq(int irq, void *dev)
 	DBG_INFO("RX_FULL_FLAG");
 
 	
-           for(i=0;i<data_unit;i++){    // if READ_BYTE(0) i<data_unit  can set the condition at here
+           for(i=0;i<pspim->data_unit;i++){    // if READ_BYTE(0) i<data_unit  can set the condition at here
             //DBG_INFO("rx_cur_len %d",pspim->rx_cur_len);
            //char_temp= (char)readl(&spim_reg->FIFO_DATA);
 		   //DBG_INFO("001 char_temp %d",char_temp);
@@ -853,8 +850,8 @@ static int pentagram_spi_master_fullduplex_write_read(struct spi_controller *ctl
 	
 	// set SPI FIFO data for full duplex (SPI_FD fifo_data)  91.13
     if(pspim->tx_cur_len < data_len){
-        if(data_len >= data_unit){
-		    for(i=0;i<data_unit;i++){
+        if(data_len >= pspim->data_unit){
+		    for(i=0;i<pspim->data_unit;i++){
 		    DBG_INFO("tx_data_buf1143 0x%x  ,tx_cur_len %d  \n",pspim->tx_data_buf[i],pspim->tx_cur_len);	
 		    writel(pspim->tx_data_buf[i], &spim_reg->FIFO_DATA);
 	            pspim->tx_cur_len++;
@@ -1042,8 +1039,8 @@ static int pentagram_spi_master_write(struct spi_controller *ctlr, const u8  *bu
 
     // set SPI FIFO data for full duplex (SPI_FD fifo_data)  91.13
     if(pspim->tx_cur_len < data_len){
-        if(data_len >= data_unit){
-		    for(i=0;i<data_unit;i++){
+        if(data_len >= pspim->data_unit){
+		    for(i=0;i<pspim->data_unit;i++){
 		    DBG_INFO("tx_data_buf1143 0x%x  ,tx_cur_len %d \n",pspim->tx_data_buf[i],pspim->tx_cur_len);	
 		    writel(pspim->tx_data_buf[i], &spim_reg->FIFO_DATA);
 	      	    pspim->tx_cur_len++;
@@ -1171,8 +1168,8 @@ static int pentagram_spi_master_combine_write_read(struct spi_controller *ctlr,
 	
 	// set SPI FIFO data for full duplex (SPI_FD fifo_data)  91.13
     if(pspim->tx_cur_len < data_len){
-        if(data_len >= data_unit){
-		    for(i=0;i<data_unit;i++){
+        if(data_len >= pspim->data_unit){
+		    for(i=0;i<pspim->data_unit;i++){
 		    DBG_INFO("tx_data_buf1143 0x%x  ,tx_cur_len %d\n",pspim->tx_data_buf[i],pspim->tx_cur_len);	
 		    writel(pspim->tx_data_buf[i], &spim_reg->FIFO_DATA);
 	    	   pspim->tx_cur_len++;
@@ -1447,11 +1444,12 @@ static void pentagram_spi_setup_transfer(struct spi_device *spi, struct spi_cont
 
 	   writel(reg_temp, &spim_reg->SPI_FD_CONFIG);	
 	
-	   data_unit = FIFO_DATA_BITS / t->bits_per_word;
+	   //pspim->data_unit = FIFO_DATA_BITS / t->bits_per_word;
+	   pspim->data_unit = FIFO_DATA_BITS / 8;   // only 8bits_per_word now
 	
 	   pspim->isr_flag = SPI_IDLE;
 
-	   DBG_INFO( "data_unit %d unit\n",data_unit);
+	   DBG_INFO( "pspim->data_unit %d unit\n",pspim->data_unit);
 
 }
 
@@ -1755,6 +1753,7 @@ static int pentagram_spi_controller_probe(struct platform_device *pdev)
 	struct resource *res;
 	int ret;
 	int mode;	
+	int spi_work_mode;		
 	unsigned int max_freq;
 	//struct spi_master *master;
 	struct spi_controller *ctlr;
@@ -1763,9 +1762,22 @@ static int pentagram_spi_controller_probe(struct platform_device *pdev)
 
     FUNC_DEBUG();
 
+	spi_work_mode = 0;
+
+
 	if (pdev->dev.of_node) {
 		pdev->id = of_alias_get_id(pdev->dev.of_node, "spi");
 		mode = of_property_read_bool(pdev->dev.of_node, "spi-slave") ? SPI_SLAVE : SPI_MASTER;
+
+	        spi_work_mode |= of_property_read_bool(pdev->dev.of_node, "spi-cpol") ? SPI_CPOL : 0; 
+	        spi_work_mode |= of_property_read_bool(pdev->dev.of_node, "spi-cpha") ? SPI_CPHA : 0; 	
+	}
+	else{
+		pdev->id = 0;
+                mode = SPI_MASTER;		
+                spi_work_mode |= SPI_CPOL; 
+	        spi_work_mode |= SPI_CPHA; 	
+	
 	}
 
     DBG_INFO(" pdev->id  = %d\n",pdev->id);
@@ -1791,7 +1803,7 @@ static int pentagram_spi_controller_probe(struct platform_device *pdev)
 
 	//ctlr->auto_runtime_pm = true;
 	/* setup the master state. */
-	ctlr->mode_bits = SPI_MODE_1 ;
+	ctlr->mode_bits = spi_work_mode ;
 	ctlr->bus_num = pdev->id;
 	//master->setup = pentagram_spi_controller_setup;
 	ctlr->prepare_message = pentagram_spi_controller_prepare_message;

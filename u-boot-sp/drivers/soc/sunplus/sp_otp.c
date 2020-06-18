@@ -2,64 +2,68 @@
 #include <asm/io.h>
 
 #include "sp_otp.h"
+
+//#define SUPPORT_WRITE_OTP
+
 /*
  * QAC628 OTP memory contains 8 banks with 4 32-bit words. Bank 0 starts
  * at offset 0 from the base.
  *
  */
-#define QAC628_OTP_NUM_BANKS		   8
-#define QAC628_OTP_WORDS_PER_BANK	   4
-#define QAC628_OTP_WORD_SIZE		   sizeof(u32)
-#define QAC628_OTP_SIZE		           (QAC628_OTP_NUM_BANKS * \
-					            QAC628_OTP_WORDS_PER_BANK * \
-					            QAC628_OTP_WORD_SIZE)
-#define QAC628_OTP_BIT_ADDR_OF_BANK    (8 * QAC628_OTP_WORD_SIZE * \
-	                            QAC628_OTP_WORDS_PER_BANK)
-	                            
-#define OTP_READ_TIMEOUT               20000
+#define QAC628_OTP_NUM_BANKS            8
+#define QAC628_OTP_WORDS_PER_BANK       4
+#define QAC628_OTP_WORD_SIZE            sizeof(u32)
+#define QAC628_OTP_SIZE                 (QAC628_OTP_NUM_BANKS * \
+					QAC628_OTP_WORDS_PER_BANK * \
+					QAC628_OTP_WORD_SIZE)
+#define QAC628_OTP_BIT_ADDR_OF_BANK     (8 * QAC628_OTP_WORD_SIZE * \
+					QAC628_OTP_WORDS_PER_BANK)
 
-#define OTPRX_2_BASE_ADR               0x9C002800
+#define OTP_READ_TIMEOUT                20000
+#define OTP_WAIT_MICRO_SECONDS          100
+
+#define OTPRX_2_BASE_ADR                0x9C002800
 
 /* OTP register map */
-#define OTP_PROGRAM_CONTROL            0x0C
-#define PIO_MODE                       0x07
+#define OTP_PROGRAM_CONTROL             0x0C
+#define PIO_MODE                        0x07
 
-#define OTP_PROGRAM_ADDRESS            0x10
-#define PROG_OTP_ADDR                  0x1FFF
+#define OTP_PROGRAM_ADDRESS             0x10
+#define PROG_OTP_ADDR                   0x1FFF
 
-#define OTP_PROGRAM_PGENB              0x20
-#define PIO_PGENB                      0x01
+#define OTP_PROGRAM_PGENB               0x20
+#define PIO_PGENB                       0x01
 
-#define OTP_PROGRAM_ENABLE             0x24
-#define PIO_WR                         0x01
+#define OTP_PROGRAM_ENABLE              0x24
+#define PIO_WR                          0x01
 
-#define OTP_PROGRAM_VDD2P5             0x28
-#define PROGRAM_OTP_DATA               0xFF00
-#define PROGRAM_OTP_DATA_SHIFT         8
-#define REG25_PD_MODE_SEL              0x10
-#define REG25_POWER_SOURCE_SEL         0x02
-#define OTP2REG_PD_N_P                 0x01
+#define OTP_PROGRAM_VDD2P5              0x28
+#define PROGRAM_OTP_DATA                0xFF00
+#define PROGRAM_OTP_DATA_SHIFT          8
+#define REG25_PD_MODE_SEL               0x10
+#define REG25_POWER_SOURCE_SEL          0x02
+#define OTP2REG_PD_N_P                  0x01
 
-#define OTP_PROGRAM_STATE              0x2C
-#define OTPRSV_CMD3                    0xE0
-#define OTPRSV_CMD3_SHIFT              5
-#define TSMC_OTP_STATE                 0x1F
+#define OTP_PROGRAM_STATE               0x2C
+#define OTPRSV_CMD3                     0xE0
+#define OTPRSV_CMD3_SHIFT               5
+#define TSMC_OTP_STATE                  0x1F
 
-#define OTP_CONTROL                    0x44
-#define PROG_OTP_PERIOD                0xFFE0
-#define PROG_OTP_PERIOD_SHIFT          5
-#define OTP_EN_R                       0x01
+#define OTP_CONTROL                     0x44
+#define PROG_OTP_PERIOD                 0xFFE0
+#define PROG_OTP_PERIOD_SHIFT           5
+#define OTP_EN_R                        0x01
 
-#define OTP_CONTROL2                   0x48
-#define OTP_RD_PERIOD                  0xFF00
-#define OTP_RD_PERIOD_SHIFT            8
-#define OTP_READ                       0x04
+#define OTP_CONTROL2                    0x48
+#define OTP_RD_PERIOD                   0xFF00
+#define OTP_RD_PERIOD_SHIFT             8
+#define OTP_READ                        0x04
 
-#define OTP_STATUS                     0x4C
-#define OTP_READ_DONE                  0x10
+#define OTP_STATUS                      0x4C
+#define OTP_READ_DONE                   0x10
 
-#define OTP_READ_ADDRESS               0x50
-#define RD_OTP_ADDRESS                 0x1F
+#define OTP_READ_ADDRESS                0x50
+#define RD_OTP_ADDRESS                  0x1F
 
 struct otprx_sunplus {
 	u32 sw_trim;
@@ -98,91 +102,153 @@ static volatile struct otprx_sunplus *regs = (volatile struct otprx_sunplus *)(O
 static volatile struct hbgpio_sunplus *otp_data = (volatile struct hbgpio_sunplus *)(HB_GPIO);
 
 int read_otp_data(int addr, char *value)
-{        	
+{
 	unsigned int addr_data;
 	unsigned int byte_shift;
 	unsigned int status;
 	u32 timeout = OTP_READ_TIMEOUT;
-	
+
 	addr_data = addr % (QAC628_OTP_WORD_SIZE * QAC628_OTP_WORDS_PER_BANK);
 	addr_data = addr_data / QAC628_OTP_WORD_SIZE;
-	
+
 	byte_shift = addr % (QAC628_OTP_WORD_SIZE * QAC628_OTP_WORDS_PER_BANK);
 	byte_shift = byte_shift % QAC628_OTP_WORD_SIZE;
-	
+
 	writel(0x0, &regs->otp_cmd_status);
-	
+
 	addr = addr / (QAC628_OTP_WORD_SIZE * QAC628_OTP_WORDS_PER_BANK);
 	addr = addr * QAC628_OTP_BIT_ADDR_OF_BANK;
 	writel(addr, &regs->otp_addr);
-	
+
 	writel(0x1E04, &regs->otp_cmd);
-	
-	do
-	{
+
+	do {
 		udelay(10);
 		if (timeout-- == 0)
 			return -1;
-		
+
 		status = readl(&regs->otp_cmd_status);
-	} while((status & OTP_READ_DONE) != OTP_READ_DONE);
-	
+	} while ((status & OTP_READ_DONE) != OTP_READ_DONE);
+
 	*value = (otp_data->hb_gpio_rgst_bus32[8+addr_data] >> (8 * byte_shift)) & 0xFF;
-	
+
 	return 0;
 }
 
+#ifdef SUPPORT_WRITE_OTP
+int write_otp_data(int addr, char value)
+{
+	unsigned int data;
+	u32 timeout = OTP_WAIT_MICRO_SECONDS;
+
+	writel(0xFD01, &regs->otp_ctrl);
+	writel(addr, &regs->otp_prog_addr);
+	writel(0x03, &regs->otp_prog_ctl);
+
+	data = value;
+	data = (data << 8) + 0x12;
+	writel(data, &regs->otp_prog_reg25);
+
+	writel(0x01, &regs->otp_prog_wr);
+	writel(0x00, &regs->otp_prog_pgenb);
+
+	do {
+		udelay(1000);
+		if (timeout-- == 0)
+			return -1;
+
+		data = readl(&regs->otp_prog_state);
+	} while((data & 0x1F) != 0x13);
+
+	writel(0x01, &regs->otp_prog_pgenb);
+	writel(0x00, &regs->otp_prog_wr);
+	writel(0x00, &regs->otp_prog_ctl);
+
+	return 0;
+}
+#endif
+
 static int do_read_otp(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 {
-	unsigned int addr;	
+	unsigned int addr;
 	char value;
 	unsigned int data;
 	int i, j;
-	
-	if (argc == 2)
-	{
+
+	if (argc == 2) {
 		addr = simple_strtoul(argv[1], NULL, 0);
-		
+
 		if (addr >= QAC628_OTP_SIZE)
 			return CMD_RET_USAGE;
-		
+
 		if (read_otp_data(addr, &value) == -1)
 			return CMD_RET_FAILURE;
-		
+
 		data = value;
 		printf("OTP DATA (byte %u) = 0x%X\n", addr, data);
-		
+
 		return 0;
-	}
-	else if (argc == 1)
-	{
+	} else if (argc == 1) {
 		printf(" (byte No.)   (data)\n");
 		j = 0;
-		
-		for (addr = 0 ; addr < (QAC628_OTP_SIZE - 1); addr += (QAC628_OTP_WORD_SIZE * QAC628_OTP_WORDS_PER_BANK))
-		{
+
+		for (addr = 0 ; addr < (QAC628_OTP_SIZE - 1); addr += (QAC628_OTP_WORD_SIZE * QAC628_OTP_WORDS_PER_BANK)) {
 			if (read_otp_data(addr, &value) == -1)
 				return CMD_RET_FAILURE;
-			
-			for (i = 0; i < 4; i++, j++)
-			{   					
-				printf("  %03u~%03u : 0x%08X\n", 3+j*4, j*4, otp_data->hb_gpio_rgst_bus32[8+i]); 	
+
+			for (i = 0; i < 4; i++, j++) {
+				printf("  %03u~%03u : 0x%08X\n", 3+j*4, j*4, otp_data->hb_gpio_rgst_bus32[8+i]);
 			}
-			
+
 			printf("\n");
 		}
-		
+
 		return 0;
-	}
-	else
-	{
+	} else {
 		return CMD_RET_USAGE;
-	}	    
+	}
 }
+
+#ifdef SUPPORT_WRITE_OTP
+static int do_write_otp(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
+{
+	unsigned int addr;
+	unsigned int data;
+	char value;
+
+	if (argc == 3) {
+		addr = simple_strtoul(argv[1], NULL, 0);
+		data = simple_strtoul(argv[2], NULL, 0);
+
+		if ((addr >= 128) || (data >= 256))
+			return CMD_RET_USAGE;
+
+		value = data & 0xFF;
+
+		if (write_otp_data(addr, value) == -1) {
+			return CMD_RET_FAILURE;
+		}
+
+		printf("OTP write complete !!\n");
+
+		return 0;
+	} else {
+		return CMD_RET_USAGE;
+	}
+}
+#endif
 
 /*******************************************************/
 U_BOOT_CMD(
-	rotp,	2,	1,	do_read_otp,
-	"read 1 byte data or all data of OTP", 
+	rotp, 2, 1, do_read_otp,
+	"read 1 byte data or all data of OTP",
 	"[OTP address (0, 1,..., 128 byte) | None]"
 );
+
+#ifdef SUPPORT_WRITE_OTP
+U_BOOT_CMD(
+	wotp, 3, 1, do_write_otp,
+	"write 1 byte data to OTP",
+	"[OTP address (0~127 byte)] [data (0~255)]"
+);
+#endif

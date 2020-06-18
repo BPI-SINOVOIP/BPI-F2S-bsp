@@ -1036,7 +1036,7 @@ static int sp_spinand_probe(struct platform_device *pdev)
 		NULL,
 	};
 
-	SPINAND_LOGI("%s in\n", __FUNCTION__);
+	//SPINAND_LOGI("%s in\n", __FUNCTION__);
 
 	info = devm_kzalloc(dev, sizeof(*info), GFP_KERNEL);
 	if (!info) {
@@ -1138,7 +1138,11 @@ static int sp_spinand_probe(struct platform_device *pdev)
 	nand_set_flash_node(&info->nand, dev->of_node);
 
 	spi_nand_readid(info, 0, (u8*)&id);
-
+	if ( id == 0) {
+		SPINAND_LOGE("not found\n");
+		ret = -ENXIO;
+		goto err1;
+	}
 	if (nand_scan_ident(info->mtd, 1, sp_spinand_ids)) {
 		SPINAND_LOGE("unsupport spinand,(device id:0x%08x)\n", id);
 		ret = -ENXIO;

@@ -5,3 +5,5 @@
 obj-y	:= board.o sp_go.o
 obj-$(CONFIG_SP_UTIL_MON) += sp_mon.o
 obj-$(CONFIG_SP_JTAG) += sp_jtag.o
+obj-$(CONFIG_ARMV7_NONSEC) += nonsec_virt.o
+obj-$(CONFIG_DM_VIDEO) += video_display.o

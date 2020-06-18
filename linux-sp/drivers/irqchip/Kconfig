@@ -363,6 +363,7 @@ config GOLDFISH_PIC
          for Goldfish based virtual platforms.
 
 config SP_INTC
+	depends on ARCH_PENTAGRAM
 	bool "Sunplus interrupt controller"
 
 config QCOM_PDC

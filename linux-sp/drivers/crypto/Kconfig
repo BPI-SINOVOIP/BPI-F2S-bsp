@@ -11,11 +11,11 @@ menuconfig CRYPTO_HW
 if CRYPTO_HW
 config CRYPTO_DEV_SP
 	tristate "Support for Sunplus Crypto Engine"
+	depends on ARCH_PENTAGRAM
 	select CRYPTO_BLKCIPHER
 	select MPILIB
 	help
 	  Say 'Y' to support Sunplus AES/SHA3/HASH/RSA acceletor.
-
 	  If unsure say M. The compiled module will be
 	  called spcrypto.
 

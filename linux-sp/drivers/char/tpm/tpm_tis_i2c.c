@@ -1,5 +1,5 @@
 /*
- * STMicroelectronics TCG TPM I2C Linux driver 
+ * STMicroelectronics TCG TPM I2C Linux driver
  * Copyright (C) 2018 STMicroelectronics
  *
  * Authors:
@@ -37,6 +37,7 @@
 #include <linux/of_irq.h>
 #include <linux/of_gpio.h>
 #include <linux/tpm.h>
+#include <linux/version.h>
 #include "tpm.h"
 #include "tpm_tis_core.h"
 
@@ -113,7 +114,7 @@ static int tpm_tis_i2c_ptp_register_mapper(u32 addr, u8 *i2c_reg)
 	return 0;
 }
 
-#ifdef BPI
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,15,0)
 static void tpm_tis_i2c_guard_time_timeout(unsigned long data)
 {
 	struct tpm_tis_i2c_phy *phy = (struct tpm_tis_i2c_phy *)data;
@@ -133,7 +134,7 @@ static void tpm_tis_i2c_guard_time_timeout(struct timer_list *t)
 
 static void tpm_tis_i2c_sleep_guard_time(struct tpm_tis_i2c_phy *phy,
 					 u8 i2c_operation)
-{					
+{
 	del_timer_sync(&phy->guard_timer);
 	switch (i2c_operation) {
 	case TPM_I2C_RECV:
@@ -189,8 +190,7 @@ static int tpm_tis_i2c_read_bytes(struct tpm_tis_data *data, u32 addr,
 		mod_timer(&phy->guard_timer, phy->guard_time);
 	}
 
-	if (ret < 0)
-	{
+	if (ret < 0) {
 		sprintf(phy->buf, " read 1 %x\n", phy->guard_time);
 		goto exit;
 	}
@@ -200,8 +200,7 @@ static int tpm_tis_i2c_read_bytes(struct tpm_tis_data *data, u32 addr,
 		ret = i2c_master_recv(phy->client, result, size);
 		mod_timer(&phy->guard_timer, phy->guard_time);
 	}
-	if (ret < 0)
-	{
+	if (ret < 0) {
 		sprintf(phy->buf, " read 2 %x\n", phy->guard_time);
 		goto exit;
 	}
@@ -210,11 +209,11 @@ exit:
 	return ret;
 }
 
-static int tpm_tis_i2c_write_bytes(struct tpm_tis_data *data, u32 addr, 
+static int tpm_tis_i2c_write_bytes(struct tpm_tis_data *data, u32 addr,
 				   u16 size, const u8 *value)
 {
 	struct tpm_tis_i2c_phy *phy = to_tpm_tis_i2c_phy(data);
-	int ret = 0;	
+	int ret = 0;
 	int i;
 	u8 i2c_reg;
 
@@ -237,8 +236,7 @@ static int tpm_tis_i2c_write_bytes(struct tpm_tis_data *data, u32 addr,
 		ret = i2c_master_send(phy->client, phy->buf, size + 1);
 		mod_timer(&phy->guard_timer, phy->guard_time);
 	}
-		if (ret < 0)
-	{
+	if (ret < 0) {
 		sprintf(phy->buf, " WRITE 1 %x\n", phy->guard_time);
 		goto exit;
 	}
@@ -270,8 +268,7 @@ static int tpm_tis_i2c_read32(struct tpm_tis_data *data, u32 addr, u32 *result)
 static int tpm_tis_i2c_write32(struct tpm_tis_data *data, u32 addr, u32 value)
 {
 	value = cpu_to_le32(value);
-	return data->phy_ops->write_bytes(data, addr, sizeof(u32),
-					   (u8 *)&value);
+	return data->phy_ops->write_bytes(data, addr, sizeof(u32), (u8 *)&value);
 }
 
 static bool tpm_tis_i2c_check_data(struct tpm_tis_data *data, u8 *buf, size_t len)
@@ -426,25 +423,24 @@ static int tpm_tis_i2c_probe(struct i2c_client *client,
 	phy = devm_kzalloc(&client->dev, sizeof(struct tpm_tis_i2c_phy),
 			   GFP_KERNEL);
 
-	if (!phy)
-		{ dev_err(&client->dev,"%s:devm_kzalloc failed.\n",
-				__func__);
+	if (!phy) {
+		dev_err(&client->dev,"%s:devm_kzalloc failed.\n", __func__);
 		return -ENOMEM;
-		}
+	}
 
 	phy->client = client;
 
 	mutex_init(&phy->phy_lock);
 
 	phy->guard_time = TPM_I2C_DEFAULT_GUARD_TIME;
-	
+
 	phy->read_read = false;
 	phy->read_write = false;
 	phy->write_read = false;
 	phy->write_write = false;
 
 	/* initialize timer */
-#ifdef BPI
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,15,0)
 	init_timer(&phy->guard_timer);
 	phy->guard_timer.data = (unsigned long)phy;
 	phy->guard_timer.function = tpm_tis_i2c_guard_time_timeout;
@@ -453,16 +449,12 @@ static int tpm_tis_i2c_probe(struct i2c_client *client,
 	timer_setup(&phy->guard_timer, tpm_tis_i2c_guard_time_timeout, 0);
 #endif
 
-	
 	return tpm_tis_core_init(&client->dev, &phy->priv, -1, &tpm_tis,
 				 NULL);
-
-
 }
 
 static int tpm_tis_i2c_remove(struct i2c_client *client)
 {
-	
 	struct tpm_chip *data = i2c_get_clientdata(client);
 	tpm_chip_unregister(data);
 	return 0;

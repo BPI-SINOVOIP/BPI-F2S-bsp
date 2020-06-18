@@ -112,6 +112,7 @@ static const struct dm_serial_ops sunplus_serial_ops = {
 };
 
 static const struct udevice_id sunplus_serial_ids[] = {
+	{ .compatible = "sunplus,sp7021-uart"},
 	{ .compatible = "sunplus,sunplus-uart"},
 	{}
 };

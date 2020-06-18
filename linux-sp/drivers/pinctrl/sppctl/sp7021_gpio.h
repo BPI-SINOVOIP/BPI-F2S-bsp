@@ -44,7 +44,7 @@
 #define M_AUT "Dvorkin Dmitry <dvorkin@tibbo.com>"
 #define M_NAM "SP7021 GPIO"
 #define M_ORG "SunPlus/Tibbo Tech."
-#define M_CPR "(C) 2019-2019"
+#define M_CPR "(C) 2019"
 
 #define KINF(pd,fmt,args...) { \
     if ( (pd) != NULL) {  dev_info((pd),""fmt,##args);  \

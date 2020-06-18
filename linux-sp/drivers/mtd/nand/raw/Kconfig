@@ -563,6 +563,7 @@ config MTD_NAND_TEGRA
 
 config MTD_SPINAND_SP
 	tristate "Support for SPI NAND controller on SUNPLUS SoCs"
+	depends on ARCH_PENTAGRAM
 	help
 	  Enables support for SPI NAND controller on SUNPLUS SoCs.
 	  This controller is found on Sunplus SoCs.

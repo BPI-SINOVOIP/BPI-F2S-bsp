@@ -242,10 +242,6 @@ export	HOSTARCH HOSTOS
 # set default to nothing for native builds
 ifeq ($(HOSTARCH),$(ARCH))
 CROSS_COMPILE ?=
-BOOT_KERNEL_FROM_TFTP ?=
-TFTP_SERVER_IP ?=
-BOARD_MAC_ADDR ?=
-USER_NAME ?=
 endif
 
 KCONFIG_CONFIG	?= .config
@@ -379,11 +375,6 @@ CHECKFLAGS     := -D__linux__ -Dlinux -D__STDC__ -Dunix -D__unix__ \
 		  -Wbitwise -Wno-return-void -D__CHECK_ENDIAN__ $(CF)
 
 KBUILD_CPPFLAGS := -D__KERNEL__ -D__UBOOT__
-
-ifeq ($(BOOT_KERNEL_FROM_TFTP), 1)
-KBUILD_CPPFLAGS += -DBOOT_KERNEL_FROM_TFTP=$(BOOT_KERNEL_FROM_TFTP) -DTFTP_SERVER_IP=$(TFTP_SERVER_IP) \
-		   -DBOARD_MAC_ADDR=$(BOARD_MAC_ADDR) -DUSER_NAME=$(USER_NAME)
-endif
 
 KBUILD_CFLAGS   := -Wall -Wstrict-prototypes \
 		   -Wno-format-security \
@@ -926,13 +917,15 @@ quiet_cmd_cfgcheck = CFGCHK  $2
 cmd_cfgcheck = $(srctree)/scripts/check-config.sh $2 \
 		$(srctree)/scripts/config_whitelist.txt $(srctree)
 
-# xboot uses name field of u-boot header to differeciate between A boot
-# image and B boot image. If name field has prefix "uboot_B", it boots from
-# B chip.
-ifeq ($(CONFIG_TARGET_PENTAGRAM_B_BOOT),y)
-img_name = "uboot_B_$(CONFIG_SYS_BOARD)"
+BOOT_FROM ?=
+BOOT_CHIP ?= C_CHIP
+
+# xboot uses name field of u-boot header to differeciate between C-chip boot image
+# and P-chip boot image. If name field has prefix "uboot_B", it boots from P chip.
+ifeq ("$(BOOT_CHIP)", "C_CHIP")
+img_name = "uboot_pentagram_board"
 else
-img_name = "uboot_$(CONFIG_SYS_BOARD)"
+img_name = "uboot_B_pentagram_board"
 endif
 
 all:		$(ALL-y)
@@ -1027,7 +1020,6 @@ endif
 	@# options are whitelisted, so new ones should not be added.
 	@# create u-boot.img
 	@echo "Wrap u-boot image..."
-	#./tools/add_uhdr.sh $(img_name) u-boot.bin u-boot.img 0x200040 0x200040
 	$(objtree)/tools/mkimage -A arm -O linux -T quickboot -C none -a 0x200040 -e 0x200040 -n $(img_name) -d u-boot.bin u-boot.img
 	@img_sz=`du -sb u-boot.img | cut -f1` ; \
 	printf "size: %d (hex %x)\n" $$img_sz $$img_sz

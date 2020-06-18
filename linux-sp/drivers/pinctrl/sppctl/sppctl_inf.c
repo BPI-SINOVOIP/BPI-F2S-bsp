@@ -402,14 +402,14 @@ func_t list_funcs[] = {
  FNCN("SPI3S_EN",        fOFF_M, 0x28, 8, 7),
  FNCN("SPI3S_DO",        fOFF_M, 0x29, 0, 7),
  FNCN("SPI3S_DI",        fOFF_M, 0x29, 8, 7),
- FNCN("I2CM0_CK",        fOFF_M, 0x2A, 0, 7),    // 4x I2C masters
+ FNCN("I2CM0_CLK",       fOFF_M, 0x2A, 0, 7),    // 4x I2C masters
  FNCN("I2CM0_DAT",       fOFF_M, 0x2A, 8, 7),
- FNCN("I2CM1_CK",        fOFF_M, 0x2B, 0, 7),
+ FNCN("I2CM1_CLK",       fOFF_M, 0x2B, 0, 7),
  FNCN("I2CM1_DAT",       fOFF_M, 0x2B, 8, 7),
- FNCN("I2CM2_CK",        fOFF_M, 0x2C, 0, 7),
- FNCN("I2CM2_D",         fOFF_M, 0x2C, 8, 7),
- FNCN("I2CM3_CK",        fOFF_M, 0x2D, 0, 7),
- FNCN("I2CM3_D",         fOFF_M, 0x2D, 8, 7),
+ FNCN("I2CM2_CLK",       fOFF_M, 0x2C, 0, 7),
+ FNCN("I2CM2_DAT",       fOFF_M, 0x2C, 8, 7),
+ FNCN("I2CM3_CLK",       fOFF_M, 0x2D, 0, 7),
+ FNCN("I2CM3_DAT",       fOFF_M, 0x2D, 8, 7),
  FNCN("UA1_TX",          fOFF_M, 0x2E, 0, 7),    // +4x muxable UARTS (#0 is not muxable)
  FNCN("UA1_RX",          fOFF_M, 0x2E, 8, 7),
  FNCN("UA1_CTS",         fOFF_M, 0x2F, 0, 7),

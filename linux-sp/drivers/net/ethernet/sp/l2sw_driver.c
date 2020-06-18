@@ -928,6 +928,7 @@ static int l2sw_probe(struct platform_device *pdev)
 	struct resource *r_mem;
 	struct net_device *net_dev, *net_dev2;
 	struct l2sw_mac *mac, *mac2;
+	u32 mode;
 	int ret = 0;
 	int rc;
 
@@ -946,12 +947,6 @@ static int l2sw_probe(struct platform_device *pdev)
 	ETH_DEBUG("[%s] comm = 0x%08x\n", __func__, (int)comm);
 	memset(comm, '\0', sizeof(struct l2sw_common));
 	comm->pdev = pdev;
-#ifdef CONFIG_DUAL_NIC
-	comm->dual_nic = 1;
-#endif
-#ifdef CONFIG_AN_NIC_WITH_DAISY_CHAIN
-	comm->sa_learning = 1;
-#endif
 
 	/*
 	 * spin_lock:         return if it obtain spin lock, or it will wait (not sleep)
@@ -999,6 +994,23 @@ static int l2sw_probe(struct platform_device *pdev)
 		ETH_ERR("[%s] No IRQ resource found!\n", __func__);
 		ret = -ENXIO;
 		goto out_free_comm;
+	}
+
+	// Get L2-switch mode.
+	ret = of_property_read_u32(pdev->dev.of_node, "mode", &mode);
+	if (ret) {
+		mode = 0;
+	}
+	ETH_INFO(" L2 switch mode = %u\n", mode);
+	if (mode == 2) {
+		comm->dual_nic = 0;     // daisy-chain mode 2
+		comm->sa_learning = 0;
+	} else if (mode == 1) {
+		comm->dual_nic = 1;     // dual NIC mode
+		comm->sa_learning = 0;
+	} else {
+		comm->dual_nic = 0;     // daisy-chain mode
+		comm->sa_learning = 1;
 	}
 
 	// Get resource of clock controller

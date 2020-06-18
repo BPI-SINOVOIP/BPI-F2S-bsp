@@ -58,34 +58,7 @@ config VIDEO_SENSOR_OV5647
 	default n
 	---help---
 	  Supports video sensor OV5647.
-
-choice
-	prompt "Selected Image Size"
-	depends on VIDEO_SENSOR_OV5647
-	---help---
-	  Press Enter to select image size if this is not you want.
-
-config OV5647_640x480
-	bool "640x480"
-	---help---
-	  In this mode, OV5647 output image size 640x480.
-
-config OV5647_1280x720
-	bool "1280x720"
-	---help---
-	  In this mode, OV5647 output image size 1280x720.
-
-config OV5647_1280x960
-	bool "1280x960"
-	---help---
-	  In this mode, OV5647 output image size 1280x960.
-
-config OV5647_2592x1944
-	bool "2592x1944"
-	---help---
-	  In this mode, OV5647 output image size 2592x1944.
-
-endchoice
+	  module_param(ov5647.mode): 0:640x480 1:1280x720 2:1280x960 3:2592x1944
 
 config VIDEO_SENSOR_OV9281
 	tristate "Video Sensor (OV9281) Driver"

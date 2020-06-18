@@ -14,21 +14,24 @@
 #include <mach/io_map.h>
 #include <mach/clk.h>
 #include <mach/misc.h>
-#include <dt-bindings/memory/sp-q628-mem.h> 
+#include <../drivers/misc/iop/sp_iop.h>
 #include "common.h"
 
 static void sp_power_off(void)
 {
 //	unsigned int reg_value;
 	void __iomem *regs = (void __iomem *)A_SYSTEM_BASE;
-	void __iomem *regs_B = (void __iomem *)B_SYSTEM_BASE;
+	//void __iomem *regs_B = (void __iomem *)B_SYSTEM_BASE;
 //	int i;
-	pr_info("%s\n", __func__);
-
-	writel(0x0000, regs_B + 0x434); /* iop_data5=0x0000 */
-	writel(0x0060, regs_B + 0x438); /* iop_data6=0x0060 */
-	writel(0x00dd, regs_B + 0x424); /* iop_data1=0x00dd */
-		
+	early_printk("%s\n", __func__);
+	#ifdef CONFIG_SUNPLUS_IOP
+    //for iop power off
+	sp_iop_platform_driver_poweroff();
+	#endif 
+	//writel(0x0000, regs_B + 0x434); /* iop_data5=0x0000 */
+	//writel(0x0060, regs_B + 0x438); /* iop_data6=0x0060 */
+	//writel(0x00dd, regs_B + 0x424); /* iop_data1=0x00dd */
+ 		
 	printk("PD RG_PLL_PDN and RG_PLLIO_PDN to save power\n");
 	writel(0, regs + 0x54); /* bit0 RG_PLLIO_PDN */
 	writel(0, regs + 0x2C); /* bit0 RG_PLL_PDN */
@@ -62,7 +65,7 @@ static void apply_partial_clken(void)
 {
 	int i;
 	const int ps_clken[] = {
-		0x67ef, 0x41ff, 0xff03, 0xfff0, 0x0004, /* G0.1~5  */
+		0x67ef, 0x43ff, 0xff03, 0xfff0, 0x0004, /* G0.1~5  */
 		0x0000, 0x8000, 0xffff, 0x0040, 0x0000, /* G0.6~10 */
 	};
 
@@ -183,7 +186,10 @@ static void __init sp_fixup(void)
 void sp_restart(enum reboot_mode mode, const char *cmd)
 {
 	void __iomem *regs = (void __iomem *)B_SYSTEM_BASE;
-
+	#ifdef CONFIG_SUNPLUS_IOP
+	unsigned int reg_value;
+	#endif 
+	early_printk("%s\n", __func__);
 	/* MOON : enable watchdog reset */
 	writel(0x00120012, regs + 0x0274); /* G4.29 misc_ctl */
 
@@ -192,6 +198,11 @@ void sp_restart(enum reboot_mode mode, const char *cmd)
 	writel(0xAB00, regs + 0x0630); /* unlock */
 	writel(0x0001, regs + 0x0634); /* counter */
 	writel(0x4A4B, regs + 0x0630); /* resume */
+
+	#ifdef CONFIG_SUNPLUS_IOP
+	reg_value = readl(regs + 0x400);
+	writel((reg_value|0x0001), regs + 0x400); 
+	#endif 
 }
 
 #ifdef CONFIG_MACH_PENTAGRAM_SP7021_BCHIP

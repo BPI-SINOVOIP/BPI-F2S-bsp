@@ -633,8 +633,9 @@ config RISCV_TIMER
 
 config CLKSRC_SP_TIMER
 	bool "Clocksource using Sunplus STC timer"
-    select TIMER_PROBE
-    select TIMER_OF
+	depends on ARCH_PENTAGRAM
+	select TIMER_PROBE
+	select TIMER_OF
 
 config SP_TIMER_IRQ_LATENCY_TEST
 	bool "Test IRQ latency with STC Timer2"

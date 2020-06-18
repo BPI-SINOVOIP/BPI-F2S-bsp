@@ -440,25 +440,25 @@ void DRV_OSD_Set_UI_Init(struct UI_FB_Info_t *pinfo)
 #endif
 
 	if (pinfo->UI_ColorFmt == DRV_OSD_REGION_FORMAT_8BPP)
-		gpOsdHeader = dma_zalloc_coherent(NULL,
+		gpOsdHeader = dma_alloc_coherent(pDispWorkMem->pdev,
 				sizeof(struct HW_OSD_Header_s) + 1024,
 				&gpOsdHeader_phy,
-				GFP_KERNEL);
+				GFP_KERNEL | __GFP_ZERO);
 	else
-		gpOsdHeader = dma_zalloc_coherent(NULL,
+		gpOsdHeader = dma_alloc_coherent(pDispWorkMem->pdev,
 				sizeof(struct HW_OSD_Header_s),
 				&gpOsdHeader_phy,
-				GFP_KERNEL);
+				GFP_KERNEL | __GFP_ZERO);
 
 	if (!gpOsdHeader) {
 		sp_disp_err("malloc osd header fail\n");
 		return;
 	}
 
-	gpWinRegion = dma_zalloc_coherent(NULL,
+	gpWinRegion = dma_alloc_coherent(pDispWorkMem->pdev,
 			sizeof(struct Region_Manager_s),
 			&gpWinRegion_phy,
-			GFP_KERNEL);
+			GFP_KERNEL | __GFP_ZERO);
 
 	if (!gpWinRegion) {
 		sp_disp_err("malloc region header fail\n");
@@ -638,20 +638,20 @@ void DRV_OSD_INIT_OSD_Header(void)
 
 	sp_disp_dbg("DRV_OSD_INIT_OSD_Header \n");
 
-	disp_dev->Osd0Header = dma_zalloc_coherent(NULL,
+	disp_dev->Osd0Header = dma_alloc_coherent(disp_dev->pdev,
 			sizeof(struct HW_OSD_Header_s) + 1024,
 			&disp_dev->Osd0Header_phy,
-			GFP_KERNEL);
+			GFP_KERNEL | __GFP_ZERO);
 
 	if (!disp_dev->Osd0Header) {
 		sp_disp_err("malloc osd header fail\n");
 		return;
 	}
 
-	disp_dev->Osd1Header = dma_zalloc_coherent(NULL,
+	disp_dev->Osd1Header = dma_alloc_coherent(disp_dev->pdev,
 			sizeof(struct HW_OSD_Header_s) + 1024,
 			&disp_dev->Osd1Header_phy,
-			GFP_KERNEL);
+			GFP_KERNEL | __GFP_ZERO);
 
 	if (!disp_dev->Osd1Header) {
 		sp_disp_err("malloc osd header fail\n");

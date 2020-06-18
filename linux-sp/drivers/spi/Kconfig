@@ -803,6 +803,7 @@ endif # SPI_MASTER
 
 config SPI_SLAVE
 	bool "SPI slave protocol handlers"
+	default SPI	
 	help
 	  If your system has a slave-capable SPI controller, you can enable
 	  slave protocol handlers.

@@ -1,23 +1,20 @@
 #!/bin/bash
-# (c) 2015, 2016, Leo Xu <otakunekop@banana-pi.org.cn>
-# Build script for BPI-M2U-BSP 2016.09.10
+# Build script for BPI-M2U-BSP
 
-MACH="sp7021"
-BOARD=BPI-F2S-720P
-mode=$1
-RET=0
+BOARD=$1
+mode=$2
 
-list_boards() {
-	cat <<-EOT
-	NOTICE:
-	new build.sh default select $BOARD and pack all boards
-	supported boards:
+usage() {
+	cat <<-EOT >&2
+	Usage: $0 <board>
 	EOT
-	(cd sp-pack/${MACH}/configs ; ls -1d BPI*) 
-	echo
+	./configure
 }
 
-list_boards
+if [ $# -eq 0 ]; then
+	usage
+	exit 1
+fi
 
 ./configure $BOARD
 
@@ -33,7 +30,7 @@ echo "	3. Build kernel only."
 echo "	4. kernel configure."
 echo "	5. Pack the builds to target download image, this step must execute after u-boot,"
 echo "	   kernel and rootfs build out"
-echo "	6. Update local build to SDcard with BPI Image Installed"
+echo "	6. Update local build to SD with BPI Image flashed"
 echo "	7. Clean all build."
 echo "--------------------------------------------------------------------------------"
 
@@ -54,10 +51,8 @@ esac
 echo -e "\033[31m Now building...\033[0m"
 echo
 case $mode in
-	1) RET=1;make && 
-	   make pack && 
-           RET=0
-           ;;
+	1) make && 
+	   make pack;;
 	2) make u-boot;;
 	3) make kernel;;
 	4) make kernel-config;;
@@ -65,12 +60,4 @@ case $mode in
 	6) make install;;
 	7) make clean;;
 esac
-echo
-
-if [ "$RET" -eq "0" ];
-then
-  echo -e "\033[32m Build success!\033[0m"
-else
-  echo -e "\033[31m Build failed!\033[0m"
-fi
 echo

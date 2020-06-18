@@ -1,0 +1,12 @@
+/*
+ * {desc_long}
+ * Copyright (C) 2020 Tibbo Tech. - http://tibbo.com/tps/
+ * License: GPLv2 or later
+ */
+/dts-v1/;
+
+#include "sp7021-ltpp3g2revD.dtsi"
+
+/ {
+	model = "SP7021 LTPP3G2 Rev. D (empty sockets)";
+};

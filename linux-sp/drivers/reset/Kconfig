@@ -147,6 +147,7 @@ config RESET_TI_SYSCON
 config SUNPLUS_SP7021_RESET
 	tristate "SUNPLUS SP7021 Reset Driver"
 	depends on HAS_IOMEM
+	depends on ARCH_PENTAGRAM
 	help
 	  This enables the reset driver support for SUNPLUS devices with
 	  memory-mapped reset registers as part of a syscon device node. If

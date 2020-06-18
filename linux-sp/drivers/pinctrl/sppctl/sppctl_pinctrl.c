@@ -308,7 +308,7 @@ int stpctl_o_n2map( struct pinctrl_dev *_pd, struct device_node *_dn, struct pin
  KDBG( _pd->dev, "%d pins mapped\n", *_nm);
  return( 0);  }
 void stpctl_o_mfre( struct pinctrl_dev *_pd, struct pinctrl_map *_map, unsigned num_maps) {
- KINF( _pd->dev, "%s(%d)\n", __FUNCTION__, num_maps);
+ //KINF( _pd->dev, "%s(%d)\n", __FUNCTION__, num_maps);
  // FIXME: test
  pinctrl_utils_free_map( _pd, _map, num_maps);
  return;  }

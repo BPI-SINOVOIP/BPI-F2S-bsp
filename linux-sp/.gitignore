@@ -30,6 +30,8 @@
 *.lzma
 *.lzo
 *.mod.c
+*.mod
+*.modinfo
 *.o
 *.o.*
 *.order

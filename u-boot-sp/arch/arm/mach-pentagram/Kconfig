@@ -6,13 +6,37 @@ choice
 config TARGET_PENTAGRAM_COMMON
 	bool "pentagram common board"
 	select CPU_V7A
+    #select CPU_V7_HAS_NONSEC
+    #select CPU_V7_HAS_VIRT
 	select SYS_THUMB_BUILD
 
 config TARGET_PENTAGRAM_B_BOOT
 	bool "pentagram common board (B boot)"
 	select CPU_ARM926EJS
 
+config TARGET_PENTAGRAM_I143_C
+	bool "pentagram common board (I143 C-chip)"
+	select CPU_V7A
+	select SYS_THUMB_BUILD
 endchoice
+
+choice
+	prompt "BPI Board select"
+
+config BOARD_BPI_F2S
+        bool "bananapi f2s board"
+
+config BOARD_BPI_F2P
+        bool "bananapi f2p board"
+endchoice
+
+config BPI_BOARD
+        string
+        default "bpi-f2s" if BOARD_BPI_F2S
+        default "bpi-f2p" if BOARD_BPI_F2P
+        default ""
+        help
+          This option contains information about bpi board name.
 
 choice
 	prompt "Verification Environment"
