@@ -135,13 +135,21 @@
 &uart4 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pins_uart4>;
-	status = "disabled";
+	status = "okay";
 };
 
 &sdio {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pins_sdio>;
-	status = "disabled";
+        bus-width = <4>;
+        max-frequency = <20000000>;
+        non-removable;
+        disable-wp;
+        cap-sd-highspeed;
+        cap-sdio-irq;
+        no-sd;
+        no-mmc;
+	status = "okay";
 };
 
 &l2sw {
@@ -281,15 +289,15 @@
 	};
 
 	pins_sdio: pins_sdio {
-		sppctl,pins = <
-			SP7021_IOPAD(17,SP7021_PCTL_G_PMUX,MUXF_SDIO_D1,0)
-			SP7021_IOPAD(18,SP7021_PCTL_G_PMUX,MUXF_SDIO_D0,0)
-			SP7021_IOPAD(16,SP7021_PCTL_G_PMUX,MUXF_SDIO_CLK,0)
-			SP7021_IOPAD(14,SP7021_PCTL_G_PMUX,MUXF_SDIO_CMD,0)
-			SP7021_IOPAD(15,SP7021_PCTL_G_PMUX,MUXF_SDIO_D3,0)
-			SP7021_IOPAD(13,SP7021_PCTL_G_PMUX,MUXF_SDIO_D2,0)
+        	sppctl,pins = <
+               		SP7021_IOPAD(30,SP7021_PCTL_G_PMUX,MUXF_SDIO_CLK,0)
+               		SP7021_IOPAD(31,SP7021_PCTL_G_PMUX,MUXF_SDIO_CMD,0)
+               		SP7021_IOPAD(33,SP7021_PCTL_G_PMUX,MUXF_SDIO_D0,0)
+               		SP7021_IOPAD(34,SP7021_PCTL_G_PMUX,MUXF_SDIO_D1,0)
+               		SP7021_IOPAD(36,SP7021_PCTL_G_PMUX,MUXF_SDIO_D2,0)
+               		SP7021_IOPAD(38,SP7021_PCTL_G_PMUX,MUXF_SDIO_D3,0)
 		>;
-	};
+  	};
 
 	mmc1_mux_cd: mmc1_mux_cd {
 		sppctl,pins = < SP7021_IOPAD(91,SP7021_PCTL_G_GPIO,0,0) >;
@@ -334,9 +342,9 @@
 	pins_uart4: pins_uart4 {
 		sppctl,pins = <
 			SP7021_IOPAD(14,SP7021_PCTL_G_PMUX,MUXF_UA4_TX,0)
-			SP7021_IOPAD(16,SP7021_PCTL_G_PMUX,MUXF_UA4_RX,0)
-			SP7021_IOPAD(20,SP7021_PCTL_G_PMUX,MUXF_UA3_RTS,0)
-			SP7021_IOPAD(22,SP7021_PCTL_G_PMUX,MUXF_UA3_CTS,0)
+        		SP7021_IOPAD(16,SP7021_PCTL_G_PMUX,MUXF_UA4_RX,0)
+        		SP7021_IOPAD(20,SP7021_PCTL_G_PMUX,MUXF_UA4_RTS,0)
+        		SP7021_IOPAD(22,SP7021_PCTL_G_PMUX,MUXF_UA4_CTS,0)
 		>;
 	};
 

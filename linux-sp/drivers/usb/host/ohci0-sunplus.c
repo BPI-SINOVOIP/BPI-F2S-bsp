@@ -3,6 +3,7 @@
 #include <linux/platform_device.h>
 #include "ohci-sunplus.h"
 
+extern u8 sp_port0_enabled;
 extern void usb_hcd_platform_shutdown(struct platform_device *dev);
 
 static int ohci0_sunplus_platform_probe(struct platform_device *dev){
