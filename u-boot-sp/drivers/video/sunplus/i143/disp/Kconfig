@@ -1,0 +1,78 @@
+# SPDX-License-Identifier: GPL-2.0+
+#
+# Copyright (C) 2020 Sunplus - All Rights Reserved
+#
+# Authors: Hammer Hsieh <hammer.hsieh@sunplus.com>
+#
+
+menuconfig VIDEO_I143
+	bool "Enable I143 video support"
+	select DM_VIDEO
+	select DM_GPIO
+	# default y
+	help
+	  I143 supports HDMI video output options.
+	  This option enables these supports which can be used on
+	  HDMI display connected.
+
+config VIDEO_I143_MAX_XRES
+	int "Maximum horizontal resolution (for memory allocation purposes)"
+	depends on VIDEO_I143
+	default 720
+	help
+	  The maximum horizontal resolution to support for the framebuffer.
+	  This configuration is used for reserving/allocating memory for the
+	  framebuffer during device-model binding/probing.
+
+config VIDEO_I143_MAX_YRES
+	int "Maximum vertical resolution (for memory allocation purposes)"
+	depends on VIDEO_I143
+	default 480
+	help
+	  The maximum vertical resolution to support for the framebuffer.
+	  This configuration is used for reserving/allocating memory for the
+	  framebuffer during device-model binding/probing.
+
+config VIDEO_I143_MAX_BPP
+	int "Maximum bits per pixel (for memory allocation purposes)"
+	depends on VIDEO_I143
+	default 8
+	help
+	  The maximum bits per pixel to support for the framebuffer.
+	  This configuration is used for reserving/allocating memory for the
+	  framebuffer during device-model binding/probing.
+
+config VIDEO_I143_ROTATE
+	int "Console Text Rotate Angle Setting"
+	depends on VIDEO_I143
+	default 0
+	help
+	  Rotate angle 0: 0 degree / 1: 90 degree / 2: 180 degree / 3: 270 degree.
+
+config BMP_8BPP_UPDATE_CMAP
+	bool "Enable I143 Update Palette for 8BPP"
+	depends on DM_VIDEO && VIDEO_I143
+	default y
+	help
+		Allow 8BPP format update palette.
+
+config DM_VIDEO_I143_LOGO
+	bool "Enable I143 video LOGO support"
+	depends on DM_VIDEO && VIDEO_I143
+	default y
+	help
+		Logo display support
+
+config DM_VIDEO_I143_LOGO_ALIGN
+	bool "Align I143 video LOGO to center"
+	depends on DM_VIDEO && VIDEO_I143
+	default n
+	help
+		Logo display support , align to center
+
+config VIDEO_BMP_LOGO_MANUAL
+	bool "LOGO display by manual"
+	depends on DM_VIDEO && VIDEO_I143
+	default n
+	help
+		Logo display by manual

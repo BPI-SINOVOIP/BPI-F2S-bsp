@@ -40,6 +40,7 @@
 #include <linux/pm_runtime.h>
 #endif
 #include "sp-mipi-i143.h"
+#include "sensor_power.h"
 
 
 static unsigned int allocator = 0;
@@ -136,10 +137,24 @@ static const struct sp_fmt ov9281_isp_formats[] = {
 	},
 };
 
+static const struct sp_fmt sc2310_formats[] = {
+	{
+		.name     = "UYVY/YUY2, YUV422",
+		.fourcc   = V4L2_PIX_FMT_UYVY,
+		.width    = 1920,
+		.height   = 1080,
+		.depth    = 16,
+		.walign   = 2,
+		.halign   = 1,
+		.mipi_lane = 4,
+		.sol_sync = SYNC_YUY2,
+	},
+};
+
 static const struct sp_fmt isp_test_formats[] = {
 	{
-		.name     = "YUYV/YUY2, YUV422",        // for SunplusIT ov9281_isp
-		.fourcc   = V4L2_PIX_FMT_YUYV,
+		.name     = "UYVY/YUY2, YUV422",
+		.fourcc   = V4L2_PIX_FMT_UYVY,
 		.width    = 1920,
 		.height   = 1080,
 		.depth    = 16,
@@ -152,73 +167,23 @@ static const struct sp_fmt isp_test_formats[] = {
 
 static struct sp_mipi_subdev_info sp_mipi_sub_devs[] = {
 	{
+		.name = "sc2310",
+		.grp_id = 0,
+		.board_info = {
+			I2C_BOARD_INFO("sc2310", 0x30),
+		},
+		.formats = sc2310_formats,
+		.formats_size = ARRAY_SIZE(sc2310_formats),
+	},
+
+	{
 		.name = "mipi_isp_test",
 		.grp_id = 0,
 		.board_info = {
-			I2C_BOARD_INFO("mipi_isp_test", 0x01),
+			I2C_BOARD_INFO("mipi_isp_test", 0x7f),
 		},
 		.formats = isp_test_formats,
 		.formats_size = ARRAY_SIZE(isp_test_formats),
-	},
-
-	{
-		.name = "gc0310",
-		.grp_id = 0,
-		.board_info = {
-			I2C_BOARD_INFO("gc0310", 0x21),
-		},
-		.formats = gc0310_formats,
-		.formats_size = ARRAY_SIZE(gc0310_formats),
-	},
-
-	{
-		.name = "imx219",
-		.grp_id = 0,
-		.board_info = {
-			I2C_BOARD_INFO("imx219", 0x10),
-		},
-		.formats = imx219_formats,
-		.formats_size = ARRAY_SIZE(imx219_formats),
-	},
-
-	{
-		.name = "ov5647",
-		.grp_id = 0,
-		.board_info = {
-			I2C_BOARD_INFO("ov5647", 0x36),
-		},
-		.formats = ov5647_formats,
-		.formats_size = ARRAY_SIZE(ov5647_formats),
-	},
-
-	{
-		.name = "ov9281",
-		.grp_id = 0,
-		.board_info = {
-			I2C_BOARD_INFO("ov9281", 0x60),
-		},
-		.formats = ov9281_formats,
-		.formats_size = ARRAY_SIZE(ov9281_formats),
-	},
-/*
-	{
-		.name = "ov9281",
-		.grp_id = 0,
-		.board_info = {
-			I2C_BOARD_INFO("ov9281", 0x10),
-		},
-		.formats = ov9281_formats,
-		.formats_size = ARRAY_SIZE(ov9281_formats),
-	},
-*/
-	{
-		.name = "ov9281_isp",
-		.grp_id = 0,
-		.board_info = {
-			I2C_BOARD_INFO("ov9281_isp", 0x60),
-		},
-		.formats = ov9281_isp_formats,
-		.formats_size = ARRAY_SIZE(ov9281_isp_formats),
 	}
 };
 
@@ -237,6 +202,8 @@ static const struct sp_fmt *get_format(const struct sp_mipi_subdev_info *sdinfo,
 	const struct sp_fmt *formats = sdinfo->formats;
 	int size = sdinfo->formats_size;
 	unsigned int k;
+
+	MIPI_DBG("%s, %d\n", __FUNCTION__, __LINE__);
 
 	for (k = 0; k < size; k++) {
 		if (formats[k].fourcc == pixel_fmt) {
@@ -287,8 +254,9 @@ static void mipi_isp_init(struct sp_mipi_device *mipi)
 	u16 width = mipi->cur_format->width;
 	u16 height = mipi->cur_format->height;
 	u8 input_format = YUV422_FORMAT;
-	u8 output_format = YUV422_FORMAT;
+	u8 output_format = YUV422_FORMAT_YUYV_ORDER;
 	u8 scale = SCALE_DOWN_OFF;
+	//u8 scale = SCALE_DOWN_FHD_HD;
 
 	MIPI_DBG("%s, %d\n", __FUNCTION__, __LINE__);
 
@@ -304,17 +272,17 @@ static void mipi_isp_init(struct sp_mipi_device *mipi)
 	switch (mipi->cur_format->fourcc)
 	{
 		case V4L2_PIX_FMT_YUYV:
-			MIPI_INFO("YUV422 format YUYV order input\n");
+			MIPI_DBG("YUV422 format YUYV order input\n");
 			input_format = YUV422_FORMAT_YUYV_ORDER;
 			break;
 
 		case V4L2_PIX_FMT_UYVY:
-			MIPI_INFO("YUV422 format UYVY order input\n");
+			MIPI_DBG("YUV422 format UYVY order input\n");
 			input_format = YUV422_FORMAT_UYVY_ORDER;
 			break;
 
 		case V4L2_PIX_FMT_SRGGB8:
-			MIPI_INFO("RAW10 format input\n");
+			MIPI_DBG("RAW10 format input\n");
 			input_format = RAW10_FORMAT;
 			break;
 
@@ -322,17 +290,17 @@ static void mipi_isp_init(struct sp_mipi_device *mipi)
 			MIPI_ERR("No such format! (fourcc: 0x%04x)\n", mipi->cur_format->fourcc);
 			break;
 	}
-	MIPI_INFO("ISP input format: %d\n", input_format);
+	MIPI_DBG("ISP input format: %d\n", input_format);
 
 #if 0
-	MIPI_INFO("MIPI ISP Test Info:\n",;
+	MIPI_INFO("MIPI ISP Test Info:\n");
 	isp_mode = ISP_TEST_MODE;
-	test_pattern = STILL_VERTICAL_COLOR_BAR;
+	test_pattern = MOVING_HORIZONTAL_COLOR_BAR;
 	probe = 0;
 	width = 1920;
 	height = 1080;
 	input_format = RAW10_FORMAT;
-	output_format = RAW10_FORMAT;
+	output_format = YUV422_FORMAT_UYVY_ORDER;
 	scale = SCALE_DOWN_OFF;
 	MIPI_INFO("test_pattern: %d, probe: %d\n", test_pattern, probe);
 	MIPI_INFO("Image size: %dx%d\n", width, height);
@@ -342,6 +310,7 @@ static void mipi_isp_init(struct sp_mipi_device *mipi)
 	// Prepare ISP information
 	isp_info = &mipi->isp_info;
 	isp_info->mipi_isp_regs = mipi->mipi_isp_regs;
+	isp_info->video_device = &mipi->video_dev;
 	isp_info->isp_channel = isp_channel;
 	isp_info->isp_mode = isp_mode;
 	isp_info->test_pattern = test_pattern;
@@ -352,7 +321,13 @@ static void mipi_isp_init(struct sp_mipi_device *mipi)
 	isp_info->output_fmt = output_format;
 	isp_info->scale = scale;
 
-	isp_setting(isp_info);
+	if (isp_mode == ISP_TEST_MODE) {
+		isp_test_setting(isp_info);
+	}
+	else {
+		isp_setting(isp_info);
+		powerSensorDown_RAM(isp_info);
+	}
 }
 
 static void csiiw_init(struct sp_mipi_device *mipi)
@@ -371,25 +346,31 @@ static void csiiw_init(struct sp_mipi_device *mipi)
 	switch (mipi->isp_info.scale)
 	{
 		case SCALE_DOWN_OFF:
-			MIPI_INFO("Scaling down is off (%ux%u)\n", width, height);
+			MIPI_DBG("Scaling down is off (%ux%u)\n", width, height);
 			break;
 	
 		case SCALE_DOWN_FHD_HD:
 			width = 1280;
 			height = 720;
-			MIPI_INFO("Scale down FHD to HD (%ux%u)\n", width, height);
+			MIPI_DBG("Scale down FHD to HD (%ux%u)\n", width, height);
+			break;
+
+		case SCALE_DOWN_FHD_WVGA:
+			width = 720;
+			height = 480;
+			MIPI_DBG("Scale down FHD to WVGA (%ux%u)\n", width, height);
 			break;
 	
 		case SCALE_DOWN_FHD_VGA:
 			width = 640;
 			height = 480;
-			MIPI_INFO("Scale down FHD to VGA (%ux%u)\n", width, height);
+			MIPI_DBG("Scale down FHD to VGA (%ux%u)\n", width, height);
 			break;
 	
-		case SCALE_DOWN_FHD_QVGA:
+		case SCALE_DOWN_FHD_QQVGA:
 			width = 160;
 			height = 120;
-			MIPI_INFO("Scale down FHD to QVGA (%ux%u)\n", width, height);
+			MIPI_DBG("Scale down FHD to QQVGA (%ux%u)\n", width, height);
 			break;
 
 		default:
@@ -407,7 +388,8 @@ static void csiiw_init(struct sp_mipi_device *mipi)
 			// 2 pixels, 4 bytes, 32 bits
 			line_stride = LINE_STRIDE((width/2)*4);
 
-			if (mipi->isp_info.output_fmt == YUV422_FORMAT_YUYV_ORDER) {
+			if (((mipi->isp_info.input_fmt == YUV422_FORMAT_UYVY_ORDER) && (mipi->isp_info.output_fmt == YUV422_FORMAT_YUYV_ORDER)) ||
+				((mipi->isp_info.input_fmt == YUV422_FORMAT_YUYV_ORDER) && (mipi->isp_info.output_fmt == YUV422_FORMAT_UYVY_ORDER))) {
 				config2 |= YCSWAP_EN_ENA;       // YCSWAP_EN = 1 (bit 1)
 			}
 			break;
@@ -439,7 +421,7 @@ static void csiiw_init(struct sp_mipi_device *mipi)
 			MIPI_ERR("No such format! (output_fmt: %d)\n", mipi->isp_info.output_fmt);
 			break;
 	}
-	MIPI_INFO("line_stride: 0x%08X, frame_size: 0x%08X\n", line_stride, frame_size);
+	MIPI_DBG("line_stride: 0x%08X, frame_size: 0x%08X\n", line_stride, frame_size);
 
 	// latch mode should be enable before base address setup
 	reg_value = LATCH_EN_ENA;
@@ -461,6 +443,36 @@ static void csiiw_init(struct sp_mipi_device *mipi)
 	MIPI_DBG("csiiw_frame_size: 0x%08X(0x%08X)\n", readl(&mipi->csiiw_regs->csiiw_frame_size), frame_size);
 	MIPI_DBG("csiiw_frame_buf: 0x%08X(0x%08X)\n", readl(&mipi->csiiw_regs->csiiw_frame_buf), ADDR_OFFSET(0x100));
 	MIPI_DBG("config2: 0x%08X(0x%08X)\n", readl(&mipi->csiiw_regs->csiiw_config2), config2);
+}
+
+irqreturn_t isp_vsync_isr(int irq, void *dev_instance)
+{
+	struct sp_mipi_device *mipi = dev_instance;
+
+	ispVsyncInt(&mipi->isp_info);
+
+	return IRQ_HANDLED;
+}
+
+static int isp_irq_init(struct sp_mipi_device *mipi)
+{
+	int ret;
+
+	// Disable ISP Vsync interrupt
+	ispVsyncIntCtrl(&mipi->isp_info, 0);
+
+	mipi->vsync_irq = irq_of_parse_and_map(mipi->pdev->of_node, 2);
+	ret = devm_request_irq(mipi->pdev, mipi->vsync_irq, isp_vsync_isr, 0, "isp_vsync", mipi);
+	if (ret) {
+		goto err_isp_vsync_irq;
+	}
+
+	MIPI_INFO("Installed isp interrupt (vsync_irq=%d).\n", mipi->vsync_irq);
+	return 0;
+
+err_isp_vsync_irq:
+	MIPI_ERR("request_irq failed (%d)!\n", ret);
+	return ret;
 }
 
 irqreturn_t csiiw_fs_isr(int irq, void *dev_instance)
@@ -499,6 +511,7 @@ irqreturn_t csiiw_fe_isr(int irq, void *dev_instance)
 
 			// Set active-buffer to 'next frame'.
 			addr = vb2_dma_contig_plane_dma_addr(&next_frm->vb.vb2_buf, 0);
+			addr = addr & 0x7fffffff;                                // Mark bit31 for direct access
 			writel(addr, &mipi->csiiw_regs->csiiw_base_addr);        // base address
 
 			// Then, release current frame.
@@ -606,6 +619,7 @@ static int sp_start_streaming(struct vb2_queue *vq, unsigned count)
 	struct sp_mipi_device *mipi = vb2_get_drv_priv(vq);
 	struct sp_mipi_subdev_info *sdinfo;
 	struct sp_buffer *buf, *tmp;
+	struct mipi_isp_reg *regs;
 	unsigned long flags;
 	unsigned long addr;
 	int ret;
@@ -618,8 +632,11 @@ static int sp_start_streaming(struct vb2_queue *vq, unsigned count)
 		return -EBUSY;
 	}
 
-	mipi->sequence = 0;
+	// Power senor on and start video output
+	powerSensorOn_RAM(&mipi->isp_info);
+	videoStartMode(&mipi->isp_info);
 
+	mipi->sequence = 0;
 	sdinfo = mipi->current_subdev;
 	ret = v4l2_device_call_until_err(&mipi->v4l2_dev, sdinfo->grp_id,
 					video, s_stream, 1);
@@ -634,6 +651,23 @@ static int sp_start_streaming(struct vb2_queue *vq, unsigned count)
 		return ret;
 	}
 
+	regs = (struct mipi_isp_reg *)((u64)mipi->mipi_isp_regs - ISP_BASE_ADDRESS);
+
+	/* use pixel clock, master clock and mipi decoder clock as they are  */
+	writeb(0x07, &(regs->reg[0x2008]));
+
+	/* set and clear of front sensor interface */
+	writeb(0x01, &(regs->reg[0x276C]));
+	writeb(0x00, &(regs->reg[0x276C]));
+
+	/* set and clear of front i2c interface */
+	writeb(0x01, &(regs->reg[0x2660]));
+	writeb(0x00, &(regs->reg[0x2660]));
+
+	/* set and clear of cdsp */
+	writeb(0x01, &(regs->reg[0x21D0]));
+	writeb(0x00, &(regs->reg[0x21D0]));
+
 	spin_lock_irqsave(&mipi->dma_queue_lock, flags);
 
 	// Get the next frame from the dma queue.
@@ -643,6 +677,7 @@ static int sp_start_streaming(struct vb2_queue *vq, unsigned count)
 	list_del_init(&mipi->cur_frm->list);
 
 	addr = vb2_dma_contig_plane_dma_addr(&mipi->cur_frm->vb.vb2_buf, 0);
+	addr = addr & 0x7fffffff;								 // Mark bit31 for direct access
 
 	spin_unlock_irqrestore(&mipi->dma_queue_lock, flags);
 
@@ -657,14 +692,18 @@ static int sp_start_streaming(struct vb2_queue *vq, unsigned count)
 	writel(reg_value, &mipi->csiiw_regs->csiiw_frame_size);
 
 	//writel(0x12701, &mipi->csiiw_regs->csiiw_config0);      // Enable csiiw and fe_irq
-	reg_value = readl(&mipi->csiiw_regs->csiiw_config0);
-	reg_value = (reg_value&(~(IRQ_MASK_FE_MASK|CSIIW_EN_MASK)))|(IRQ_MASK_FE_ENA|CSIIW_EN_ENA);
+	//reg_value = readl(&mipi->csiiw_regs->csiiw_config0);
+	reg_value = (IRQ_MASK_FE_ENA|IRQ_MASK_FS_ENA|CMD_URGENT_TH(2)|CMD_QUEUE(7)|CSIIW_EN_ENA);
 	writel(reg_value, &mipi->csiiw_regs->csiiw_config0);    // Enable csiiw and fe_irq
 
 	mipi->streaming = true;
 	mipi->skip_first_int = true;
 
-	MIPI_DBG("%s: cur_frm = %p, addr = %08lx\n", __FUNCTION__, mipi->cur_frm, addr);
+	// Enable ISP Vsync interrupt
+	ispVsyncIntCtrl(&mipi->isp_info, 1);
+
+	MIPI_DBG("%s: video%d, cur_frm = %px, addr = %08lx\n",
+		__FUNCTION__, mipi->video_dev.num, mipi->cur_frm, addr);
 
 	return 0;
 }
@@ -693,10 +732,17 @@ static void sp_stop_streaming(struct vb2_queue *vq)
 		return;
 	}
 
+	// Disable ISP Vsync interrupt
+	//ispVsyncIntCtrl(&mipi->isp_info, 0);
+
+	// Power senor down and stop video output
+	powerSensorDown_RAM(&mipi->isp_info);
+	videoStopMode(&mipi->isp_info);
+
 	// FW must mask irq to avoid unmap issue (for test code)
 	//writel(0x32700, &mipi->csiiw_regs->csiiw_config0);      // Disable csiiw, fs_irq and fe_irq
-	reg_value = readl(&mipi->csiiw_regs->csiiw_config0);
-	reg_value = (reg_value&(~(IRQ_MASK_FE_MASK|CSIIW_EN_MASK)))|(IRQ_MASK_FE_DIS|CSIIW_EN_DIS);
+	//reg_value = readl(&mipi->csiiw_regs->csiiw_config0);
+	reg_value = (IRQ_MASK_FE_DIS|IRQ_MASK_FS_DIS|CMD_URGENT_TH(2)|CMD_QUEUE(7)|CSIIW_EN_DIS);
 	writel(reg_value, &mipi->csiiw_regs->csiiw_config0);    // Disable csiiw, fs_irq and fe_irq
 
 	mipi->streaming = false;
@@ -1150,7 +1196,7 @@ static int sp_mipi_probe(struct platform_device *pdev)
 	int num_subdevs = 0;
 	int ret, i;
 
-	MIPI_DBG("%s\n", __FUNCTION__);
+	MIPI_INFO("SP MIPI driver is probed\n");
 
 	// Allocate memory for 'sp_mipi_device'.
 	mipi = kzalloc(sizeof(struct sp_mipi_device), GFP_KERNEL);
@@ -1291,13 +1337,13 @@ static int sp_mipi_probe(struct platform_device *pdev)
 
 	// Initialize field of video device.
 	vfd = &mipi->video_dev;
-	vfd->fops       = &sp_mipi_fops;
-	vfd->ioctl_ops  = &sp_mipi_ioctl_ops;
-	vfd->device_caps= mipi->caps;
-	vfd->release    = video_device_release_empty;
-	vfd->v4l2_dev   = &mipi->v4l2_dev;
-	vfd->queue      = &mipi->buffer_queue;
-	//vfd->tvnorms  = 0;
+	vfd->fops        = &sp_mipi_fops;
+	vfd->ioctl_ops   = &sp_mipi_ioctl_ops;
+	vfd->device_caps = mipi->caps;
+	vfd->release     = video_device_release_empty;
+	vfd->v4l2_dev    = &mipi->v4l2_dev;
+	vfd->queue       = &mipi->buffer_queue;
+	//vfd->tvnorms     = 0;
 	strlcpy(vfd->name, MIPI_CSI_RX_NAME, sizeof(vfd->name));
 	vfd->lock       = &mipi->lock;  // protect all fops and v4l2 ioctls.
 
@@ -1342,7 +1388,7 @@ static int sp_mipi_probe(struct platform_device *pdev)
 						    i2c_adap,
 						    &sdinfo->board_info,
 						    NULL);
-		MIPI_DBG("i:%d, subdev:0x%px\n", i, subdev); // CCHo added for debugging
+
 		if (subdev) {
 			subdev->grp_id = sdinfo->grp_id;
 			MIPI_INFO("Registered V4L2 subdevice \'%s\'.\n", sdinfo->name);
@@ -1363,12 +1409,13 @@ static int sp_mipi_probe(struct platform_device *pdev)
 
 	cur_fmt = get_format(mipi->current_subdev, sensor_data->fourcc);
 	if (cur_fmt == NULL) {
+		MIPI_ERR("Failed to check sensor format!\n");
 		goto err_get_format;
 	}
 	mipi->cur_format = cur_fmt;
 
 	// Check MO5_CFG0 register if ISP APB interval mode is 4T
-	MIPI_INFO("mo5_cfg_0: 0x%08x", readl(&(mipi->moon5_regs->mo5_cfg_0)));
+	MIPI_INFO("mo5_cfg_0: 0x%08x\n", readl(&(mipi->moon5_regs->mo5_cfg_0)));
 
 	// Initialize MIPI ISP
 	mipi_isp_init(mipi);
@@ -1379,6 +1426,11 @@ static int sp_mipi_probe(struct platform_device *pdev)
 	ret = csiiw_irq_init(mipi);
 	if (ret) {
 		goto err_csiiw_irq_init;
+	}
+
+	ret = isp_irq_init(mipi);
+	if (ret) {
+		goto err_isp_irq_init;
 	}
 
 #if (SYSFS_MIPI_CSIIW_ATTRIBUTE == 1) || (SYSFS_MIPI_ISP_ATTRIBUTE == 1)
@@ -1407,9 +1459,12 @@ static int sp_mipi_probe(struct platform_device *pdev)
 	pm_runtime_set_active(&pdev->dev);
 	pm_runtime_enable(&pdev->dev);
 #endif
+
+	MIPI_INFO("SP MIPI driver is installed!\n");
 	return 0;
 
 err_sysfs_create_group:
+err_isp_irq_init:
 err_csiiw_irq_init:
 err_get_format:
 err_subdev_register:
@@ -1442,7 +1497,12 @@ static int sp_mipi_remove(struct platform_device *pdev)
 {
 	struct sp_mipi_device *mipi = platform_get_drvdata(pdev);
 
-	MIPI_DBG("%s\n", __FUNCTION__);
+	MIPI_INFO("SP MIPI driver is removing\n");
+
+#if (SYSFS_MIPI_CSIIW_ATTRIBUTE == 1) || (SYSFS_MIPI_ISP_ATTRIBUTE == 1)
+	/* Remove the device attribute group from sysfs */
+	sysfs_remove_group(&pdev->dev.kobj, &mipi_attribute_group);
+#endif
 
 	i2c_put_adapter(mipi->i2c_adap);
 	kfree(mipi->cfg);
@@ -1459,6 +1519,7 @@ static int sp_mipi_remove(struct platform_device *pdev)
 	pm_runtime_set_suspended(&pdev->dev);
 #endif
 
+	MIPI_INFO("SP MIPI driver is removed!\n");
 	return 0;
 }
 
@@ -1526,7 +1587,7 @@ static const struct dev_pm_ops sp7021_mipicsi_rx_pm_ops = {
 #endif
 
 static const struct of_device_id sp_mipicsi_rx_of_match[] = {
-	{ .compatible = "sunplus,sp7021-mipicsi-rx", },
+	{ .compatible = "sunplus,i143-mipicsi-rx", },
 	{}
 };
 

@@ -15,6 +15,14 @@ config SYS_CONFIG_NAME
 config SYS_TEXT_BASE
 	default 0xA1000000 
 
+config SP_UTIL_MON
+	bool "enable Sunplus mon util"
+	default y
+	help
+	  Enable Sunplys mon util
+	  It is useful to read/write Sunplus register
+	  group.
+	  
 config BOARD_SPECIFIC_OPTIONS # dummy
 	def_bool y
 	select GENERIC_RISCV

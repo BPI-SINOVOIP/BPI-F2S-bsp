@@ -120,22 +120,22 @@ static void spi_readcmd_set(UINT8 cmd)
 	diag_printf("%s\n",__FUNCTION__);
 
 	switch (cmd) {
-	case 0x0B:
+	case 0x0B: // Fast read
 		spi_nor_io_CUST_config(CMD_1,ADDR_1,DATA_1,enhance,DUMMY_CYCLE(8));
 		break;
-	case 0x3B:
+	case 0x3B: // Fast read dual output
 		spi_nor_io_CUST_config(CMD_1,ADDR_1,DATA_2,enhance,DUMMY_CYCLE(8));
 		break;
-	case 0x6B:
+	case 0x6B: // Fast read quad output
 		spi_nor_io_CUST_config(CMD_1,ADDR_1,DATA_4,enhance,DUMMY_CYCLE(8));
 		break;
-	case 0xBB:
+	case 0xBB: // Fast read dual I/O
 		spi_nor_io_CUST_config(CMD_1,ADDR_2,DATA_2,enhance,DUMMY_CYCLE(4));
 		break;
-	case 0xEB:
+	case 0xEB: // Fast read quad I/O
 		spi_nor_io_CUST_config(CMD_1,ADDR_4,DATA_4,enhance,DUMMY_CYCLE(6));
 		break;
-	case 0x32:
+	case 0x32: // Quad input page program
 		spi_nor_io_CUST_config(CMD_1,ADDR_1,DATA_4,enhance,DUMMY_CYCLE(0));
 		break;
 	default:
@@ -147,18 +147,17 @@ static void spi_readcmd_set(UINT8 cmd)
 static int spi_flash_xfer_DMAread(struct sp_spi_nor_priv *priv,UINT8 *cmd, size_t cmd_len, void *data, size_t data_len)
 {
 	UINT32 addr_temp = 0;
-	UINT8 *data_in = data;
+	UINT8  *data_in = data;
 	UINT32 time = 0;
-	UINT32 ctrl = 0;
-	UINT32 autocfg = 0;
-	UINT32 temp_len = 0;
-	int value = 0;
+	UINT32 ctrl;
+	UINT32 autocfg;
+	UINT32 temp_len;
+	int    value;
 	struct spinorbufdesc *desc_r = &priv->rchain;
-	ulong data_end;
 
 	diag_printf("%s\n",__FUNCTION__);
-	msg_printf("DMA read :data length 0x%x cmd[0] 0x%x\n",data_len, cmd[0]);
-	while ((spi_reg->spi_auto_cfg & DMA_TRIGGER) ||  (spi_reg->spi_ctrl & SPI_CTRL_BUSY)) {
+	msg_printf("DMA read: data length 0x%x, cmd[0] 0x%x\n", data_len, cmd[0]);
+	while ((spi_reg->spi_auto_cfg & DMA_TRIGGER) || (spi_reg->spi_ctrl & SPI_CTRL_BUSY)) {
 		time++;
 		if (time > 0x30000) {
 			 msg_printf("##busy check time out: spi_auto_cfg 0x%x spi_ctrl 0x%x\n", spi_reg->spi_auto_cfg, spi_reg->spi_ctrl);
@@ -166,15 +165,12 @@ static int spi_flash_xfer_DMAread(struct sp_spi_nor_priv *priv,UINT8 *cmd, size_
 		}
 	}
 
-	data_end = desc_r->phys + CFG_BUFF_MAX;
 	msg_printf("data length %d buff size 0x%x\n",data_len, desc_r->size);
 
 	spi_readcmd_set(cmd[0]);
-
 	ctrl = spi_reg->spi_ctrl & (CLEAR_CUST_CMD & (~(1<<19)));
 	ctrl |= (READ | BYTE_0 | ADDR_0B);
 
-	//spi_reg->spi_page_addr = 0;
 	spi_reg->spi_data = 0;
 	if (cmd_len > 1) {
 		addr_temp = (cmd[1] << 16) | (cmd[2] << 8) | cmd[3];
@@ -187,7 +183,7 @@ static int spi_flash_xfer_DMAread(struct sp_spi_nor_priv *priv,UINT8 *cmd, size_
 	do {
 		spi_reg->spi_page_addr = addr_temp;
 		if (data_len > CFG_BUFF_MAX) {
-			temp_len = CFG_BUFF_MAX;
+			temp_len  = CFG_BUFF_MAX;
 			data_len -= CFG_BUFF_MAX;
 		} else {
 			temp_len = data_len;
@@ -195,7 +191,7 @@ static int spi_flash_xfer_DMAread(struct sp_spi_nor_priv *priv,UINT8 *cmd, size_
 		}
 		msg_printf("remain len  0x%x\n", data_len);
 
-		value =  (spi_reg->spi_cfg0 & CLEAR_DATA64_LEN) |  temp_len | DATA64_EN;
+		value = (spi_reg->spi_cfg0 & CLEAR_DATA64_LEN) |  temp_len | DATA64_EN;
 		if (cmd[0] == 5)//need to check
 			value |= (1<<19);
 		spi_reg->spi_cfg0 = value;
@@ -204,7 +200,7 @@ static int spi_flash_xfer_DMAread(struct sp_spi_nor_priv *priv,UINT8 *cmd, size_
 		msg_printf("dma addr 0x%x\n", spi_reg->spi_mem_data_addr);
 		msg_printf("spi_auto_cfg  0x%x\n", spi_reg->spi_auto_cfg);
 
-		autocfg =  (cmd[0]<<24)|(1<<20)| DMA_TRIGGER;
+		autocfg = (cmd[0]<<24)|(1<<20)| DMA_TRIGGER;
 		value = (spi_reg->spi_auto_cfg &(~(0xff<<24))) | autocfg;
 
 		spi_reg->spi_intr_msk = (0x2<<1);
@@ -227,10 +223,10 @@ static int spi_flash_xfer_DMAread(struct sp_spi_nor_priv *priv,UINT8 *cmd, size_
 		}
 
 		/* Invalidate received data */
-		invalidate_dcache_range(rounddown(desc_r->phys, ARCH_DMA_MINALIGN), roundup(data_end,ARCH_DMA_MINALIGN));
+		invalidate_dcache_range(rounddown(desc_r->phys, ARCH_DMA_MINALIGN), roundup(desc_r->phys+temp_len, ARCH_DMA_MINALIGN));
 		memcpy(data_in, (void *)desc_r->phys, temp_len);
-		addr_temp += CFG_BUFF_MAX;
-		data_in += CFG_BUFF_MAX;
+		addr_temp += temp_len;
+		data_in   += temp_len;
 	} while (data_len != 0);
 
 	spi_reg->spi_cfg0 &= (DATA64_DIS & (~ (1<<19)));
@@ -241,21 +237,19 @@ static int spi_flash_xfer_DMAread(struct sp_spi_nor_priv *priv,UINT8 *cmd, size_
 
 static int spi_flash_xfer_DMAwrite(struct sp_spi_nor_priv *priv, UINT8 *cmd, size_t cmd_len, const void *data, size_t data_len)
 {
-	UINT32 temp_len = data_len;
+	UINT32 temp_len;
 	UINT32 addr_temp = 0;
-	UINT8 *data_in = (UINT8 *)data;
+	UINT8  *data_in = (UINT8 *)data;
 	UINT32 time = 0;
-	UINT32 ctrl = 0;
-	UINT32 autocfg = 0;
-	int value = 0;
+	UINT32 ctrl;
+	UINT32 autocfg;
+	int    value;
 	struct spinorbufdesc *desc_w = &priv->wchain;
 
-	ulong data_end = desc_w->phys + roundup(CFG_BUFF_MAX, ARCH_DMA_MINALIGN);
-
 	diag_printf("%s\n",__FUNCTION__);
-	msg_printf("DMA write : wdata length %d, cmd 0x%x\n",data_len, cmd[0]);
+	msg_printf("DMA write: wdata length %d, cmd 0x%x\n", data_len, cmd[0]);
 
-	while ((spi_reg->spi_auto_cfg & DMA_TRIGGER) ||  (spi_reg->spi_ctrl & SPI_CTRL_BUSY)) {
+	while ((spi_reg->spi_auto_cfg & DMA_TRIGGER) || (spi_reg->spi_ctrl & SPI_CTRL_BUSY)) {
 		time++;
 		if (time > 0x30000) {
 			 msg_printf("##busy check time out: spi_auto_cfg 0x%x spi_ctrl 0x%x\n", spi_reg->spi_auto_cfg, spi_reg->spi_ctrl);
@@ -269,7 +263,6 @@ static int spi_flash_xfer_DMAwrite(struct sp_spi_nor_priv *priv, UINT8 *cmd, siz
 	if (cmd[0] == 6)//need to check
 		ctrl &= ~(1<<19);
 
-	spi_reg->spi_page_addr = 0;
 	spi_reg->spi_data = 0;
 	if (cmd_len > 1) {
 		addr_temp = (cmd[1] << 16) | (cmd[2] << 8) | cmd[3];
@@ -281,7 +274,7 @@ static int spi_flash_xfer_DMAwrite(struct sp_spi_nor_priv *priv, UINT8 *cmd, siz
 	do {
 		spi_reg->spi_page_addr = addr_temp;
 		if (data_len > CFG_BUFF_MAX) {
-			temp_len = CFG_BUFF_MAX;
+			temp_len  = CFG_BUFF_MAX;
 			data_len -= CFG_BUFF_MAX;
 		} else {
 			temp_len = data_len;
@@ -291,7 +284,7 @@ static int spi_flash_xfer_DMAwrite(struct sp_spi_nor_priv *priv, UINT8 *cmd, siz
 		if (temp_len > 0) {
 			memcpy((void *)desc_w->phys, data_in, temp_len); // copy data to dma
 			/* Flush data to be sent */
-			flush_dcache_range(desc_w->phys, data_end);
+			flush_dcache_range(rounddown(desc_w->phys, ARCH_DMA_MINALIGN), roundup(desc_w->phys+temp_len, ARCH_DMA_MINALIGN));
 		}
 
 		value =  spi_reg->spi_cfg0;
@@ -322,8 +315,8 @@ static int spi_flash_xfer_DMAwrite(struct sp_spi_nor_priv *priv, UINT8 *cmd, siz
 			}
 		}
 
-		addr_temp += CFG_BUFF_MAX;
-		data_in += CFG_BUFF_MAX;
+		addr_temp += temp_len;
+		data_in   += temp_len;
 	} while (data_len != 0);
 
 	spi_reg->spi_cfg0 &= DATA64_DIS;
@@ -331,6 +324,7 @@ static int spi_flash_xfer_DMAwrite(struct sp_spi_nor_priv *priv, UINT8 *cmd, siz
 	spi_readcmd_set(0);
 	return 0;
 }
+
 #else
 static void spi_fast_read_enable(void)
 {
@@ -392,13 +386,12 @@ static int spi_flash_xfer_read(UINT8 *cmd, size_t cmd_len, void *data, size_t da
 	UINT32 data_count;
 	UINT32 addr_offset = 0;
 	UINT32 addr_temp = 0;
-	UINT8 *data_in = (UINT8 *)data;
+	UINT8  *data_in = (UINT8 *)data;
 	UINT32 data_temp = 0;
-	//UINT8 addr_len = 0;
 	UINT32 timeout = 0;
 	UINT32 time = 0;
 	UINT32 ctrl = 0;
-	int fast_read = 0;
+	int    fast_read = 0;
 
 	msg_printf("data length %d\n",data_len);
 	while (total_count > 0) {
@@ -424,7 +417,7 @@ static int spi_flash_xfer_read(UINT8 *cmd, size_t cmd_len, void *data, size_t da
 			addr_temp = (cmd[1] << 16) | (cmd[2] << 8) | cmd[3];
 			addr_temp = addr_temp + addr_offset * SPI_DATA64_MAX_LEN;
 			spi_reg->spi_page_addr = addr_temp;
-			ctrl = ctrl | ADDR_3B ;
+			ctrl = ctrl | ADDR_3B;
 			msg_printf("addr 0x%x\n", spi_reg->spi_page_addr);
 		}
 
@@ -448,10 +441,10 @@ static int spi_flash_xfer_read(UINT8 *cmd, size_t cmd_len, void *data, size_t da
 		while (data_count > 0) {
 			if ((data_count / 4) > 0) {
 				time = AV1_GetStc32();
-				while ((spi_reg->spi_status_2 & SPI_SRAM_ST ) == SRAM_EMPTY) {
+				while (spi_reg->spi_status_2 & SRAM_EMPTY) {
 					timeout = AV1_GetStc32();
 					if ((timeout - time) > SPI_TIMEOUT) {
-						msg_printf("timeout \n");
+						msg_printf("timeout\n");
 						break;
 					}
 				}
@@ -466,27 +459,30 @@ static int spi_flash_xfer_read(UINT8 *cmd, size_t cmd_len, void *data, size_t da
 				data_count = data_count - 4;
 			} else {
 				time = AV1_GetStc32();
-				while ((spi_reg->spi_status_2 & SPI_SRAM_ST ) == SRAM_EMPTY) {
+				while (spi_reg->spi_status_2 & SRAM_EMPTY) {
 					timeout = AV1_GetStc32();
 					if ((timeout - time) > SPI_TIMEOUT) {
-						msg_printf("timeout \n");
+						msg_printf("timeout\n");
 						break;
 					}
 				}
 
 				data_temp = spi_reg->spi_data64;
 				//msg_printf("data_temp 0x%x\n",data_temp);
-				if (data_count%4 == 3) {
+				if (data_count == 3) {
 					data_in[0] = data_temp & 0xff;
 					data_in[1] = ((data_temp & 0xff00) >> 8);
 					data_in[2] = ((data_temp & 0xff0000) >> 16);
+					data_in = data_in+3;
 					data_count = data_count-3;
-				} else if (data_count%4 == 2) {
+				} else if (data_count == 2) {
 					data_in[0] = data_temp & 0xff;
 					data_in[1] = ((data_temp & 0xff00) >> 8);
+					data_in = data_in+2;
 					data_count = data_count-2;
-				} else if (data_count%4 == 1) {
+				} else if (data_count == 1) {
 					data_in[0] = data_temp & 0xff;
+					data_in = data_in+1;
 					data_count = data_count-1;
 				}
 			}
@@ -520,9 +516,8 @@ static int spi_flash_xfer_write(UINT8 *cmd, size_t cmd_len, const void *data, si
 	UINT32 data_count = 0;
 	UINT32 addr_offset = 0;
 	UINT32 addr_temp = 0;
-	UINT8 *data_in = (UINT8 *) data;
+	UINT8  *data_in = (UINT8 *)data;
 	UINT32 data_temp = 0;
-	//UINT8 addr_len = 0;
 	UINT32 timeout = 0;
 	UINT32 time = 0;
 	UINT32 ctrl = 0;
@@ -541,7 +536,7 @@ static int spi_flash_xfer_write(UINT8 *cmd, size_t cmd_len, const void *data, si
 		if (cmd_len > 1) {
 			addr_temp = (cmd[1] << 16) | (cmd[2] << 8) | cmd[3];
 			spi_reg->spi_page_addr = addr_temp;
-			ctrl = ctrl | ADDR_3B ;
+			ctrl = ctrl | ADDR_3B;
 			msg_printf("addr 0x%x\n", spi_reg->spi_page_addr);
 		}
 
@@ -574,7 +569,7 @@ static int spi_flash_xfer_write(UINT8 *cmd, size_t cmd_len, const void *data, si
 			addr_temp = (cmd[1] << 16) | (cmd[2] << 8) | cmd[3];
 			addr_temp = addr_temp + addr_offset * SPI_DATA64_MAX_LEN;
 			spi_reg->spi_page_addr = addr_temp;
-			ctrl = ctrl | ADDR_3B ;
+			ctrl = ctrl | ADDR_3B;
 			msg_printf("addr 0x%x\n", spi_reg->spi_page_addr);
 		}
 
@@ -587,12 +582,12 @@ static int spi_flash_xfer_write(UINT8 *cmd, size_t cmd_len, const void *data, si
 
 		while (data_count > 0) {
 			if ((data_count / 4) > 0) {
-				if ((spi_reg->spi_status_2 & SPI_SRAM_ST) == SRAM_FULL) {
+				if (spi_reg->spi_status_2 & SRAM_FULL) {
 					time = AV1_GetStc32();
-					while ((spi_reg->spi_status_2 & SPI_SRAM_ST) != SRAM_EMPTY) {
+					while ((spi_reg->spi_status_2 & SRAM_EMPTY) == 0) {
 						timeout = AV1_GetStc32();
 						if ((timeout - time) > SPI_TIMEOUT) {
-							msg_printf("timeout \n");
+							msg_printf("timeout\n");
 							break;
 						}
 					}
@@ -603,26 +598,29 @@ static int spi_flash_xfer_write(UINT8 *cmd, size_t cmd_len, const void *data, si
 				data_in = data_in + 4;
 				data_count = data_count - 4;
 			} else {
-				if ((spi_reg->spi_status_2 & SPI_SRAM_ST) == SRAM_FULL) {
+				if (spi_reg->spi_status_2 & SRAM_FULL) {
 					time = AV1_GetStc32();
-					while ((spi_reg->spi_status_2 & SPI_SRAM_ST) != SRAM_EMPTY) {
+					while ((spi_reg->spi_status_2 & SRAM_EMPTY) == 0) {
 						timeout = AV1_GetStc32();
 						if ((timeout - time) > SPI_TIMEOUT) {
-							msg_printf("timeout \n");
+							msg_printf("timeout\n");
 							break;
 						}
 					}
 				}
 
 				//data_temp = data_in[0] & 0xff;
-				if ((data_count%4) == 3) {
+				if (data_count == 3) {
 					data_temp = (data_in[2] << 16) | (data_in[1] << 8) | data_in[0];
+					data_in = data_in+3;
 					data_count = data_count-3;
-				} else if ((data_count%4) == 2) {
-					data_temp =  (data_in[1] << 8) | data_in[0];
+				} else if (data_count == 2) {
+					data_temp = (data_in[1] << 8) | data_in[0];
+					data_in = data_in+2;
 					data_count = data_count-2;
-				} else if ((data_count%4) == 1) {
+				} else if (data_count == 1) {
 					data_temp = data_in[0];
+					data_in = data_in+1;
 					data_count = data_count-1;
 				}
 				spi_reg->spi_data64 = data_temp;
@@ -657,7 +655,9 @@ static int sp_spi_nor_ofdata_to_platdata(struct udevice *bus)
 	msg_printf("%s\n",__FUNCTION__);
 	plat->regs = (struct sp_spi_nor_regs *)fdtdec_get_addr(blob, node, "reg");
 	plat->clock = fdtdec_get_int(blob, node, "spi-max-frequency", 50000000);
-	plat->chipsel = fdtdec_get_int(blob, node, "chip-selection", 0);
+	plat->chipsel = fdtdec_get_int(blob, node, "spi-chip-selection", 0);
+	plat->rwTimingSel = fdtdec_get_int(blob, node, "write-timing-selection", 0);
+	plat->rwTimingSel |= (fdtdec_get_int(blob, node, "read-timing-selection", 0) << 1);
 
 	return 0;
 }
@@ -682,9 +682,9 @@ static int sp_spi_nor_probe(struct udevice *bus)
 	cmd_buf = malloc(CMD_BUF_LEN * sizeof(UINT8));
 
 #if (SP_SPINOR_DMA)
-	msg_printf("buffsddr 0x%x\n", cmd_buf);
-	msg_printf("wdesc 0x%x rdesc 0x%x\n", wdesc, rdesc);
-	msg_printf("w_buffer_adr 0x%x size 0x%x r_buffer_adr 0x%x\n", w_buffer_adr, CFG_BUFF_MAX, r_buffer_adr);
+	msg_printf("buffsddr 0x%px\n", cmd_buf);
+	msg_printf("wdesc 0x%px rdesc 0x%px\n", wdesc, rdesc);
+	msg_printf("w_buffer_adr 0x%px size 0x%x r_buffer_adr 0x%px\n", w_buffer_adr, CFG_BUFF_MAX, r_buffer_adr);
 	flush_dcache_range((ulong)w_buffer_adr, (ulong)w_buffer_adr + CFG_BUFF_MAX);
 	flush_dcache_range((ulong)r_buffer_adr, (ulong)r_buffer_adr + CFG_BUFF_MAX);
 
@@ -713,12 +713,9 @@ static int sp_spi_nor_claim_bus(struct udevice *dev)
 {
 	struct udevice *bus = dev->parent;
 	struct sp_spi_nor_platdata *plat =  bus->platdata;
-	//set pinmux
-	UINT32* grp1_sft_cfg = (UINT32 *) 0x9c000080;
 	int value = 0;
 
 	diag_printf("%s\n",__FUNCTION__);
-	grp1_sft_cfg[1] = RF_MASK_V(0xf, (2 << 2) | 2);
 
 	if (plat->chipsel == 0)
 		value = A_CHIP;
@@ -750,14 +747,15 @@ static int sp_spi_nor_claim_bus(struct udevice *dev)
 		break;
 	}
 
+        spi_reg->spi_ctrl = value;
 #if (SP_SPINOR_DMA)
-	spi_reg->spi_ctrl = value;
 	//value = spi_reg->spi_timing;
-	spi_reg->spi_timing = (2<<22) | (0x16<<16) | (1<<1);
-	msg_printf("ctrl 0x%x spi_timing 0x%x\n",spi_reg->spi_ctrl, spi_reg->spi_timing);
+	spi_reg->spi_timing = ((0x2 << 22) | (0x16 << 16) | plat->rwTimingSel); //2 = 200(MHz) * 10 / 1000 (minium val = 3), 0x16 = 105 * 200(MHz) / 1000. detail in reg spec.
 #else
-	spi_reg->spi_ctrl = value;//SPI_CLK_D_16 = 62M
+	spi_reg->spi_timing = (spi_reg->spi_timing & (~0x3)) | plat->rwTimingSel;
 #endif
+	msg_printf("ctrl 0x%x spi_timing 0x%x\n", spi_reg->spi_ctrl, spi_reg->spi_timing);
+
 	spi_reg->spi_cfg1 = SPI_CMD_OEN_1b | SPI_ADDR_OEN_1b | SPI_DATA_OEN_1b | SPI_CMD_1b | SPI_ADDR_1b |
 			    SPI_DATA_1b | SPI_ENHANCE_NO | SPI_DUMMY_CYC(0) | SPI_DATA_IEN_DQ1;
 	spi_reg->spi_auto_cfg &= ~(AUTO_RDSR_EN);
@@ -776,7 +774,6 @@ static int sp_spi_nor_xfer(struct udevice *dev, unsigned int bitlen,
 {
 #if (SP_SPINOR_DMA)
 	struct udevice *bus = dev->parent;
-	//struct sp_spi_nor_platdata *pdata = dev_get_platdata(bus);
 	struct sp_spi_nor_priv *priv = dev_get_priv(bus);
 #endif
 	unsigned int len;
@@ -796,9 +793,9 @@ static int sp_spi_nor_xfer(struct udevice *dev, unsigned int bitlen,
 			cmd_len = len;
 			memset(cmd_buf, 0, CMD_BUF_LEN);
 			memcpy(cmd_buf, dout, len);
-			msg_printf("cmd %x\n", cmd_buf[0]);
+			msg_printf("cmd 0x%x\n", cmd_buf[0]);
 			msg_printf("addr 0x%x\n", cmd_buf[1] << 16 | cmd_buf[2] << 8 | cmd_buf[3]);
-			msg_printf("cmd len %d, flags %d\n", len, flags);
+			msg_printf("cmd len %d, flags %lx\n", len, flags);
 		}
 
 		if (!(flags & SPI_XFER_END))
@@ -812,7 +809,7 @@ static int sp_spi_nor_xfer(struct udevice *dev, unsigned int bitlen,
 		msg_printf("read\n");
 #if (SP_SPINOR_DMA)
 		if (cmd_buf[0] == 0x0B)
-			cmd_buf[0] = 0xEB;
+			cmd_buf[0] = 0x3B;
 
 		spi_flash_xfer_DMAread(priv, cmd_buf, cmd_len, din, len);
 #else
@@ -820,11 +817,15 @@ static int sp_spi_nor_xfer(struct udevice *dev, unsigned int bitlen,
 #endif
 	} else if ((!din) | (flags & SPI_XFER_END)) {
 		// write
+		if (cmd_buf[0] == 0xD8) { // 64kB sector erase
+			memcpy(cmd_buf+1, dout, 3);
+			cmd_len += 3;
+			flc = 1;
+		}
+
 #if (SP_SPINOR_DMA)
 		if (cmd_buf[0] == 0x06)
 			goto out;
-		if (cmd_buf[0] == 0x02)
-			cmd_buf[0] = 0x32;
 
 		msg_printf("write\n");
 		if (flc == 1)
@@ -833,6 +834,7 @@ static int sp_spi_nor_xfer(struct udevice *dev, unsigned int bitlen,
 			spi_flash_xfer_DMAwrite(priv, cmd_buf, cmd_len, dout, len);
 #else
 		msg_printf("write\n");
+
 		if (flc == 1)
 			spi_flash_xfer_write(cmd_buf, cmd_len, NULL, 0);
 		else

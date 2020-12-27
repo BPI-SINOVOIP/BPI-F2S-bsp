@@ -5306,7 +5306,7 @@ OnError:
                 if (pfn_valid(page_to_pfn(pages[i])))
                 {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,9,0)
-                    put_page(pages[i]);
+                    //put_page(pages[i]);
 #else
 					page_cache_release(pages[i]);
 #endif
@@ -5567,7 +5567,7 @@ gckOS_CacheClean(
 
 #else
     dma_sync_single_for_device(
-              gcvNULL,
+              galcore_device,
               (dma_addr_t)Physical,
               Bytes,
               DMA_TO_DEVICE);
@@ -5673,7 +5673,7 @@ gckOS_CacheInvalidate(
     /* TODO */
 #else
     dma_sync_single_for_device(
-              gcvNULL,
+              galcore_device,
               (dma_addr_t)Physical,
               Bytes,
               DMA_FROM_DEVICE);
@@ -5768,7 +5768,7 @@ gckOS_CacheFlush(
     /* TODO */
 #else
     dma_sync_single_for_device(
-              gcvNULL,
+              galcore_device,
               (dma_addr_t)Physical,
               Bytes,
               DMA_BIDIRECTIONAL);

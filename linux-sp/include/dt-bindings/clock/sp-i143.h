@@ -11,6 +11,9 @@
 #define PLL_TV		6
 #define PLL_TV_A	7
 #define PLL_SYS		8
+#define PLL_FLA		9
+#define PLL_GPU		10
+#define PLL_CPU		11
 
 /* gates: mo_clken0 ~ mo_clken9 */
 #define SYSTEM		0x10

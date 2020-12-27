@@ -3,7 +3,8 @@
 # Makefile for physical layer USB drivers
 #
 
-obj-$(CONFIG_SUNPLUS_USB_PHY)			+= phy0-sunplus.o phy1-sunplus.o
+obj-$(CONFIG_SUNPLUS_USB_PHY)			+= phy0-sunplus.o phy1-sunplus.o 
+obj-$(CONFIG_SUNPLUS_USB3_PHY)                  += phy2-sunplus.o
 obj-$(CONFIG_USB_SUNPLUS_OTG)			+= otg-sunplus.o otg0-sunplus.o otg1-sunplus.o
 
 obj-$(CONFIG_USB_PHY)			+= phy.o

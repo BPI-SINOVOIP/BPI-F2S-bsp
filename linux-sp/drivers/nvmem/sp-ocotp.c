@@ -164,7 +164,11 @@ static int sp_ocotp_read(void *_c, unsigned int _off, void *_v, size_t _l)
 	char value[4];
 	int ret;
 
+#ifdef CONFIG_SOC_SP7021
 	dev_dbg(otp->dev, "OTP read %u bytes at %u", _l, _off);
+#elif defined(CONFIG_SOC_I143)
+	dev_dbg(otp->dev, "OTP read %lu bytes at %u", _l, _off);
+#endif
 
 	if ((_off >= QAC628_OTP_SIZE) || (_l == 0) || ((_off + _l) > 128)) {
 		return -EINVAL;
@@ -275,11 +279,18 @@ static int sp_ocotp_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, nvmem);
 
+#ifdef CONFIG_SOC_SP7021
 	dev_dbg(dev, "clk:%ld banks:%d x wpb:%d x wsize:%d = %d",
 		clk_get_rate(otp->clk),
 		QAC628_OTP_NUM_BANKS, QAC628_OTP_WORDS_PER_BANK,
 		QAC628_OTP_WORD_SIZE, QAC628_OTP_SIZE);
-	dev_info(dev, "by SunPlus (C) 2019");
+#elif defined(CONFIG_SOC_I143)
+	dev_dbg(dev, "clk:%ld banks:%d x wpd:%d x wsize:%ld = %ld",
+		clk_get_rate(otp->clk),
+		QAC628_OTP_NUM_BANKS, QAC628_OTP_WORDS_PER_BANK,
+		QAC628_OTP_WORD_SIZE, QAC628_OTP_SIZE);
+#endif
+	dev_info(dev, "by Sunplus (C) 2020");
 
 	return 0;
 }

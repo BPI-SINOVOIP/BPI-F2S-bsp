@@ -1,0 +1,12 @@
+/*
+ * {desc_long}
+ * Copyright (C) 2020 Tibbo Tech. - http://tibbo.com/tps/
+ * License: GPLv2 or later
+ */
+/dts-v1/;
+
+#include "sp7021-dsx.dtsi"
+
+/ {
+	model = "SP7021 DSX Rev. A (empty sockets)";
+};

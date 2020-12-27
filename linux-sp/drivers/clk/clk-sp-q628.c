@@ -11,8 +11,8 @@
 #include <mach/io_map.h>
 #include <dt-bindings/clock/sp-q628.h>
 
-#define TRACE	pr_info("### %s:%d (%d)\n", __FUNCTION__, __LINE__, (clk->reg - REG(4, 0)) / 4)
-//#define TRACE
+//#define TRACE	pr_info("### %s:%d (%d)\n", __FUNCTION__, __LINE__, (clk->reg - REG(4, 0)) / 4)
+#define TRACE
 
 #ifndef clk_readl
 #define clk_readl  readl
@@ -55,24 +55,24 @@ enum {
 struct sp_pll {
 	struct clk_hw	hw;
 	void __iomem	*reg;
-	spinlock_t		*lock;
-	int				pd_bit;		/* power down bit idx */
-	int				bp_bit;		/* bypass bit idx */
+	spinlock_t	*lock;
+	int		pd_bit;		/* power down bit idx */
+	int		bp_bit;		/* bypass bit idx */
 	unsigned long	brate;		/* base rate, FIXME: replace brate with muldiv */
-	int				div_shift;
-	int				div_width;
-	u32 			p[P_MAX];	/* for hold PLLTV/PLLA parameters */
+	int		div_shift;
+	int		div_width;
+	u32 		p[P_MAX];	/* for hold PLLTV/PLLA parameters */
 };
 #define to_sp_pll(_hw)	container_of(_hw, struct sp_pll, hw)
 
 #define P_EXTCLK	(1 << 16)
-static char *parents[] = {
+static const char * const parents[] = {
 	"pllsys",
 	"extclk",
 };
 
 /* FIXME: parent clk incorrect cause clk_get_rate got error value */
-static u32 gates[] = {
+static const u32 gates[] = {
 	SYSTEM,
 	RTC,
 	IOCTL,
@@ -169,7 +169,7 @@ static DEFINE_SPINLOCK(pllf_lock);
 static DEFINE_SPINLOCK(pllsys_lock);
 static DEFINE_SPINLOCK(plltv_lock);
 
-#define _M			1000000UL
+#define _M		1000000UL
 #define F_27M		(27 * _M)
 
 /************************************************* PLL_TV *************************************************/
@@ -266,7 +266,7 @@ static const u32 pt[][5] = {
 		1,			// factor
 		5,			// 5 * p0 (nint)
 		1,			// 1 * p0
-		F_27M,		// F_27M / p0
+		F_27M,			// F_27M / p0
 		1,			// p0 / p2
 	},
 	/* phase rotation */
@@ -274,7 +274,7 @@ static const u32 pt[][5] = {
 		10,			// factor
 		54,			// 5.4 * p0 (nint)
 		2,			// 0.2 * p0
-		F_27M / 10,	// F_27M / p0
+		F_27M / 10,		// F_27M / p0
 		5,			// p0 / p2
 	},
 };
@@ -539,7 +539,7 @@ static unsigned long sp_pll_recalc_rate(struct clk_hw *hw,
 	} else if (clk->div_width == DIV_TV) {
 		u32 m, r, reg2;
 
-		//pr_info("!!!!!!! %p:%p %08x\n", clk, clk->reg, reg);
+		//pr_info("!!!!!!! %px:%px %08x\n", clk, clk->reg, reg);
 		r = MASK_GET(7, 2, clk_readl(clk->reg + 4));
 		reg2 = clk_readl(clk->reg + 8);
 		m = MASK_GET(8, 7, reg2) + 1;
@@ -734,7 +734,7 @@ static void __init sp_clk_setup(struct device_node *np)
 		clks[j] = clk_register_gate(NULL, s, parents[gates[i] >> 16], CLK_IGNORE_UNUSED,
 			REG(0, j >> 4), j & 0x0f,
 			CLK_GATE_HIWORD_MASK, NULL);
-		//printk("%02x %p %p.%d\n", j, clks[j], REG(0, j >> 4), j & 0x0f);
+		//printk("%02x %px %px.%d\n", j, clks[j], REG(0, j >> 4), j & 0x0f);
 	}
 
 	clk_data.clks = clks;

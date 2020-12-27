@@ -2,28 +2,14 @@
 
 
 static struct l2sw_reg* l2sw_reg_base = NULL;
-static struct moon5_reg* moon5_reg_base = NULL;
 
 
 int l2sw_reg_base_set(void __iomem *baseaddr)
 {
 	l2sw_reg_base = (struct l2sw_reg*)baseaddr;
-	ETH_INFO(" l2sw_reg_base = %px\n", l2sw_reg_base);
+	ETH_DEBUG(" l2sw_reg_base = %px\n", l2sw_reg_base);
 
 	if (l2sw_reg_base == NULL){
-		return -1;
-	}
-	else{
-		return 0;
-	}
-}
-
-int moon5_reg_base_set(void __iomem *baseaddr)
-{
-	moon5_reg_base = (struct moon5_reg*)baseaddr;
-	ETH_INFO(" moon5_reg_base = %px\n", moon5_reg_base);
-
-	if (moon5_reg_base == NULL){
 		return -1;
 	}
 	else{
@@ -74,6 +60,8 @@ void mac_hw_start(struct l2sw_mac *mac)
 	HWREG_W(port_cntl0, reg & (~(comm->enable<<24)));
 	wmb();
 
+	HWREG_W(sw_int_mask, MAC_INT_MASK_DEF);
+
 	//regs_print();
 }
 
@@ -90,7 +78,7 @@ void mac_hw_addr_set(struct l2sw_mac *mac)
 	do {
 		reg = HWREG_R(wt_mac_ad0);
 		ndelay(10);
-		ETH_DEBUG(" wt_mac_ad0 = 0x%08x\n", reg);
+		ETH_DEBUG(" wt_mac_ad0 = %08x\n", reg);
 	} while ((reg&(0x1<<1)) == 0x0);
 	ETH_DEBUG(" mac_ad0 = %08x, mac_ad = %08x%04x\n", HWREG_R(wt_mac_ad0), HWREG_R(w_mac_47_16), HWREG_R(w_mac_15_0)&0xffff);
 
@@ -110,7 +98,7 @@ void mac_hw_addr_del(struct l2sw_mac *mac)
 	do {
 		reg = HWREG_R(wt_mac_ad0);
 		ndelay(10);
-		ETH_DEBUG(" wt_mac_ad0 = 0x%08x\n", reg);
+		ETH_DEBUG(" wt_mac_ad0 = %08x\n", reg);
 	} while ((reg&(0x1<<1)) == 0x0);
 	ETH_DEBUG(" mac_ad0 = %08x, mac_ad = %08x%04x\n", HWREG_R(wt_mac_ad0), HWREG_R(w_mac_47_16), HWREG_R(w_mac_15_0)&0xffff);
 
@@ -142,7 +130,7 @@ void mac_addr_table_del_all(void)
 		}
 
 		ETH_DEBUG(" addr_tbl_st = %08x\n", reg);
-		ETH_DEBUG(" @AT #%u: port=0x%01x, cpu=0x%01x, vid=%u, aging=%u, proxy=%u, mc_ingress=%u\n",
+		ETH_DEBUG(" @AT #%u: port=%01x, cpu=%01x, vid=%u, aging=%u, proxy=%u, mc_ingress=%u\n",
 			(reg>>22)&0x3ff, (reg>>12)&0x3, (reg>>10)&0x3, (reg>>7)&0x7,
 			(reg>>4)&0x7, (reg>>3)&0x1, (reg>>2)&0x1);
 
@@ -158,7 +146,7 @@ void mac_addr_table_del_all(void)
 			do {
 				reg = HWREG_R(wt_mac_ad0);
 				ndelay(10);
-				ETH_DEBUG(" wt_mac_ad0 = 0x%08x\n", reg);
+				ETH_DEBUG(" wt_mac_ad0 = %08x\n", reg);
 			} while ((reg&(0x1<<1)) == 0x0);
 			ETH_DEBUG(" mac_ad0 = %08x, mac_ad = %08x%04x\n", HWREG_R(wt_mac_ad0), HWREG_R(w_mac_47_16), HWREG_R(w_mac_15_0)&0xffff);
 		}
@@ -199,7 +187,7 @@ void mac_hw_addr_print(void)
 		regh = HWREG_R(MAC_ad_ser1);
 
 		//ETH_INFO(" addr_tbl_st = %08x\n", reg);
-		ETH_INFO(" AT #%u: port=0x%01x, cpu=0x%01x, vid=%u, aging=%u, proxy=%u, mc_ingress=%u,"
+		ETH_INFO(" AT #%u: port=%01x, cpu=%01x, vid=%u, aging=%u, proxy=%u, mc_ingress=%u,"
 			" HWaddr=%02x:%02x:%02x:%02x:%02x:%02x\n",
 			(reg>>22)&0x3ff, (reg>>12)&0x3, (reg>>10)&0x3, (reg>>7)&0x7,
 			(reg>>4)&0x7, (reg>>3)&0x1, (reg>>2)&0x1,
@@ -229,13 +217,13 @@ void mac_hw_init(struct l2sw_mac *mac)
 	wmb();
 
 	// Threshold values
-	HWREG_W(fl_cntl_th,     0x4a3a2d1d);    // Fc_rls_th=0x4a,  Fc_set_th=0x3a,  Drop_rls_th=0x2d, Drop_set_th=0x1d
-	HWREG_W(cpu_fl_cntl_th, 0x6a5a1212);    // Cpu_rls_th=0x6a, Cpu_set_th=0x5a, Cpu_th=0x12,      Port_th=0x12
-	HWREG_W(pri_fl_cntl,    0xf6680000);    // mtcc_lmt=0xf, Pri_th_l=6, Pri_th_h=6, weigh_8x_en=1
+	//HWREG_W(fl_cntl_th,     0x4a3a2d1d);    // Fc_rls_th=0x4a,  Fc_set_th=0x3a,  Drop_rls_th=0x2d, Drop_set_th=0x1d
+	//HWREG_W(cpu_fl_cntl_th, 0x6a5a1212);    // Cpu_rls_th=0x6a, Cpu_set_th=0x5a, Cpu_th=0x12,      Port_th=0x12
+	//HWREG_W(pri_fl_cntl,    0xf6680000);    // mtcc_lmt=0xf, Pri_th_l=6, Pri_th_h=6, weigh_8x_en=1
 
-	// High-active LED
-	reg = HWREG_R(led_port0);
-	HWREG_W(led_port0, reg | (1<<28));
+	// Softpad config
+	HWREG_W(p0_softpad_config, 0x2001);
+	HWREG_W(p1_softpad_config, 0x2001);
 
 	/* phy address */
 	reg = HWREG_R(mac_force_mode0);
@@ -395,6 +383,7 @@ static int mdio_access(u8 op_cd, u8 dev_reg_addr, u8 phy_addr, u32 wdata)
 		}
 
 		value = HWREG_R(phy_cntl_reg1);
+		ndelay(100);
 	} while ((value & 0x3) == 0);
 
 	if (time == 0)
@@ -467,11 +456,11 @@ void l2sw_enable_port(struct l2sw_mac *mac)
 	wmb();
 }
 
-int phy_cfg()
+int phy_cfg(struct l2sw_mac *mac)
 {
 	// Enable flow control of phy.
-	mdio_write(0, 4, mdio_read(0, 4) | (1<<10));
-	mdio_write(1, 4, mdio_read(1, 4) | (1<<10));
+	mdio_write(mac->comm->phy1_addr, 4, mdio_read(mac->comm->phy1_addr, 4) | (3<<10));
+	mdio_write(mac->comm->phy2_addr, 4, mdio_read(mac->comm->phy2_addr, 4) | (3<<10));
 
 	return 0;
 }

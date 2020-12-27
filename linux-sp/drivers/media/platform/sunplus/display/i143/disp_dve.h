@@ -1,12 +1,21 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (C) 2020 Sunplus Technology, Inc.
+ *
+ * Sunplus I143 Display driver for dve header file
+ *
+ * Authors: Hammer Hsieh <hammer.hsieh@sunplus.com>
+ *
+ */
+
 #ifndef __DISP_DVE_H__
 #define __DISP_DVE_H__
 
-#include "display.h"
+#include <media/sunplus/disp/i143/display.h>
 
 void DRV_DVE_Init(void *pInHWReg);
 void DRV_DVE_SetMode(int mode);
 void DRV_DVE_SetColorbar(int enable);
-void DRV_DVE_dump(void);
 
 /* DVE G234 REG Define */
 //G234.00 (User mode)
@@ -107,4 +116,3 @@ void DRV_DVE_dump(void);
 //G235.31 (Reserved)
 
 #endif	//__DISP_DVE_H__
-

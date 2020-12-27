@@ -2,6 +2,9 @@ config FB_SP7021
 	tristate "SP7021 Graphics Backend framebuffer support"
 	depends on FB && SOC_SP7021 && VIDEO_SP7021_DISP
 	default y
+	select FB_CFB_FILLRECT
+	select FB_CFB_COPYAREA
+	select FB_CFB_IMAGEBLIT
 	help
 	  This is the frame buffer device driver for the SP7021 Graphics
 	  hardware.

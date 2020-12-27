@@ -433,6 +433,9 @@ int do_bdinfo(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 	print_num("reloc off", gd->reloc_off);
 	print_eth_ip_addr();
 	print_baudrate();
+#if defined(CONFIG_DM_VIDEO)
+	print_num("logo addr   ", gd->bmp_logo_addr);
+#endif
 
 	return 0;
 }

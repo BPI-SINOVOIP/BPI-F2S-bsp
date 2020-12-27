@@ -52,7 +52,7 @@
 *
 *****************************************************************************/
 
-
+#include <linux/uaccess.h>
 #include "gc_hal.h"
 #include "gc_hal_kernel.h"
 #if VIVANTE_PROFILER_CONTEXT
@@ -2577,7 +2577,8 @@ gckHARDWARE_PipeSelect(
     IN OUT gctUINT32 * Bytes
     )
 {
-    gctUINT32_PTR logical = (gctUINT32_PTR) Logical;
+    gctUINT32 logical[8];
+    gctUINT32 ret;
     gceSTATUS status;
 
     gcmkHEADER_ARG("Hardware=0x%x Logical=0x%x Pipe=%d *Bytes=%lu",
@@ -2646,6 +2647,12 @@ gckHARDWARE_PipeSelect(
         logical[7] = (Pipe == gcvPIPE_2D)
             ? 0x1
             : 0x0;
+
+        ret=copy_to_user(Logical, logical, sizeof(logical));
+        if(ret != 0)
+        {
+            printk("%s%s(%d)copy_to_user failed!\n", __FILE__, __FUNCTION__, __LINE__);
+        }
 
         gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_HARDWARE,
                        "0x%x: PIPE %d", logical + 6, Pipe);

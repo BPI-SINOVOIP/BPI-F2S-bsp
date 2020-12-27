@@ -1,6 +1,6 @@
 /*
  * SP7021 pinmux controller driver.
- * Copyright (C) SunPlus Tech/Tibbo Tech. 2019
+ * Copyright (C) Sunplus Tech/Tibbo Tech. 2020
  * Author: Dvorkin Dmitry <dvorkin@tibbo.com>
  *
  * This program is free software; you can redistribute it and/or modify
@@ -15,7 +15,7 @@
  */
 
 #include "sppctl_sysfs.h"
-#include "sp7021_gpio_ops.h"
+#include "sppctl_gpio_ops.h"
 #include "sppctl_pinctrl.h"
 
 
@@ -205,11 +205,7 @@ static ssize_t sppctl_sop_fw_W(struct file *filp, struct kobject *_k,
 	struct device *_pdev = container_of(_k, struct device, kobj);
 
 	if (_off + _count < (list_funcsSZ - 2)) {
-#ifdef CONFIG_64BIT
-		KINF(_pdev, "%s() fw size %lu < %lu\n", __FUNCTION__, _count, list_funcsSZ);
-#else
-		KINF(_pdev, "%s() fw size %d < %d\n", __FUNCTION__, _count, list_funcsSZ);
-#endif
+		KINF(_pdev, "%s() fw size %zd < %zd\n", __FUNCTION__, _count, list_funcsSZ);
 	}
 
 	if (!_pdev) return (-ENXIO);

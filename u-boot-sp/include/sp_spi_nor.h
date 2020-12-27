@@ -34,11 +34,7 @@ typedef unsigned char BYTE;
 #define SP_SPINOR_DMA                   1
 
 #define CFG_BUFF_MAX                    (18 << 10)
-#define CONFIG_SRAM_BASE                0x9e800000
-
-#define CMD_BUF_LEN                     4
-
-#define RF_MASK_V(_mask, _val)          (((_mask) << 16) | (_val))
+#define CMD_BUF_LEN                     5
 
 //spi_ctrl
 #define SPI_CTRL_BUSY                   (1<<31)
@@ -214,9 +210,9 @@ enum SPI_DMA_MODE {
 };
 
 enum SPI_SRAM_STATUS {
-	SRAM_CONFLICT = 0,
-	SRAM_EMPTY = 1,
-	SRAM_FULL = 2
+	SRAM_CONFLICT = (1 << 13),
+	SRAM_EMPTY    = (2 << 13),
+	SRAM_FULL     = (4 << 13)
 };
 
 enum SPI_INTR_STATUS {
@@ -255,6 +251,7 @@ struct sp_spi_nor_platdata {
 	unsigned int clock;
 	unsigned int mode;
 	unsigned int chipsel;
+	unsigned int rwTimingSel;
 };
 
 #if (SP_SPINOR_DMA)

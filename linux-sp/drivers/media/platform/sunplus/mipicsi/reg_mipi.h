@@ -4,11 +4,18 @@
 /****************************************
 * MIPI I2C Register Definition
 ****************************************/
+#define ISP_BASE_ADDRESS 0x2000
+
 // 0x276A
 #define ISP_2601_TRANS_MODE        (1<<0)
 
 
 /* mipi-ispapb registers */
+struct mipi_isp_reg {
+	volatile unsigned char reg[0x1300];         /* 0x2000 ~ 0x32FF */
+};
+
+#if 0 // Original ISP register structure
 struct mipi_isp_reg {
 	volatile unsigned char global[0x100];               /* 0x2000 ~ 0x20FF Global Registers                       */
 	volatile unsigned char cdsp[0x100];                 /* 0x2100 ~ 0x21FF CDSP Registers                         */
@@ -20,22 +27,8 @@ struct mipi_isp_reg {
 	volatile unsigned char new_cdsp[0x100];             /* 0x3100 ~ 0x31FF New CDSP Registers                     */
 	volatile unsigned char new_cdsp_win[0x100];         /* 0x3200 ~ 0x32FF New CDSP Window Registers              */
 };
-
-#if 0 // Original MIPI ISP register structure
-struct isp_p1_reg {
-	volatile unsigned char isp_global[0x100];              /* 0x2000 ~ 0x20FF Global Registers                       */
-	volatile unsigned char isp_cdsp[0x100];                /* 0x2100 ~ 0x21FF CDSP Registers                         */
-	volatile unsigned char isp_cdsp_win[0x100];            /* 0x2200 ~ 0x22FF CDSP Window Register                   */
-	volatile unsigned char isp_reserved[0x300];            /* 0x2300 ~ 0x25FF Synchronous Serial Interface Registers */
-};
-
-struct isp_p2_reg {
-	volatile unsigned char isp_sensor_if[0x100];           /* 0x2700 ~ 0x27FF CMOS Sensor Interface Registers        */
-	volatile unsigned char isp_reserved[0x900];            /* 0x2800 ~ 0x30FF Reserved                               */
-	volatile unsigned char isp_new_cdsp[0x100];            /* 0x3100 ~ 0x31FF New CDSP Registers                     */
-	volatile unsigned char isp_new_cdsp_win[0x100];        /* 0x3200 ~ 0x32FF New CDSP Window Registers              */
-};
 #endif
+
 
 /****************************************
 * MIPI  Register Definition

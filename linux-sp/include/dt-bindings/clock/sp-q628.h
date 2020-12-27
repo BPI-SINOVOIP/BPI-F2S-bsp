@@ -14,12 +14,12 @@
 
 /* gates: mo_clken0 ~ mo_clken9 */
 #define SYSTEM		0x10
-#define	RTC			0x12
+#define RTC		0x12
 #define IOCTL		0x13
-#define IOP			0x14
+#define IOP		0x14
 #define OTPRX		0x15
-#define NOC			0x16
-#define BR			0x17
+#define NOC		0x16
+#define BR		0x17
 #define RBUS_L00	0x18
 #define SPIFL		0x19
 #define SDCTRL0		0x1a
@@ -34,11 +34,11 @@
 #define STC_AV0		0x25
 #define STC_AV1		0x26
 #define STC_AV2		0x27
-#define UA0			0x28
-#define UA1			0x29
-#define UA2			0x2a
-#define UA3			0x2b
-#define UA4			0x2c
+#define UA0		0x28
+#define UA1		0x29
+#define UA2		0x2a
+#define UA3		0x2b
+#define UA4		0x2c
 #define HWUA		0x2d
 #define DDC0		0x2e
 #define UADMA		0x2f
@@ -49,7 +49,7 @@
 #define SPI_COMBO_1	0x33
 #define SPI_COMBO_2	0x34
 #define SPI_COMBO_3	0x35
-#define AUD			0x36
+#define AUD		0x36
 #define USBC0		0x3a
 #define USBC1		0x3b
 #define UPHY0		0x3d
@@ -59,12 +59,12 @@
 #define I2CM1		0x41
 #define I2CM2		0x42
 #define I2CM3		0x43
-#define PMC			0x4d
+#define PMC		0x4d
 #define CARD_CTL0	0x4e
 #define CARD_CTL1	0x4f
 
 #define CARD_CTL4	0x52
-#define BCH			0x54
+#define BCH		0x54
 #define DDFCH		0x5b
 #define CSIIW0		0x5c
 #define CSIIW1		0x5d
@@ -86,8 +86,8 @@
 #define MAILBOX		0x96
 #define SPIND		0x9a
 #define I2C2CBUS	0x9b
-#define SEC			0x9d
-#define DVE			0x9e
+#define SEC		0x9d
+#define DVE		0x9e
 #define GPOST0		0x9f
 
 #define OSD0		0xa0
@@ -97,7 +97,7 @@
 #define FIO_CTL		0xa5
 #define FPGA		0xa6
 #define L2SW		0xa7
-#define ICM			0xa8
+#define ICM		0xa8
 #define AXI_GLOBAL	0xa9
 
 #define CLK_MAX		0xb0

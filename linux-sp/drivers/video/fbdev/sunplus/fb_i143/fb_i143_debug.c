@@ -36,7 +36,7 @@
 
 #include <media/sunplus/disp/i143/disp_osd.h>
 #include "fb_i143_main.h"
-#include "FontAPI.h"
+//#include "FontAPI.h"
 
 /**************************************************************************
  *                           C O N S T A N T S                            *
@@ -46,7 +46,7 @@
  *                              M A C R O S                               *
  **************************************************************************/
 #define SUPPORT_LOAD_BMP
-#define SUPPORT_FONT
+//#define SUPPORT_FONT
 
 /* test pattern gen */
 #define MAKE_ARGB(A, R, G, B)	((B) | ((G) << 8) | ((R) << 16) | ((A) << 24))
@@ -542,14 +542,14 @@ static void _device_info(struct fb_info *fbinfo)
 			fb_par->fbwidth,
 			fb_par->fbheight,
 			fb_par->fbsize);
-	pr_err("Base addr: 0x%x, Phy addr: 0x%x, now show buf id=%d\n",
-			(u32)fb_par->fbmem,
+	pr_err("Base addr: 0x%llx, Phy addr: 0x%lx, now show buf id=%d\n",
+			(u64)fb_par->fbmem,
 			__pa(fb_par->fbmem),
 			fbinfo->var.yoffset
 			/ fbinfo->var.yres);
 	if (fb_par->ColorFmt == DRV_OSD_REGION_FORMAT_8BPP) {
-		pr_err("palette Base addr: 0x%x, Phy addr: 0x%x\n",
-				(u32)fb_par->fbmem_palette,
+		pr_err("palette Base addr: 0x%llx, Phy addr: 0x%lx\n",
+				(u64)fb_par->fbmem_palette,
 				__pa(fb_par->fbmem_palette));
 	}
 #ifdef SUPPORT_FONT
@@ -668,7 +668,7 @@ static void _fb_debug_cmd(char *tmpbuf, struct fb_info *fbinfo)
 		tmpbuf = _mon_readint(tmpbuf, (int *)&argb);
 
 		if (index >= (FB_PALETTE_LEN / sizeof(unsigned int))) {
-			mod_err("index %d > %d\n", index,
+			mod_err("index %d > %ld\n", index,
 					FB_PALETTE_LEN / sizeof(unsigned int));
 			return;
 		}
@@ -732,7 +732,6 @@ static void _fb_debug_cmd(char *tmpbuf, struct fb_info *fbinfo)
 	} else if (!strncasecmp(tmpbuf, "info", 4)) {
 		_device_info(fbinfo);
 	} else if (!strncasecmp(tmpbuf, "getUI", 5)) {
-		#if 0 //TBD
 		struct UI_FB_Info_t Info;
 		int ret;
 
@@ -742,7 +741,6 @@ static void _fb_debug_cmd(char *tmpbuf, struct fb_info *fbinfo)
 			mod_err("Get UI error\n");
 		else
 			_print_UI_info(&Info);
-		#endif
 	}
 #ifdef SUPPORT_LOAD_BMP
 	else if (!strncasecmp(tmpbuf, "bmp", 3)) {
@@ -767,7 +765,7 @@ static void _fb_debug_cmd(char *tmpbuf, struct fb_info *fbinfo)
 		}
 
 		_Draw_Bmpfile(tmpbuf,
-			(unsigned char *)((int)fbinfo->screen_base
+			(unsigned char *)((uintptr_t)fbinfo->screen_base
 				+ (fb_par->fbpagesize * buf_id)),
 			fbinfo,
 			x,
@@ -847,7 +845,7 @@ static void _fb_debug_cmd(char *tmpbuf, struct fb_info *fbinfo)
 
 		FONT_GetString_Size(tmpbuf, strlen(tmpbuf), &w, &h);
 
-		fb_ptr = (unsigned char *)((int)fbinfo->screen_base
+		fb_ptr = (unsigned char *)((uintptr_t)fbinfo->screen_base
 				+ (fb_par->fbpagesize * buf_id)
 				+ ((y * fbinfo->var.xres + x) * pixel_len));
 
@@ -953,15 +951,15 @@ static void _fb_debug_cmd(char *tmpbuf, struct fb_info *fbinfo)
 				bg_color,
 				pixel_len);
 
-		fb_ptr = (unsigned char *)((int)fbinfo->screen_base
+		fb_ptr = (unsigned char *)((uintptr_t)fbinfo->screen_base
 				+ (fb_par->fbpagesize * buf_id)
 				+ ((y * fbinfo->var.xres + x) * pixel_len));
 
 		/* copy font raw data to fb */
 		for (i = 0; i < h; ++i)
-			memcpy((unsigned char *)((int)fb_ptr + fbinfo->var.xres
+			memcpy((unsigned char *)((uintptr_t)fb_ptr + fbinfo->var.xres
 						* pixel_len * i),
-					(unsigned char *)((int)pstr + w
+					(unsigned char *)((uintptr_t)pstr + w
 						* pixel_len * i),
 					w * pixel_len);
 

@@ -954,11 +954,11 @@ config RTC_DRV_CMOS
 	  will be called rtc-cmos.
 
 config RTC_DRV_SUNPLUS
-	bool "RTC for Sunplus Pentagram Platform"
-	depends on ARCH_PENTAGRAM
+	bool "Sunplus SP7021 RTC"
+	depends on SOC_SP7021
 	default y
 	help
-	  RTC for Sunplus Pentagram platform.
+	  Say 'yes' to support Sunplus real-time clock (RTC).
 
 config RTC_DRV_ALPHA
 	bool "Alpha PC-style CMOS"

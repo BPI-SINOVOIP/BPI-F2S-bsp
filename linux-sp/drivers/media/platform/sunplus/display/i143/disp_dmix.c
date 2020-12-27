@@ -1,29 +1,13 @@
-/**************************************************************************
- *                                                                        *
- *         Copyright (c) 2020 by Sunplus Inc.                             *
- *                                                                        *
- *  This software is copyrighted by and is the property of Sunplus        *
- *  Inc. All rights are reserved by Sunplus Inc.                          *
- *  This software may only be used in accordance with the                 *
- *  corresponding license agreement. Any unauthorized use, duplication,   *
- *  distribution, or disclosure of this software is expressly forbidden.  *
- *                                                                        *
- *  This Copyright notice MUST not be removed or modified without prior   *
- *  written consent of Sunplus Technology Co., Ltd.                       *
- *                                                                        *
- *  Sunplus Inc. reserves the right to modify this software               *
- *  without notice.                                                       *
- *                                                                        *
- *  Sunplus Inc.                                                          *
- *  19, Innovation First Road, Hsinchu Science Park                       *
- *  Hsinchu City 30078, Taiwan, R.O.C.                                    *
- *                                                                        *
- **************************************************************************/
-/**
- * @file disp_dmix.c
- * @brief
- * @author Hammer Hsieh
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (C) 2020 Sunplus Technology, Inc.
+ *
+ * Sunplus I143 Display driver for data mixer
+ *
+ * Authors: Hammer Hsieh <hammer.hsieh@sunplus.com>
+ *
  */
+
 /**************************************************************************
  *                         H E A D E R   F I L E S
  **************************************************************************/
@@ -51,12 +35,9 @@
  **************************************************************************/
 static DISP_DMIX_REG_t *pDMIXReg;
 
-#if 1 //def SP_DISP_DEBUG
-	static const char * const LayerNameStr[] = {"BG", "L1", "L2", "L3", "L4", "L5", "L6"};
-	static const char * const LayerModeStr[] = {"AlphaBlend", "Transparent", "Opacity"};
-	static const char * const SelStr[] = {"VPP0", "VPP1", "VPP2", "OSD0", "OSD1", "OSD2", "OSD3", "PTG"};
-#endif
-
+static const char * const LayerNameStr[] = {"BG", "L1", "L2", "L3", "L4", "L5", "L6"};
+static const char * const LayerModeStr[] = {"AlphaBlend", "Transparent", "Opacity"};
+static const char * const SelStr[] = {"VPP0", "VPP1", "VPP2", "OSD0", "OSD1", "OSD2", "OSD3", "PTG"};
 /**************************************************************************
  *             F U N C T I O N    I M P L E M E N T A T I O N S           *
  **************************************************************************/
@@ -64,86 +45,12 @@ void DRV_DMIX_Init(void *pInReg)
 {
 	pDMIXReg = (DISP_DMIX_REG_t *)pInReg;
 
-	sp_disp_info("DRV_DMIX_Init \n");
-	
-	#if 0 //for sp7021
-	pDMIXReg->dmix_pix_en_sel = 0x0006;
+	pDMIXReg->dmix_layer_config_0 = 0x34561070;
+	pDMIXReg->dmix_layer_config_1 = 0x00000000;
+	pDMIXReg->dmix_ptg_config_0 = 0x00002001;
+	pDMIXReg->dmix_ptg_config_2 = 0x0029f06e;
+	pDMIXReg->dmix_source_select = 0x00000006;
 
-	// BG: pattern gen
-	// L1: VPP0
-	// L6: OSD0
-	pDMIXReg->dmix_config0 = 0x0070;
-	pDMIXReg->dmix_config1 = 0x8156;
-	pDMIXReg->dmix_config2 = 0x3000;
-
-	//DMIX PTG(default border pixel len=0 (BGC))
-	pDMIXReg->dmix_ptg_config = 0x2000;
-	//default BGC color
-	pDMIXReg->dmix_ptg_config_4 = (0<<8) | (0x10 & 0xff);
-	pDMIXReg->dmix_ptg_config_5 = (0<<8) | (0x80 & 0xff);
-	pDMIXReg->dmix_ptg_config_6 = (0<<8) | (0x80 & 0xff);
-
-	//DMIX YC adjust
-	pDMIXReg->dmix_yc_adjust = 0x0;
-	#endif
-	
-	//for i143
-	// BG: pattern gen
-	// L1: VPP0
-	// L5: OSD1
-	// L6: OSD0
-	#ifdef DISP_64X64
-	//64x64 setting	
-	pDMIXReg->dmix_layer_config_0 = 0x34561070; // 00
-	pDMIXReg->dmix_layer_config_1 = 0x00000000; // 01
-	pDMIXReg->dmix_ptg_config_0 = 0x00002001; // 09
-	pDMIXReg->dmix_ptg_config_2 = 0x0029f06e; // 11
-	//pDMIXReg->dmix_ptg_config_2 = 0x00f0f0f0; // 11
-	pDMIXReg->dmix_source_select = 0x00000006; // 20
-	#endif
-	
-	#ifdef DISP_480P
-	//480P 720x480 setting	
-	pDMIXReg->dmix_layer_config_0 = 0x34561070; // 00
-	pDMIXReg->dmix_layer_config_1 = 0x00000000; // 01 all layer blending
-	//pDMIXReg->dmix_layer_config_1 = 0x00000002; // 01 show L1 - VPP0 , block Background 
-	//pDMIXReg->dmix_layer_config_1 = 0x00000556; // 01 hide L6L5L4L3L2 show L1 - VPP0 , block Background 
-	pDMIXReg->dmix_ptg_config_0 = 0x00002001; // 09
-	//pDMIXReg->dmix_ptg_config_0 = 0x00000001; // 09 dmix color bar H
-	//pDMIXReg->dmix_ptg_config_0 = 0x00008001; // 09 dmix color bar V
-	//pDMIXReg->dmix_ptg_config_0 = 0x00004001; // 09 dmix color bar snow
-	pDMIXReg->dmix_ptg_config_2 = 0x0029f06e; // 11
-	//pDMIXReg->dmix_ptg_config_2 = 0x00f0f0f0; // 11
-	pDMIXReg->dmix_source_select = 0x00000006; // 20	
-	#endif
-
-	#ifdef DISP_576P
-	//576P 720x576 setting	
-	pDMIXReg->dmix_layer_config_0 = 0x34561070; // 00
-	pDMIXReg->dmix_layer_config_1 = 0x00000000; // 01 all layer blending
-	pDMIXReg->dmix_ptg_config_0 = 0x00002001; // 09
-	pDMIXReg->dmix_ptg_config_2 = 0x0029f06e; // 11
-	pDMIXReg->dmix_source_select = 0x00000006; // 20	
-	#endif
-	
-	#ifdef DISP_720P
-	//720P 1280x720 setting	
-	pDMIXReg->dmix_layer_config_0 = 0x34561070; // 00
-	pDMIXReg->dmix_layer_config_1 = 0x00000000; // 01 all layer blending
-	pDMIXReg->dmix_ptg_config_0 = 0x00002001; // 09
-	pDMIXReg->dmix_ptg_config_2 = 0x0029f06e; // 11
-	pDMIXReg->dmix_source_select = 0x00000006; // 20	
-	#endif
-	
-	#ifdef DISP_1080P
-	//1080P 1920x1080 setting	
-	pDMIXReg->dmix_layer_config_0 = 0x34561070; // 00
-	pDMIXReg->dmix_layer_config_1 = 0x00000000; // 01 all layer blending
-	pDMIXReg->dmix_ptg_config_0 = 0x00002001; // 09
-	pDMIXReg->dmix_ptg_config_2 = 0x0029f06e; // 11
-	pDMIXReg->dmix_source_select = 0x00000006; // 20	
-	#endif
-	
 }
 
 DRV_Status_e DRV_DMIX_PTG_ColorBar(DRV_DMIX_TPG_e tpg_sel, int bg_color_yuv, int border_len)
@@ -208,16 +115,10 @@ void DRV_DMIX_PTG_Color_Set_YCbCr(UINT8 enable, UINT8 Y, UINT8 Cb, UINT8 Cr)
 {
 	if (enable) {
 		pDMIXReg->dmix_ptg_config_2 = (1 << 26) | (1 << 25) | (1 << 24) | \
-																	((Y & 0xff)<<16) | ((Cb & 0xff)<<8) | ((Cr & 0xff)<<0);
-		//pDMIXReg->dmix_ptg_config_4 = (1 << 8) | (Y & 0xff);
-		//pDMIXReg->dmix_ptg_config_5 = (1 << 8) | (Cb & 0xff);
-		//pDMIXReg->dmix_ptg_config_6 = (1 << 8) | (Cr & 0xff);
+							((Y & 0xff)<<16) | ((Cb & 0xff)<<8) | ((Cr & 0xff)<<0);
 	} else {
 		pDMIXReg->dmix_ptg_config_2 = (0 << 26) | (0 << 25) | (0 << 24) | \
-																	((Y & 0xff)<<16) | ((Cb & 0xff)<<8) | ((Cr & 0xff)<<0);		
-		//pDMIXReg->dmix_ptg_config_4 &= 0xff;
-		//pDMIXReg->dmix_ptg_config_5 &= 0xff;
-		//pDMIXReg->dmix_ptg_config_6 &= 0xff;
+							((Y & 0xff)<<16) | ((Cb & 0xff)<<8) | ((Cr & 0xff)<<0);
 	}
 }
 
@@ -226,9 +127,9 @@ DRV_Status_e DRV_DMIX_Layer_Init(DRV_DMIX_LayerId_e Layer, DRV_DMIX_LayerMode_e 
 	UINT32 tmp, tmp1;
 	DRV_TGEN_Input_e input;
 
-	if ((((int)Layer >= DRV_DMIX_L2) && ((int)Layer <= DRV_DMIX_L5)) ||
+	if ((((int)Layer >= DRV_DMIX_L2) && ((int)Layer <= DRV_DMIX_L4)) ||
 			((int)LayerMode < DRV_DMIX_AlphaBlend) || ((int)LayerMode > DRV_DMIX_Opacity) ||
-			(((int)FG_Sel != DRV_DMIX_VPP0) && ((int)FG_Sel != DRV_DMIX_OSD0) && ((int)FG_Sel != DRV_DMIX_PTG))) {
+			(((int)FG_Sel != DRV_DMIX_VPP0) && ((int)FG_Sel != DRV_DMIX_OSD1) && ((int)FG_Sel != DRV_DMIX_OSD0) && ((int)FG_Sel != DRV_DMIX_PTG))) {
 		//sp_disp_err("Layer %d, LayerMode %d, InSel %d\n", Layer, LayerMode, FG_Sel);
 		return DRV_ERR_INVALID_PARAM;
 	}
@@ -238,47 +139,39 @@ DRV_Status_e DRV_DMIX_Layer_Init(DRV_DMIX_LayerId_e Layer, DRV_DMIX_LayerMode_e 
 	tmp  = pDMIXReg->dmix_layer_config_0;
 	tmp1 = pDMIXReg->dmix_layer_config_1;
 
-	//Set layer mode
 	if (Layer != DRV_DMIX_BG) {
-		//Clear layer mode bit
 		tmp1 &= ~(0x3 << ((Layer - 1) << 1));
 		tmp1 |= (LayerMode << ((Layer - 1) << 1));
 	}
 
 	tmp = (tmp & ~(0X7 << ((Layer * 4) + 4))) | (FG_Sel << ((Layer * 4) + 4));
 
-	//Finish set amix layer information
 	pDMIXReg->dmix_layer_config_0 = tmp;
 	pDMIXReg->dmix_layer_config_1 = tmp1;
-	//pDMIXReg->dmix_config2 = tmp2;
 
-	//{
-		//DRV_TGEN_Input_e input;
-
-		switch (FG_Sel) {
-		case DRV_DMIX_VPP0:
-			input = DRV_TGEN_VPP0;
-			break;
-		case DRV_DMIX_OSD0:
-			input = DRV_TGEN_OSD0;
-			break;
-		case DRV_DMIX_OSD1:
-			input = DRV_TGEN_OSD1;
-			break;			
-		case DRV_DMIX_PTG:
-			input = DRV_TGEN_PTG;
-			break;
-		default:
-			input = DRV_TGEN_ALL;
-			break;
-		}
-		if (input != DRV_TGEN_ALL) {
-			if (input == DRV_TGEN_PTG)
-				DRV_TGEN_Adjust(input, 0x10);
-			else
-				DRV_TGEN_Adjust(input, 0x10 - ((Layer - DRV_DMIX_L1) << 1));
-		}
-	//}
+	switch (FG_Sel) {
+	case DRV_DMIX_VPP0:
+		input = DRV_TGEN_VPP0;
+		break;
+	case DRV_DMIX_OSD0:
+		input = DRV_TGEN_OSD0;
+		break;
+	case DRV_DMIX_OSD1:
+		input = DRV_TGEN_OSD1;
+		break;			
+	case DRV_DMIX_PTG:
+		input = DRV_TGEN_PTG;
+		break;
+	default:
+		input = DRV_TGEN_ALL;
+		break;
+	}
+	if (input != DRV_TGEN_ALL) {
+		if (input == DRV_TGEN_PTG)
+			DRV_TGEN_Adjust(input, 0x10);
+		else
+			DRV_TGEN_Adjust(input, 0x10 - ((Layer - DRV_DMIX_L1) << 1));
+	}
 
 	return DRV_SUCCESS;
 }
@@ -314,13 +207,11 @@ DRV_Status_e DRV_DMIX_Layer_Set(DRV_DMIX_LayerMode_e LayerMode, DRV_DMIX_InputSe
 
 	tmp = pDMIXReg->dmix_layer_config_1;
 
-	//Set layer mode
 	if (Layer != DRV_DMIX_BG) {
 		tmp &= ~(0x3 << ((Layer - 1) << 1));
 		tmp |= (LayerMode << ((Layer - 1) << 1));
 	}
 
-	//Finish set amix layer information
 	pDMIXReg->dmix_layer_config_1 = tmp;
 
 ERROR:
@@ -332,12 +223,12 @@ void DRV_DMIX_Layer_Mode_Set(DRV_DMIX_LayerId_e Layer, DRV_DMIX_LayerMode_e Laye
 	UINT32 tmp;
 
 	tmp = pDMIXReg->dmix_layer_config_1;
-	//Set layer mode
+
 	if (Layer != DRV_DMIX_BG) {
 		tmp &= ~(0x3 << ((Layer - 1) << 1));
 		tmp |= (LayerMode << ((Layer - 1) << 1));
 	}
-	//Finish set amix layer information
+
 	pDMIXReg->dmix_layer_config_1 = tmp;
 
 }
@@ -418,72 +309,7 @@ DRV_Status_e DRV_DMIX_Plane_Alpha_Set(DRV_DMIX_PlaneAlpha_t *PlaneAlphaInfo)
 void DRV_DMIX_PQ_OnOff(int OutId, int enable)
 {
 	if (enable)
-		//pDMIXReg->dmix_yc_adjust |= 0x3;
 		pDMIXReg->dmix_adjust_config_0 = (1<<17) | (1<<16);
 	else
-		//pDMIXReg->dmix_yc_adjust = 0;
 		pDMIXReg->dmix_adjust_config_0 = (0<<17) | (0<<16);
 }
-
-void DRV_DMIX_dump(void)
-{
-	#if 0
-	//dump after setting
-	printk(KERN_INFO "pDMIXReg G217.00 0x%08x(%d) \n",pDMIXReg->dmix_layer_config_0,pDMIXReg->dmix_layer_config_0);
-	printk(KERN_INFO "pDMIXReg G217.01 0x%08x(%d) \n",pDMIXReg->dmix_layer_config_1,pDMIXReg->dmix_layer_config_1);
-	printk(KERN_INFO "pDMIXReg G217.02 0x%08x(%d) \n",pDMIXReg->dmix_plane_alpha_config_0,pDMIXReg->dmix_plane_alpha_config_0);
-	printk(KERN_INFO "pDMIXReg G217.03 0x%08x(%d) \n",pDMIXReg->dmix_plane_alpha_config_1,pDMIXReg->dmix_plane_alpha_config_1);
-	printk(KERN_INFO "pDMIXReg G217.04 0x%08x(%d) \n",pDMIXReg->dmix_adjust_config_0,pDMIXReg->dmix_adjust_config_0);
-	printk(KERN_INFO "pDMIXReg G217.05 0x%08x(%d) \n",pDMIXReg->dmix_adjust_config_1,pDMIXReg->dmix_adjust_config_1);
-	printk(KERN_INFO "pDMIXReg G217.06 0x%08x(%d) \n",pDMIXReg->dmix_adjust_config_2,pDMIXReg->dmix_adjust_config_2);
-	printk(KERN_INFO "pDMIXReg G217.07 0x%08x(%d) \n",pDMIXReg->dmix_adjust_config_3,pDMIXReg->dmix_adjust_config_3);
-	printk(KERN_INFO "pDMIXReg G217.08 0x%08x(%d) \n",pDMIXReg->dmix_adjust_config_4,pDMIXReg->dmix_adjust_config_4);
-	printk(KERN_INFO "pDMIXReg G217.09 0x%08x(%d) \n",pDMIXReg->dmix_ptg_config_0,pDMIXReg->dmix_ptg_config_0);
-	printk(KERN_INFO "pDMIXReg G217.10 0x%08x(%d) \n",pDMIXReg->dmix_ptg_config_1,pDMIXReg->dmix_ptg_config_1);
-	printk(KERN_INFO "pDMIXReg G217.11 0x%08x(%d) \n",pDMIXReg->dmix_ptg_config_2,pDMIXReg->dmix_ptg_config_2);
-	printk(KERN_INFO "pDMIXReg G217.12 0x%08x(%d) \n",pDMIXReg->dmix_ptg_config_3,pDMIXReg->dmix_ptg_config_3);
-	printk(KERN_INFO "pDMIXReg G217.13 0x%08x(%d) \n",pDMIXReg->dmix_ptg_config_4,pDMIXReg->dmix_ptg_config_4);
-	printk(KERN_INFO "pDMIXReg G217.14 0x%08x(%d) \n",pDMIXReg->dmix_dtg_config_0,pDMIXReg->dmix_dtg_config_0);
-	printk(KERN_INFO "pDMIXReg G217.15 0x%08x(%d) \n",pDMIXReg->dmix_dtg_config_1,pDMIXReg->dmix_dtg_config_1);
-	printk(KERN_INFO "pDMIXReg G217.16 0x%08x(%d) \n",pDMIXReg->dmix_dtg_config_2,pDMIXReg->dmix_dtg_config_2);
-	printk(KERN_INFO "pDMIXReg G217.17 0x%08x(%d) \n",pDMIXReg->dmix_dtg_config_3,pDMIXReg->dmix_dtg_config_3);
-	printk(KERN_INFO "pDMIXReg G217.18 0x%08x(%d) \n",pDMIXReg->dmix_exp_config_0,pDMIXReg->dmix_exp_config_0);
-	printk(KERN_INFO "pDMIXReg G217.19 0x%08x(%d) \n",pDMIXReg->dmix_exp_config_1,pDMIXReg->dmix_exp_config_1);
-	printk(KERN_INFO "pDMIXReg G217.20 0x%08x(%d) \n",pDMIXReg->dmix_source_select,pDMIXReg->dmix_source_select);
-	printk(KERN_INFO "pDMIXReg G217.21 0x%08x(%d) \n",pDMIXReg->dmix_chksum,pDMIXReg->dmix_chksum);
-	printk(KERN_INFO "pDMIXReg G217.22 0x%08x(%d) \n",pDMIXReg->dmix_version,pDMIXReg->dmix_version);
-	printk(KERN_INFO "pDMIXReg G217.23 0x%08x(%d) \n",pDMIXReg->dmix_time_detect_0,pDMIXReg->dmix_time_detect_0);
-	printk(KERN_INFO "pDMIXReg G217.24 0x%08x(%d) \n",pDMIXReg->dmix_time_detect_1,pDMIXReg->dmix_time_detect_1);
-	printk(KERN_INFO "pDMIXReg G217.25 0x%08x(%d) \n",pDMIXReg->dmix_time_detect_2,pDMIXReg->dmix_time_detect_2);
-	//printk(KERN_INFO "pDMIXReg G217.26 0x%08x(%d) \n",pDMIXReg->g217_reserved2[0],pDMIXReg->g217_reserved2[0]);
-	//printk(KERN_INFO "pDMIXReg G217.27 0x%08x(%d) \n",pDMIXReg->g217_reserved2[1],pDMIXReg->g217_reserved2[1]);
-	//printk(KERN_INFO "pDMIXReg G217.28 0x%08x(%d) \n",pDMIXReg->g217_reserved2[2],pDMIXReg->g217_reserved2[2]);
-	//printk(KERN_INFO "pDMIXReg G217.29 0x%08x(%d) \n",pDMIXReg->g217_reserved2[3],pDMIXReg->g217_reserved2[3]);
-	//printk(KERN_INFO "pDMIXReg G217.30 0x%08x(%d) \n",pDMIXReg->g217_reserved2[4],pDMIXReg->g217_reserved2[4]);
-	//printk(KERN_INFO "pDMIXReg G217.31 0x%08x(%d) \n",pDMIXReg->g217_reserved2[5],pDMIXReg->g217_reserved2[5]);
-	#endif
-	//dump after setting
-	printk(KERN_INFO "pDMIXReg G217.00 0x%08x(%d) \n",pDMIXReg->dmix_layer_config_0,pDMIXReg->dmix_layer_config_0);
-	printk(KERN_INFO "pDMIXReg G217.01 0x%08x(%d) \n",pDMIXReg->dmix_layer_config_1,pDMIXReg->dmix_layer_config_1);
-	//printk(KERN_INFO "pDMIXReg G217.02 0x%08x(%d) \n",pDMIXReg->dmix_plane_alpha_config_0,pDMIXReg->dmix_plane_alpha_config_0);
-	//printk(KERN_INFO "pDMIXReg G217.03 0x%08x(%d) \n",pDMIXReg->dmix_plane_alpha_config_1,pDMIXReg->dmix_plane_alpha_config_1);
-	//printk(KERN_INFO "pDMIXReg G217.04 0x%08x(%d) \n",pDMIXReg->dmix_adjust_config_0,pDMIXReg->dmix_adjust_config_0);
-	//printk(KERN_INFO "pDMIXReg G217.05 0x%08x(%d) \n",pDMIXReg->dmix_adjust_config_1,pDMIXReg->dmix_adjust_config_1);
-	//printk(KERN_INFO "pDMIXReg G217.06 0x%08x(%d) \n",pDMIXReg->dmix_adjust_config_2,pDMIXReg->dmix_adjust_config_2);
-	//printk(KERN_INFO "pDMIXReg G217.07 0x%08x(%d) \n",pDMIXReg->dmix_adjust_config_3,pDMIXReg->dmix_adjust_config_3);
-	//printk(KERN_INFO "pDMIXReg G217.08 0x%08x(%d) \n",pDMIXReg->dmix_adjust_config_4,pDMIXReg->dmix_adjust_config_4);
-	printk(KERN_INFO "pDMIXReg G217.09 0x%08x(%d) \n",pDMIXReg->dmix_ptg_config_0,pDMIXReg->dmix_ptg_config_0);
-	//printk(KERN_INFO "pDMIXReg G217.10 0x%08x(%d) \n",pDMIXReg->dmix_ptg_config_1,pDMIXReg->dmix_ptg_config_1);
-	printk(KERN_INFO "pDMIXReg G217.11 0x%08x(%d) \n",pDMIXReg->dmix_ptg_config_2,pDMIXReg->dmix_ptg_config_2);
-	//printk(KERN_INFO "pDMIXReg G217.12 0x%08x(%d) \n",pDMIXReg->dmix_ptg_config_3,pDMIXReg->dmix_ptg_config_3);
-	//printk(KERN_INFO "pDMIXReg G217.13 0x%08x(%d) \n",pDMIXReg->dmix_ptg_config_4,pDMIXReg->dmix_ptg_config_4);
-	//printk(KERN_INFO "pDMIXReg G217.14 0x%08x(%d) \n",pDMIXReg->dmix_dtg_config_0,pDMIXReg->dmix_dtg_config_0);
-	//printk(KERN_INFO "pDMIXReg G217.15 0x%08x(%d) \n",pDMIXReg->dmix_dtg_config_1,pDMIXReg->dmix_dtg_config_1);
-	//printk(KERN_INFO "pDMIXReg G217.16 0x%08x(%d) \n",pDMIXReg->dmix_dtg_config_2,pDMIXReg->dmix_dtg_config_2);
-	//printk(KERN_INFO "pDMIXReg G217.17 0x%08x(%d) \n",pDMIXReg->dmix_dtg_config_3,pDMIXReg->dmix_dtg_config_3);
-	//printk(KERN_INFO "pDMIXReg G217.18 0x%08x(%d) \n",pDMIXReg->dmix_exp_config_0,pDMIXReg->dmix_exp_config_0);
-	//printk(KERN_INFO "pDMIXReg G217.19 0x%08x(%d) \n",pDMIXReg->dmix_exp_config_1,pDMIXReg->dmix_exp_config_1);
-	printk(KERN_INFO "pDMIXReg G217.20 0x%08x(%d) \n",pDMIXReg->dmix_source_select,pDMIXReg->dmix_source_select);	
-
-}
-

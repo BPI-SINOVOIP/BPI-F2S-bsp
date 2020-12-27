@@ -2602,7 +2602,7 @@ static int sp_disp_init_multi_layer(int i, struct platform_device *pdev, struct 
 	vbd->v4l2_dev   = &disp_dev->v4l2_dev;
 	vbd->lock	= &disp_layer->opslock;
 	vbd->vfl_dir	= VFL_DIR_TX;
-	vbd->device_caps = V4L2_CAP_VIDEO_OUTPUT;
+	vbd->device_caps = V4L2_CAP_VIDEO_OUTPUT | V4L2_CAP_STREAMING;
 
 	if (i == 0)
 		strlcpy(vbd->name, DISP_OSD0_NAME, sizeof(vbd->name));

@@ -8,6 +8,7 @@
 #include <media/v4l2-fh.h>
 #include <media/v4l2-ioctl.h>
 #include <media/v4l2-device.h>
+#include "isp_test_api.h"
 #include "isp_api.h"
 #include "reg_mipi.h"
 
@@ -34,7 +35,7 @@
 
 
 /* Message Definition */
-#define MIPI_FUNC_DEBUG
+//#define MIPI_FUNC_DEBUG
 #define MIPI_FUNC_INFO
 #define MIPI_FUNC_ERR
 
@@ -62,10 +63,10 @@ static void print_List(struct list_head *head){
 	struct videobuf_buffer *entry;
 
 	MIPI_DBG("*********************************************************************************\n");
-	MIPI_DBG("(HEAD addr =  %p, next = %p, prev = %p)\n", head, head->next, head->prev);
+	MIPI_DBG("(HEAD addr =  %px, next = %px, prev = %px)\n", head, head->next, head->prev);
 	list_for_each(listptr, head) {
 		entry = list_entry(listptr, struct videobuf_buffer, stream);
-		MIPI_DBG("list addr = %p | next = %p | prev = %p\n", &entry->stream, entry->stream.next,
+		MIPI_DBG("list addr = %px | next = %px | prev = %px\n", &entry->stream, entry->stream.next,
 			 entry->stream.prev);
 	}
 	MIPI_DBG("*********************************************************************************\n");
@@ -132,6 +133,7 @@ struct sp_mipi_device {
 
 	int                             fs_irq;
 	int                             fe_irq;
+	int                             vsync_irq;
 	bool                            streaming;              /* Indicates whether streaming started */
 	bool                            skip_first_int;
 	struct gpio_desc                *cam_gpio0;

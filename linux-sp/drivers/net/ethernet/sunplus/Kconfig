@@ -26,7 +26,7 @@ config NET_VENDOR_SUNPLUS_GL2SW
 	select PINCTRL_SPPCTL_I143
 	select COMMON_CLK_SP_I143
 	select RESET_SUNPLUS
-	select NVMEM_SUNPLUS_I143_OCOTP
+	select NVMEM_SUNPLUS_OCOTP
 	---help---
 	  If you have a network (Ethernet) device belonging to this class, say Y.
 

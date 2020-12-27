@@ -82,15 +82,31 @@ struct l2sw_reg {
 
 //=================================================================================================
 /*
- * TYPE: RegisterFile_MOON5
+ * TYPE: RegisterFile_MOON4
  */
-struct moon5_reg {
-	u32 mo5_thermal_ctl_0;
-	u32 mo5_thermal_ctl_1;
-	u32 mo4_thermal_ctl_2;
-	u32 mo4_thermal_ctl_3;
-	u32 mo4_tmds_l2sw_ctl;
-	u32 mo4_l2sw_clksw_ctl;
+struct moon4_reg {
+	u32 sd_softpad_cfg_0;
+	u32 sd_softpad_cfg_1;
+	u32 sd_softpad_cfg_2;
+	u32 sd_softpad_cfg_3;
+	u32 sdio_softpad_cfg_0;
+	u32 sdio_softpad_cfg_1;
+	u32 sdio_softpad_cfg_2;
+	u32 sdio_softpad_cfg_3;
+	u32 pllref_cfg;
+	u32 pllsys_cfg;
+	u32 pllfla_cfg;
+	u32 pllgpu_cfg;
+	u32 pllcpu_cfg;
+	u32 pllmip_cfg;
+	u32 plleth_cfg;
+	u32 plltv_cfg_0;
+	u32 plltv_cfg_1;
+	u32 plltv_cfg_2;
+	u32 plltv_cfg_3;
+	u32 pllsrv_cfg_1;
+	u32 xtal_cfg;
+	u32 mo4_cfg_21;
 };
 
 #endif

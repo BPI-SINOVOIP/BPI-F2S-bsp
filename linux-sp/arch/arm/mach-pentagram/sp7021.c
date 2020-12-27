@@ -26,25 +26,27 @@ static void sp_power_off(void)
 {
 //	unsigned int reg_value;
 	void __iomem *regs = (void __iomem *)A_SYSTEM_BASE;
-	void __iomem *regs_B = (void __iomem *)B_SYSTEM_BASE;
+//	void __iomem *regs_B = (void __iomem *)B_SYSTEM_BASE;
 //	int i;
 	early_printk("%s\n", __func__);
 	#ifdef CONFIG_SUNPLUS_IOP
-    //for iop power off
+	//for iop power off
 	sp_iop_platform_driver_poweroff();
-	#endif 
+	#endif
 	//writel(0x0000, regs_B + 0x434); /* iop_data5=0x0000 */
 	//writel(0x0060, regs_B + 0x438); /* iop_data6=0x0060 */
 	//writel(0x00dd, regs_B + 0x424); /* iop_data1=0x00dd */
- 		
-	printk("PD RG_PLL_PDN and RG_PLLIO_PDN to save power\n");
+
+	//printk("PD RG_PLL_PDN and RG_PLLIO_PDN to save power\n");
 	writel(0, regs + 0x54); /* bit0 RG_PLLIO_PDN */
 	writel(0, regs + 0x2C); /* bit0 RG_PLL_PDN */
+	while (1)
+		;
 
 //	printk("PD Achip mo_gclk_en0/mo_clk_en0 to save power \n");
-//	writel(0, regs + 0x28); 
-//	writel(0, regs + 0x24); 
-//	
+//	writel(0, regs + 0x28);
+//	writel(0, regs + 0x24);
+//
 //	printk("disable Q628 clk and enable reset to save power\n");
 //	for (i = 0; i < 20; i++) {
 //		writel(0xffff0000 , (void __iomem *)(B_SYSTEM_BASE + 4 * (1 + i)));
@@ -70,7 +72,7 @@ static void apply_partial_clken(void)
 {
 	int i;
 	const int ps_clken[] = {
-		0x67ef, 0x43ff, 0xff03, 0xfff0, 0x0004, /* G0.1~5  */
+		0x67ef, 0x03ff, 0xff03, 0xfff0, 0x0004, /* G0.1~5  */
 		0x0000, 0x8000, 0xffff, 0x0040, 0x0000, /* G0.6~10 */
 	};
 
@@ -101,7 +103,7 @@ static void __init sp_init(void)
 	writel(0x00120012, regs + 0x0274); /* G4.29 misc_ctl */
 #endif
 
-	early_printk("%s\n", __func__);
+	printk("%s\n", __func__);
 
 	sp_prn_uptime();
 
@@ -111,7 +113,7 @@ static void __init sp_init(void)
 
 	b_sysclk = b_pllsys_get_rate();
 
-	early_printk("B: b_sysclk=%uM abio_ctrl=(%ubit, %s)\n", b_sysclk / 1000000,
+	printk("P-chip: sys = %uMHz, cpio_ctrl = (%ubit, %s)\n", b_sysclk / 1000000,
 		(io_ctrl & 2) ? 16 : 8, (io_ctrl & 1) ? "DDR" : "SDR");
 
 #ifdef CONFIG_MACH_PENTAGRAM_ACHIP
@@ -121,17 +123,17 @@ static void __init sp_init(void)
 	sysclk = coreclk / (1 + ((clk_cfg >> 3) & 1));
 	a_pllioclk = (((readl((void __iomem *)A_SYSTEM_BASE + 0x54) >> 16) & 0xff) + 1) * (27 * 1000 * 1000);
 	ioclk = a_pllioclk / (20 + 5 * ((clk_cfg >> 4) & 7)) / ((clk_cfg >> 16) & 0xff) * 10;
-	early_printk("A: core=%uM a_sysclk=%uM a_pllio=%uM abio_bus=%uM\n",
+	printk("C-chip: core = %uMHz, sys = %uMHz, pllio = %uMHz, cpio_bus = %uMHz\n",
 		coreclk / 1000000, sysclk / 1000000, a_pllioclk / 1000000, ioclk / 1000000);
 
 #endif
 
 #ifdef CONFIG_SP_PARTIAL_CLKEN
-	//apply_partial_clken();
+	apply_partial_clken();
 #endif
 
-		sp7021_cpuidle.dev.platform_data = &cpuidle_coupled_sp7021_data;
-		platform_device_register(&sp7021_cpuidle);
+	sp7021_cpuidle.dev.platform_data = &cpuidle_coupled_sp7021_data;
+	platform_device_register(&sp7021_cpuidle);
 }
 
 static struct map_desc sp_io_desc[] __initdata = {
@@ -160,13 +162,15 @@ static struct map_desc sp_io_desc[] __initdata = {
 
 static void __init sp_map_io(void)
 {
-	early_printk("%s\n", __func__);
+	printk("%s\n", __func__);
 
 	iotable_init(sp_io_desc, ARRAY_SIZE( sp_io_desc));
 
-	printk("B_REG %08x -> [%08x-%08x]\n", PA_B_REG, VA_B_REG, VA_B_REG + SIZE_B_REG);
+	printk("P_REG: [%08x-%08x] -> [%08x-%08x]\n", PA_B_REG, PA_B_REG + SIZE_B_REG - 1,
+		VA_B_REG, VA_B_REG + SIZE_B_REG - 1);
 #ifdef CONFIG_MACH_PENTAGRAM_ACHIP
-        printk("A_REG %08x -> [%08x-%08x]\n", PA_A_REG, VA_A_REG, VA_A_REG + SIZE_A_REG);
+	printk("C_REG: [%08x-%08x] -> [%08x-%08x]\n", PA_A_REG, PA_A_REG + SIZE_A_REG - 1,
+		VA_A_REG, VA_A_REG + SIZE_A_REG - 1);
 #endif
 }
 
@@ -193,7 +197,7 @@ void sp_restart(enum reboot_mode mode, const char *cmd)
 	void __iomem *regs = (void __iomem *)B_SYSTEM_BASE;
 	#ifdef CONFIG_SUNPLUS_IOP
 	unsigned int reg_value;
-	#endif 
+	#endif
 	early_printk("%s\n", __func__);
 	/* MOON : enable watchdog reset */
 	writel(0x00120012, regs + 0x0274); /* G4.29 misc_ctl */
@@ -206,8 +210,8 @@ void sp_restart(enum reboot_mode mode, const char *cmd)
 
 	#ifdef CONFIG_SUNPLUS_IOP
 	reg_value = readl(regs + 0x400);
-	writel((reg_value|0x0001), regs + 0x400); 
-	#endif 
+	writel((reg_value|0x0001), regs + 0x400);
+	#endif
 }
 
 #ifdef CONFIG_MACH_PENTAGRAM_SP7021_BCHIP

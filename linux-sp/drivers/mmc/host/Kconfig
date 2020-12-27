@@ -35,7 +35,7 @@ config MMC_SUNPLUS_I143
 	  
 config SP_EMMC
 	tristate "Sunplus SP7021 MMC Controller"
-	depends on ARCH_PENTAGRAM
+	depends on ARCH_PENTAGRAM || SOC_I143
 	default y
 	help
 		If you say yes here, you will get support for eMMC host interface 

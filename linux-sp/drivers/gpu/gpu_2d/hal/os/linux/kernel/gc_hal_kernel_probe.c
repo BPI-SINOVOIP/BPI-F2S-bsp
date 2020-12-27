@@ -180,7 +180,7 @@ static ulong baseAddress = 0x20000000;
 #endif
 module_param(baseAddress, ulong, 0644);
 
-static ulong physSize = 0x04000000;
+static ulong physSize = 0x20000000;
 module_param(physSize, ulong, 0644);
 
 static uint logFileSize = 0;
@@ -1318,6 +1318,26 @@ static int __init gpu_init(void)
         }
     }
 
+    if (platform.ops->needAddDevice
+       && platform.ops->needAddDevice(&platform))
+    {
+        /* Allocate device */
+        platform.device = platform_device_alloc(DEVICE_NAME, -1);
+        if (!platform.device)
+        {
+            printk(KERN_ERR "galcore: platform_device_alloc failed.\n");
+            ret = -ENOMEM;
+            goto out;
+        }
+
+        /* Add device */
+        ret = platform_device_add(platform.device);
+        if (ret)
+        {
+            printk(KERN_ERR "galcore: platform_device_add failed.\n");
+            goto put_dev;
+        }
+    }
     platform.driver = &gpu_driver;
 
     if (platform.ops->adjustDriver)
@@ -1333,6 +1353,8 @@ static int __init gpu_init(void)
     }
 
     platform_device_del(platform.device);
+put_dev:
+    platform_device_put(platform.device);
 
 out:
     return ret;

@@ -95,6 +95,9 @@ static struct fb_ops framebuffer_ops = {
 	.fb_pan_display		= _sp7021_fb_pan_display,
 	.fb_setcmap			= _sp7021_fb_setcmap,
 	.fb_ioctl			= _sp7021_fb_ioctl,
+	.fb_fillrect    	= cfb_fillrect,
+	.fb_copyarea    	= cfb_copyarea,
+	.fb_imageblit   	= cfb_imageblit,
 };
 
 static const struct of_device_id _sp7021_fb_dt_ids[] = {
@@ -177,21 +180,15 @@ static int _sp7021_fb_create_device(struct platform_device *pdev,
 		goto ERROR_HANDLE_FB_INIT;
 	}
 
-	if (fbWorkMem->ColorFmt == DRV_OSD_REGION_FORMAT_8BPP) {
-		fbWorkMem->fbmem_palette = kzalloc(FB_PALETTE_LEN, GFP_KERNEL);
+	fbWorkMem->fbmem_palette = kzalloc(FB_PALETTE_LEN, GFP_KERNEL);
 
-		if (fbWorkMem->fbmem_palette == NULL)
-			goto ERROR_HANDLE_FB_INIT;
-	} else
-		fbWorkMem->fbmem_palette = NULL;
+	if (fbWorkMem->fbmem_palette == NULL)
+		goto ERROR_HANDLE_FB_INIT;
 
 	fbinfo->fbops = &framebuffer_ops;
 	fbinfo->flags = FBINFO_FLAG_DEFAULT;
 
-	if (fbWorkMem->ColorFmt == DRV_OSD_REGION_FORMAT_8BPP)
-		fbinfo->pseudo_palette = fbWorkMem->fbmem_palette;
-	else
-		fbinfo->pseudo_palette = NULL;
+	fbinfo->pseudo_palette = fbWorkMem->fbmem_palette;
 	fbinfo->screen_base = fbWorkMem->fbmem;
 	fbinfo->screen_size = fbWorkMem->fbsize;
 
@@ -271,10 +268,7 @@ static int _sp7021_fb_create_device(struct platform_device *pdev,
 	}
 
 	Info->UI_bufAddr = (u32)fbinfo->fix.smem_start;
-	if (fbinfo->pseudo_palette)
-		Info->UI_bufAddr_pal = (u32)fbinfo->pseudo_palette;
-	else
-		Info->UI_bufAddr_pal = 0;
+	Info->UI_bufAddr_pal = (u32)fbinfo->pseudo_palette;
 	Info->UI_bufsize = fbWorkMem->fbsize;
 
 	mod_info(pdev, "mem VA 0x%x(PA 0x%x), Palette VA 0x%x(PA 0x%x), UI Res %dx%d, size %d + %d\n",
@@ -285,8 +279,7 @@ static int _sp7021_fb_create_device(struct platform_device *pdev,
 			fbWorkMem->fbwidth,
 			fbWorkMem->fbheight,
 			fbWorkMem->fbsize,
-			(fbWorkMem->ColorFmt == DRV_OSD_REGION_FORMAT_8BPP)
-			? FB_PALETTE_LEN : 0);
+			FB_PALETTE_LEN);
 
 	gFB_INFO = fbinfo;
 
@@ -345,7 +338,7 @@ static int _sp7021_fb_setcmap(struct fb_cmap *cmap, struct fb_info *info)
 	unsigned short trans = ~0;
 	unsigned int *palette = (unsigned int *)info->pseudo_palette;
 
-	if ((fb_par->ColorFmt != DRV_OSD_REGION_FORMAT_8BPP) || (!palette))
+	if (!palette)
 		return -1;
 
 	red = cmap->red;
@@ -360,15 +353,83 @@ static int _sp7021_fb_setcmap(struct fb_cmap *cmap, struct fb_info *info)
 		if (transp)
 			trans = *(transp++);
 
-		palette[i] = sp7021_fb_chan_by_field((unsigned char)trans,
-				&info->var.transp);
-		palette[i] |= sp7021_fb_chan_by_field((unsigned char)*(red++),
-				&info->var.red);
-		palette[i] |= sp7021_fb_chan_by_field((unsigned char)*(green++),
-				&info->var.green);
-		palette[i] |= sp7021_fb_chan_by_field((unsigned char)*(blue++),
-				&info->var.blue);
+		if (fb_par->ColorFmt == DRV_OSD_REGION_FORMAT_ARGB_8888) {
+			palette[i] = 0xff000000;
+			palette[i] |= sp7021_fb_chan_by_field((unsigned char)*(red++),
+					&info->var.red);
+			palette[i] |= sp7021_fb_chan_by_field((unsigned char)*(green++),
+					&info->var.green);
+			palette[i] |= sp7021_fb_chan_by_field((unsigned char)*(blue++),
+					&info->var.blue);
+		}
+		else if (fb_par->ColorFmt == DRV_OSD_REGION_FORMAT_RGBA_8888) {
+			palette[i] = sp7021_fb_chan_by_field((unsigned char)*(red++),
+					&info->var.red);
+			palette[i] |= sp7021_fb_chan_by_field((unsigned char)*(green++),
+					&info->var.green);
+			palette[i] |= sp7021_fb_chan_by_field((unsigned char)*(blue++),
+					&info->var.blue);
+			palette[i] |= 0x000000ff;
+		}		
+		else if ( (fb_par->ColorFmt == DRV_OSD_REGION_FORMAT_8BPP) || 
+					(fb_par->ColorFmt == DRV_OSD_REGION_FORMAT_RGB_565) ) {
+			palette[i] = sp7021_fb_chan_by_field((unsigned char)trans,
+					&info->var.transp);
+			palette[i] |= sp7021_fb_chan_by_field((unsigned char)*(red++),
+					&info->var.red);
+			palette[i] |= sp7021_fb_chan_by_field((unsigned char)*(green++),
+					&info->var.green);
+			palette[i] |= sp7021_fb_chan_by_field((unsigned char)*(blue++),
+					&info->var.blue);
+		}
+		else if (fb_par->ColorFmt == DRV_OSD_REGION_FORMAT_ARGB_4444) {
+			palette[i] = 0xf000f000;
+			palette[i] |= sp7021_fb_chan_by_field((unsigned char)*(red++),
+					&info->var.red);
+			palette[i] |= sp7021_fb_chan_by_field((unsigned char)*(green++),
+					&info->var.green);
+			palette[i] |= sp7021_fb_chan_by_field((unsigned char)*(blue++),
+					&info->var.blue);
+		}
+		else if (fb_par->ColorFmt == DRV_OSD_REGION_FORMAT_RGBA_4444) {
+			palette[i] = sp7021_fb_chan_by_field((unsigned char)*(red++),
+					&info->var.red);
+			palette[i] |= sp7021_fb_chan_by_field((unsigned char)*(green++),
+					&info->var.green);
+			palette[i] |= sp7021_fb_chan_by_field((unsigned char)*(blue++),
+					&info->var.blue);
+			palette[i] |= 0x000f000f;
+		}
+		else if (fb_par->ColorFmt == DRV_OSD_REGION_FORMAT_ARGB_1555) {
+			palette[i] = 0x80008000;
+			palette[i] |= sp7021_fb_chan_by_field((unsigned char)*(red++),
+					&info->var.red);
+			palette[i] |= sp7021_fb_chan_by_field((unsigned char)*(green++),
+					&info->var.green);
+			palette[i] |= sp7021_fb_chan_by_field((unsigned char)*(blue++),
+					&info->var.blue);
+		}
 	}
+
+	if (fb_par->ColorFmt == DRV_OSD_REGION_FORMAT_YUY2) {
+		palette[0] = 0x80008000; //V Y U Y (black)
+		palette[1] = 0x7213D513; //V Y U Y
+		palette[2] = 0x38634763; //V Y U Y
+		palette[3] = 0x2B779C77; //V Y U Y
+		palette[4] = 0xD5326332; //V Y U Y
+		palette[5] = 0xC746B846; //V Y U Y
+		palette[6] = 0xB1644764; //V Y U Y
+		palette[7] = 0x80AA80AA; //V Y U Y
+		palette[8] = 0x80558055; //V Y U Y
+		palette[9] = 0x7268D568; //V Y U Y
+		palette[10] = 0x38B847B8; //V Y U Y
+		palette[11] = 0x2BCC9CCC; //V Y U Y
+		palette[12] = 0xD5876387; //V Y U Y
+		palette[13] = 0xC79BB89B; //V Y U Y
+		palette[14] = 0x8DEB2BEB; //V Y U Y
+		palette[15] = 0x80FF80FF; //V Y U Y (white)
+	}
+
 	return 0;
 }
 

@@ -15,7 +15,7 @@
 #include <errno.h>
 #include <malloc.h>
 
-#ifdef CONFIG_ARCH_PENTAGRAM
+#if defined(CONFIG_ARCH_PENTAGRAM) || defined(CONFIG_TARGET_PENTAGRAM_I143_P)
 #include <asm/arch/sp_bootinfo.h>
 #endif
 
@@ -112,7 +112,7 @@ int env_import(const char *buf, int check)
 {
 	env_t *ep = (env_t *)buf;
 
-#ifdef CONFIG_ARCH_PENTAGRAM
+#if defined(CONFIG_ARCH_PENTAGRAM) || defined(CONFIG_TARGET_PENTAGRAM_I143_P)
 	if (SP_IS_ISPBOOT()) {
 		set_default_env("!ISP mode",0);
 		return 0;

@@ -112,8 +112,11 @@ int video_clear(struct udevice *dev)
 		memset(priv->fb, priv->colour_bg, priv->fb_size);
 		break;
 	}
-#ifdef CONFIG_VIDEO_SP7021
+#if defined(CONFIG_VIDEO_SP7021)
 	flush_cache((ulong)priv->fb, priv->fb_size);
+#elif defined(CONFIG_VIDEO_I143)
+	flush_cache((long long)priv->fb, priv->fb_size);
+#else
 #endif
 	return 0;
 }
@@ -140,7 +143,7 @@ void video_set_default_colors(struct udevice *dev, bool invert)
 	}
 	priv->fg_col_idx = fore;
 
-#ifdef CONFIG_VIDEO_SP7021
+#if defined(CONFIG_VIDEO_SP7021) || defined(CONFIG_VIDEO_I143)
 	switch (priv->bpix) {
 		case VIDEO_BPP8: {
 			priv->colour_fg = fore;
@@ -214,7 +217,7 @@ int video_get_ysize(struct udevice *dev)
 /* Set up the colour map */
 static int video_pre_probe(struct udevice *dev)
 {
-#ifdef CONFIG_VIDEO_SP7021
+#if defined(CONFIG_VIDEO_SP7021) || defined(CONFIG_VIDEO_I143)
 #else
 	struct video_priv *priv = dev_get_uclass_priv(dev);
 
@@ -228,7 +231,7 @@ static int video_pre_probe(struct udevice *dev)
 
 static int video_pre_remove(struct udevice *dev)
 {
-#ifdef CONFIG_VIDEO_SP7021
+#if defined(CONFIG_VIDEO_SP7021) || defined(CONFIG_VIDEO_I143)
 #else
 	struct video_priv *priv = dev_get_uclass_priv(dev);
 

@@ -59,7 +59,7 @@
 #export AQROOT=$(PWD)/linux/kernel/arch/arm/mach-gemini/gpu2d
 #export AQROOT=$(shell find . -type d -name 'gpu2d' | grep 'drivers/gpu/gpu2d')
 #export AQROOT=$(shell find ../ -type d -name 'gpu_2d')
-export AQROOT=$(srctree)/drivers/gpu/gpu_2d
+export AQROOT=$(strip $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST)))))
 include $(AQROOT)/config
 
 KERNEL_DIR ?= $(TOOL_DIR)/kernel
@@ -179,6 +179,10 @@ endif
 
 
 EXTRA_CFLAGS += -DLINUX -DDRIVER
+
+ifeq ($(USE_DEVICE_TREE),1)
+EXTRA_CFLAGS += -DUSE_DEVICE_TREE
+endif
 
 ifeq ($(FLAREON),1)
 EXTRA_CFLAGS += -DFLAREON

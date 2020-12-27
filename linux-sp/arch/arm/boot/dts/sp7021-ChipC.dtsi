@@ -1,3 +1,7 @@
+/dts-v1/;
+
+#include "sp7021-common.dtsi"
+
 / {
 	model = "Sunplus SP7021 (CA7)";
 	compatible = "sunplus,sp7021-achip";
@@ -83,7 +87,7 @@
 			compatible = "arm,cortex-a7-gic";
 			interrupt-controller;
 			#interrupt-cells = <3>;
-			reg = <0x9f101000 0x1000>, <0x9f102000 0x2000>;
+			reg = <0x9f101000 0x1000>, <0x9f102000 0x2000>, <0x9f104000 0x2000>, <0x9f106000 0x2000>;
 		};
 
 		timer: timer@CPU {

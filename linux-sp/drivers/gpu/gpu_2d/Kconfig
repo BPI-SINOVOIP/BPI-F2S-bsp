@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: GPL-2.0-only
+config GPU_2D
+        bool "Vivante GPU_2D(GC520) Driver"
+        depends on SOC_I143
+        default y
+        help
+          Say yes if kernel should use gpu_2d.
+
+          If unsure, choose Y.

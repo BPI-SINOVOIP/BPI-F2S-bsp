@@ -971,8 +971,13 @@ static void dma_free_dma_buffers(struct platform_device *pdev)
 static int snd_spsoc_probe(struct platform_device *pdev)
 {
 	int ret = 0;
-	  
-	AUD_INFO("%s IN\n",__func__);
+	
+	AUD_INFO("%s IN\n", __func__);
+        if (!of_device_is_available(audionp)) {
+		dev_err(&pdev->dev, "devicetree status is not available\n");
+		return -ENODEV;
+	}
+	
 	ret = devm_snd_soc_register_component(&pdev->dev, &sunplus_soc_platform, NULL, 0);
 	// create & register device for file operation, used for 'ioctl'
 	//audfops_init();

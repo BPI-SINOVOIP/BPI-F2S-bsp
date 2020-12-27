@@ -16,6 +16,13 @@ config SP_ICM_TEST
 	help
 	  echo h > /sys/module/sp_icm/parameters/test
 
+config SP_FBIO_LED
+	tristate "Sunplus FBIO FPGA LED driver"
+	depends on ARCH_PENTAGRAM
+	default n
+	help
+	  echo ex_con ex_to ex_buffer > /sys/module/sp_fbio_led/parameters/test
+
 config SENSORS_LIS3LV02D
 	tristate
 	depends on INPUT

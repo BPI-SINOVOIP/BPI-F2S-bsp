@@ -49,6 +49,7 @@ config MACH_PENTAGRAM_SP7021_ACHIP
         select ARM_GIC
         select SP_INTC
 	select HAVE_SMP
+	select ARM_PSCI
     select COMMON_CLK_SP7021
 	select CLKSRC_SP_TIMER
 	select PINCTRL

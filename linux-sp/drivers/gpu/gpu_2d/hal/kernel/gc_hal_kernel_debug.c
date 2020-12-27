@@ -52,7 +52,7 @@
 *
 *****************************************************************************/
 
-
+#include <linux/uaccess.h>
 #include "gc_hal_kernel_precomp.h"
 #include <gc_hal_kernel_debug.h>
 
@@ -735,6 +735,7 @@ _PrintBuffer(
     /* Print the buffer. */
     for (i = 0, len = indent, column = 0; i < count; i += 1)
     {
+        u32 v;
         /* Append the address. */
         if (column == 0)
         {
@@ -743,10 +744,12 @@ _PrintBuffer(
                 );
         }
 
+        get_user(v, &data[i]);
+
         /* Append the data value. */
         len += gcmkSPRINTF2(
             buffer + len, gcmSIZEOF(buffer) - len, "%c%08X",
-            (address == DmaAddress)? '>' : ' ', data[i]
+            (address == DmaAddress)? '>' : ' ', v
             );
 
         buffer[len] = '\0';

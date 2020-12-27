@@ -219,7 +219,7 @@ config MTK_CMDQ_MBOX
 
 config SP_IPC
 	tristate "Sunplus Mailbox (IPC) driver"
-	depends on ARCH_RV64I
+	#depends on ARCH_RV64I
 	default n
 
 config SP_IPC_TEST

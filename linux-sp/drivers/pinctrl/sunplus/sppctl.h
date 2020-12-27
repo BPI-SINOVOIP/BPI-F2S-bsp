@@ -1,6 +1,6 @@
 /*
  * SP7021 pinmux controller driver.
- * Copyright (C) SunPlus Tech/Tibbo Tech. 2019
+ * Copyright (C) Sunplus Tech/Tibbo Tech. 2020
  * Author: Dvorkin Dmitry <dvorkin@tibbo.com>
  *
  * This program is free software; you can redistribute it and/or modify
@@ -20,13 +20,13 @@
 #define MNAME "sppctl"
 #define M_LIC "GPL v2"
 #define M_AUT "Dvorkin Dmitry dvorkin@tibbo.com"
-#ifdef CONFIG_SOC_SP7021
+#ifdef CONFIG_PINCTRL_SPPCTL
 #define M_NAM "SP7021 PinCtl"
 #else
 #define M_NAM "I143 PinCtl"
 #endif
-#define M_ORG "SunPlus/Tibbo Tech."
-#define M_CPR "(C) 2019"
+#define M_ORG "Sunplus/Tibbo Tech."
+#define M_CPR "(C) 2020"
 
 #define FW_DEFNAME NULL
 
@@ -49,10 +49,10 @@
 #include <linux/pinctrl/pinconf.h>
 #include <linux/pinctrl/pinmux.h>
 #include <linux/pinctrl/pinconf-generic.h>
-#ifdef CONFIG_SOC_SP7021
-#include <dt-bindings/pinctrl/sp7021.h>
+#ifdef CONFIG_PINCTRL_SPPCTL
+#include <dt-bindings/pinctrl/sppctl-sp7021.h>
 #else
-#include <dt-bindings/pinctrl/sp_i143.h>
+#include <dt-bindings/pinctrl/sppctl-i143.h>
 #endif
 
 #define SPPCTL_MAX_NAM 64
@@ -72,9 +72,9 @@
 #define KDBG(pd,fmt,args...)
 #endif
 
-#include "sp7021_gpio.h"
+#include "sppctl_gpio.h"
 
-typedef struct sp7021gpio_chip_T sp7021gpio_chip_t;
+typedef struct sppctlgpio_chip_T sppctlgpio_chip_t;
 
 typedef struct sppctl_pdata_T {
 	char name[SPPCTL_MAX_NAM];
@@ -90,7 +90,7 @@ typedef struct sppctl_pdata_T {
 	struct pinctrl_desc pdesc;
 	struct pinctrl_dev *pcdp;
 	struct pinctrl_gpio_range gpio_range;
-	sp7021gpio_chip_t *gpiod;
+	sppctlgpio_chip_t *gpiod;
 } sppctl_pdata_t;
 
 typedef struct sppctl_reg_T {
@@ -99,11 +99,7 @@ typedef struct sppctl_reg_T {
 } sppctl_reg_t;
 
 #include "sppctl_sysfs.h"
-#ifdef CONFIG_SOC_SP7021
 #include "sppctl_pinctrl.h"
-#else
-#include "sppctl_pinctrl_i143.h"
-#endif
 
 void sppctl_gmx_set(sppctl_pdata_t *_p, uint8_t _roff, uint8_t _boff, uint8_t _bsiz, uint8_t _rval);
 uint8_t sppctl_gmx_get(sppctl_pdata_t *_p, uint8_t _roff, uint8_t _boff, uint8_t _bsiz);
@@ -123,7 +119,7 @@ typedef struct {
 	const uint8_t gval;             // value for register
 	const unsigned * const pins;    // list of pins
 	const unsigned pnum;            // number of pins
-} sp7021grp_t;
+} sppctlgrp_t;
 
 #define EGRP(n,v,p) { \
 	.name = n, \
@@ -138,7 +134,7 @@ typedef struct {
 	const uint8_t roff;         // register offset
 	const uint8_t boff;         // bit offset
 	const uint8_t blen;         // number of bits
-	const sp7021grp_t * const grps; // list of groups
+	const sppctlgrp_t * const grps; // list of groups
 	const unsigned gnum;        // number of groups
 	const char *grps_sa[5];     // array of pointers to func's grps names
 } func_t;
@@ -165,7 +161,7 @@ typedef struct {
 extern func_t list_funcs[];
 extern const size_t list_funcsSZ;
 
-extern const char * const sp7021pmux_list_s[];
+extern const char * const sppctlpmux_list_s[];
 extern const size_t PMUX_listSZ;
 
 typedef struct grp2fp_map_T {

@@ -1,0 +1,6 @@
+config USB_GADGET_I143
+ 	tristate "Sunplus I143 Gemini USB Device Controller"
+ 	depends on SOC_I143
+ 	select USB_GADGET_DUALSPEED
+ 	help
+	   This option selects the USB device controller for Sunplus I143.

@@ -1,9 +1,16 @@
 #ifndef __L2SW_DRIVER_H__
 #define __L2SW_DRIVER_H__
 
-#include "l2sw_register.h"
 #include "l2sw_define.h"
+#ifdef CONFIG_SOC_SP7021
+#include "l2sw_register.h"
 #include "l2sw_hal.h"
+#include "l2sw_int.h"
+#else
+#include "gl2sw_register.h"
+#include "gl2sw_hal.h"
+#include "gl2sw_int.h"
+#endif
 #include "l2sw_mdio.h"
 #include "l2sw_mac.h"
 #include "l2sw_desc.h"
@@ -13,6 +20,8 @@
 #define NEXT_RX(QUEUE, N)       ((N) = (((N)+1) == mac->comm->rx_desc_num[QUEUE])? 0: (N)+1)
 
 #define RX_NAPI_WEIGHT          64
+
+void print_packet(struct sk_buff *skb);
 
 #endif
 

@@ -16,9 +16,12 @@
 #include <linux/mmc/core.h>
 #include <linux/mmc/host.h>
 
+#define SPSDC_SYS_CLK	222750000
 #define SPSDC_MIN_CLK	400000
-#define SPSDC_MAX_CLK	200000000
+#define SPSDC_MAX_CLK	111375000
 #define SPSDC_MAX_BLK_COUNT 65535
+
+
 
 #define __rsvd_regs(l) __append_suffix(l, __COUNTER__)
 #define __append_suffix(l, s) _append_suffix(l, s)
@@ -29,7 +32,7 @@
 /* #define SPMMC_EMMC_VCCQ_1V8 */
 
 #define SPMMC_SUPPORT_VOLTAGE_1V8
-//#define SPMMC_EMMC_VCCQ_1V8
+//#define SPMMC_SDIO_1V8
 
 struct spsdc_regs {
 #define SPSDC_MEDIA_NONE 0
@@ -262,6 +265,11 @@ struct spsdc_tuning_info {
 	u32 clk_dly:3;
 		
 };
+
+struct spsdc_compatible {
+	int mode; /* SD/SDIO/eMMC */
+};
+
 
 struct spsdc_host {
 	struct spsdc_regs *base;

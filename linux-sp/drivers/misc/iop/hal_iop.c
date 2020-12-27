@@ -677,6 +677,7 @@ void hal_iop_shutdown(void __iomem *iopbase, void __iomem *ioppmcbase)
 	#endif 
 	
 	pIopReg->iop_data1=0xdd; //8051 bin file call Ultra low function.
+	mdelay(10);
 	#if 0
 	early_printk("%s(%d) iop_data0=%x  iop_data1=%x iop_data2=%x iop_data3=%x iop_data4=%x iop_data5=%x\n", __FUNCTION__, __LINE__, 
 		pIopReg->iop_data0,pIopReg->iop_data1,pIopReg->iop_data2,pIopReg->iop_data3,pIopReg->iop_data4,pIopReg->iop_data5);
@@ -686,7 +687,7 @@ void hal_iop_shutdown(void __iomem *iopbase, void __iomem *ioppmcbase)
 	#endif
 	
 	//early_printk("hal_iop_shutdown end\n");
-	printk("hal_iop_shutdown end\n");
+	//printk("hal_iop_shutdown end\n");
 
 	
 }

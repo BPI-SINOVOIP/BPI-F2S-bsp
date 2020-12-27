@@ -69,7 +69,7 @@ void DRV_DVE_Init(void *pInHWReg)
 	dve_bist_mode =  (DVE_TTL_BIT_SW_OFF) \
 									|(DVE_TTL_MODE) \
 									|(DVE_COLOR_SPACE_BT601) \
-									|(DVE_TTL_CLK_POL_INV) \
+									|(DVE_TTL_CLK_POL_NOR) \
 									|(DVE_COLOR_BAR_USER_MODE_SEL) \
 									|(DVE_NORMAL_MODE);
 	if(disp_dev->TTLPar.ttl_rgb_swap) {
@@ -133,7 +133,7 @@ void DRV_DVE_Init(void *pInHWReg)
 	
 	vfp = (int)(disp_dev->TTLPar.vfp);
 	vp = (int)(disp_dev->TTLPar.vsync);
-	vbp = (int)(disp_dev->TTLPar.vfp);
+	vbp = (int)(disp_dev->TTLPar.vbp);
 	vac = (int)(disp_dev->TTLPar.vactive);
 	vtot = vfp + vp + vbp + vac;
 	

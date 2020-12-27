@@ -217,6 +217,7 @@ EXPORT_SYMBOL(fbtft_unregister_backlight);
 static void fbtft_set_addr_win(struct fbtft_par *par, int xs, int ys, int xe,
 			       int ye)
 {
+
 	write_reg(par, MIPI_DCS_SET_COLUMN_ADDRESS,
 		  (xs >> 8) & 0xFF, xs & 0xFF, (xe >> 8) & 0xFF, xe & 0xFF);
 
@@ -235,6 +236,7 @@ static void fbtft_reset(struct fbtft_par *par)
 	usleep_range(20, 40);
 	gpiod_set_value_cansleep(par->gpio.reset, 0);
 	msleep(120);
+	gpiod_set_value_cansleep(par->gpio.reset, 1);
 }
 
 static void fbtft_update_display(struct fbtft_par *par, unsigned int start_line,
@@ -275,7 +277,7 @@ static void fbtft_update_display(struct fbtft_par *par, unsigned int start_line,
 	}
 
 	fbtft_par_dbg(DEBUG_UPDATE_DISPLAY, par, "%s(start_line=%u, end_line=%u)\n",
-		      __func__, start_line, end_line);
+                     __func__, start_line, end_line);
 
 	if (par->fbtftops.set_addr_win)
 		par->fbtftops.set_addr_win(par, 0, start_line,

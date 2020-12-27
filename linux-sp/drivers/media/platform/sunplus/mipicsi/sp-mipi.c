@@ -98,6 +98,20 @@ static const struct sp_fmt imx219_formats[] = {
 	},
 };
 
+static const struct sp_fmt veye290_formats[] = {
+	{
+		.name     = "UYVY/YUY2, YUV422",
+		.fourcc   = V4L2_PIX_FMT_UYVY,
+		.width    = 1920,
+		.height   = 1080,
+		.depth    = 16,
+		.walign   = 2,
+		.halign   = 1,
+		.mipi_lane = 2,
+		.sol_sync = SYNC_YUY2,
+	},
+};
+
 static const struct sp_fmt ov5647_formats[] = {
 	{
 		.name     = "BAYER, RAW8",
@@ -159,6 +173,16 @@ static struct sp_mipi_subdev_info sp_mipi_sub_devs[] = {
 		},
 		.formats = imx219_formats,
 		.formats_size = ARRAY_SIZE(imx219_formats),
+	},
+
+	{
+		.name = "veye290",
+		.grp_id = 0,
+		.board_info = {
+			I2C_BOARD_INFO("veye290", 0x3b),
+		},
+		.formats = veye290_formats,
+		.formats_size = ARRAY_SIZE(veye290_formats),
 	},
 
 	{

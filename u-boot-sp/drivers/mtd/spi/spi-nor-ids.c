@@ -278,7 +278,7 @@ const struct flash_info spi_nor_ids[] = {
 	{INFO("W25X05CL",		0xef3010, 0x0,	64 * 1024,    1,	0)},
 	{INFO("W25X10CL",		0xef3011, 0x0,	64 * 1024,    2,	0)},
 	{INFO("W25Q32BV",		0xef4016, 0x0,	64 * 1024,   64,  SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
-	{INFO("W25Q128BV",		0xef4018, 0x0,	64 * 1024,   256, SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
+	{INFO("W25Q128BV",		0xef4018, 0x0,	64 * 1024,   256, SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
 	/* EON */
 	{INFO("EN25F05A",		0x1c3110, 0x0,	64 * 1024,    1,	0)},
 	{INFO("EN25F10A",		0x1c3111, 0x0,	64 * 1024,    2,	0)},

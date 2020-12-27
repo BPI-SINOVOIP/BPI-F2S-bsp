@@ -1,4 +1,4 @@
-#include "pinctrl_sunplus_i143.h"
+#include "pinctrl_sunplus.h"
 
 
 static const unsigned pins_spif1[] = { 57, 58, 59, 60, 61, 62 };
@@ -236,51 +236,51 @@ static const sp7021grp_t sp7021grps_usb2test[] = {
 };
 
 func_t list_funcs[] = {
-	FNCE("SPI_FLASH",       0x01, 0, 2, sp7021grps_spif),
-	FNCE("CARD0_EMMC",      0x01, 2, 1, sp7021grps_emmc),
-	FNCE("GL2SW",           0x01, 3, 1, sp7021grps_gl2sw),
-	FNCE("DISP_PWM",        0x01, 4, 1, sp7021grps_pwm),
-	FNCE("SPI_MASTER0",     0x01, 5, 1, sp7021grps_spim0),
-	FNCE("SPI_MASTER1",     0x01, 6, 1, sp7021grps_spim1),
-	FNCE("SPI_SLAVE0",      0x01, 7, 1, sp7021grps_spis0),
-	FNCE("SPI_SLAVE1",      0x01, 8, 1, sp7021grps_spis1),
-	FNCE("I2C_MASTER0",     0x01, 9, 1, sp7021grps_i2cm0),
-	FNCE("I2C_MASTER1",     0x01,10, 1, sp7021grps_i2cm1),
-	FNCE("WAKEUP",          0x01,11, 1, sp7021grps_wakeup),
-	FNCE("UART1",           0x01,12, 1, sp7021grps_uart1),
-	FNCE("UART2",           0x01,13, 2, sp7021grps_uart2),
-	FNCE("UART3",           0x01,15, 1, sp7021grps_uart3),
+	FNCE("SPI_FLASH",       fOFF_G, 1, 0, 2, sp7021grps_spif),
+	FNCE("CARD0_EMMC",      fOFF_G, 1, 2, 1, sp7021grps_emmc),
+	FNCE("GL2SW",           fOFF_G, 1, 3, 1, sp7021grps_gl2sw),
+	FNCE("DISP_PWM",        fOFF_G, 1, 4, 1, sp7021grps_pwm),
+	FNCE("SPI_MASTER0",     fOFF_G, 1, 5, 1, sp7021grps_spim0),
+	FNCE("SPI_MASTER1",     fOFF_G, 1, 6, 1, sp7021grps_spim1),
+	FNCE("SPI_SLAVE0",      fOFF_G, 1, 7, 1, sp7021grps_spis0),
+	FNCE("SPI_SLAVE1",      fOFF_G, 1, 8, 1, sp7021grps_spis1),
+	FNCE("I2C_MASTER0",     fOFF_G, 1, 9, 1, sp7021grps_i2cm0),
+	FNCE("I2C_MASTER1",     fOFF_G, 1,10, 1, sp7021grps_i2cm1),
+	FNCE("WAKEUP",          fOFF_G, 1,11, 1, sp7021grps_wakeup),
+	FNCE("UART1",           fOFF_G, 1,12, 1, sp7021grps_uart1),
+	FNCE("UART2",           fOFF_G, 1,13, 2, sp7021grps_uart2),
+	FNCE("UART3",           fOFF_G, 1,15, 1, sp7021grps_uart3),
 
-	FNCE("UART4",           0x02, 0, 1, sp7021grps_uart4),
-	FNCE("UART_DEBUG",      0x02, 1, 1, sp7021grps_uartdbg),
-	FNCE("STC_TIMER0",      0x02, 2, 1, sp7021grps_timeri0),
-	FNCE("GPIO_INT0",       0x02, 3, 1, sp7021grps_gpioi0),
-	FNCE("UART0",           0x02, 4, 1, sp7021grps_uart0),
-	FNCE("ACHIP_DEBUG",     0x02, 5, 2, sp7021grps_adbg),
-	FNCE("ACHIP_UA2AXI",    0x02, 7, 2, sp7021grps_au2x),
-	FNCE("U54_JTAG",        0x02, 9, 1, sp7021grps_u54_jtag),
-	FNCE("HDMI_TX",         0x02,10, 2, sp7021grps_hdmi),
-	FNCE("USB0_OTG",        0x02,12, 1, sp7021grps_u0otg),
-	FNCE("USB1_OTG",        0x02,13, 1, sp7021grps_u1otg),
-	FNCE("ISP0_DVP",        0x02,14, 1, sp7021grps_isp0_dvp),
-	FNCE("ISP1_DVP",        0x02,15, 1, sp7021grps_isp1_dvp),
+	FNCE("UART4",           fOFF_G, 2, 0, 1, sp7021grps_uart4),
+	FNCE("UART_DEBUG",      fOFF_G, 2, 1, 1, sp7021grps_uartdbg),
+	FNCE("STC_TIMER0",      fOFF_G, 2, 2, 1, sp7021grps_timeri0),
+	FNCE("GPIO_INT0",       fOFF_G, 2, 3, 1, sp7021grps_gpioi0),
+	FNCE("UART0",           fOFF_G, 2, 4, 1, sp7021grps_uart0),
+	FNCE("ACHIP_DEBUG",     fOFF_G, 2, 5, 2, sp7021grps_adbg),
+	FNCE("ACHIP_UA2AXI",    fOFF_G, 2, 7, 2, sp7021grps_au2x),
+	FNCE("U54_JTAG",        fOFF_G, 2, 9, 1, sp7021grps_u54_jtag),
+	FNCE("HDMI_TX",         fOFF_G, 2,10, 2, sp7021grps_hdmi),
+	FNCE("USB0_OTG",        fOFF_G, 2,12, 1, sp7021grps_u0otg),
+	FNCE("USB1_OTG",        fOFF_G, 2,13, 1, sp7021grps_u1otg),
+	FNCE("ISP0_DVP",        fOFF_G, 2,14, 1, sp7021grps_isp0_dvp),
+	FNCE("ISP1_DVP",        fOFF_G, 2,15, 1, sp7021grps_isp1_dvp),
 
-	FNCE("ISP0_SPI",        0x03, 0, 1, sp7021grps_isp0_spi),
-	FNCE("ISP1_SPI",        0x03, 1, 1, sp7021grps_isp1_spi),
-	FNCE("UPHY0_DEBUG",     0x03, 2, 1, sp7021grps_up0d),
-	FNCE("UPHY1_DEBUG",     0x03, 3, 1, sp7021grps_up1d),
-	FNCE("UPHY2_DEBUG",     0x03, 4, 1, sp7021grps_up2d),
-	FNCE("UPHY0_IF",        0x03, 5, 2, sp7021grps_uphy0if),
-	FNCE("UPHY1_IF",        0x03, 7, 2, sp7021grps_uphy1if),
-	FNCE("UPHY2_IF",        0x03, 9, 2, sp7021grps_uphy2if),
+	FNCE("ISP0_SPI",        fOFF_G, 3, 0, 1, sp7021grps_isp0_spi),
+	FNCE("ISP1_SPI",        fOFF_G, 3, 1, 1, sp7021grps_isp1_spi),
+	FNCE("UPHY0_DEBUG",     fOFF_G, 3, 2, 1, sp7021grps_up0d),
+	FNCE("UPHY1_DEBUG",     fOFF_G, 3, 3, 1, sp7021grps_up1d),
+	FNCE("UPHY2_DEBUG",     fOFF_G, 3, 4, 1, sp7021grps_up2d),
+	FNCE("UPHY0_IF",        fOFF_G, 3, 5, 2, sp7021grps_uphy0if),
+	FNCE("UPHY1_IF",        fOFF_G, 3, 7, 2, sp7021grps_uphy1if),
+	FNCE("UPHY2_IF",        fOFF_G, 3, 9, 2, sp7021grps_uphy2if),
 
-	FNCE("SD_CARD",         0x04, 0, 1, sp7021grps_sdc30),
-	FNCE("SDIO",            0x04, 1, 1, sp7021grps_sdio30),
+	FNCE("SD_CARD",         fOFF_G, 4, 0, 1, sp7021grps_sdc30),
+	FNCE("SDIO",            fOFF_G, 4, 1, 1, sp7021grps_sdio30),
 
-	FNCE("U3PHY_TEST",      0x00, 0, 1, sp7021grps_u3phytest),
-	FNCE("USB0_TEST",       0x00, 1, 1, sp7021grps_usb0test),
-	FNCE("USB1_TEST",       0x00, 2, 1, sp7021grps_usb1test),
-	FNCE("USB2_TEST",       0x00, 3, 1, sp7021grps_usb2test)
+	FNCE("U3PHY_TEST",      fOFF_G, 0, 0, 1, sp7021grps_u3phytest),
+	FNCE("USB0_TEST",       fOFF_G, 0, 1, 1, sp7021grps_usb0test),
+	FNCE("USB1_TEST",       fOFF_G, 0, 2, 1, sp7021grps_usb1test),
+	FNCE("USB2_TEST",       fOFF_G, 0, 3, 1, sp7021grps_usb2test)
 };
 
 const int list_funcsSZ = ARRAY_SIZE(list_funcs);

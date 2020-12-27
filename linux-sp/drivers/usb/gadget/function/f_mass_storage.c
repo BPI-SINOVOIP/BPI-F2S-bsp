@@ -1059,32 +1059,37 @@ static int do_verify(struct fsg_common *common)
 
 static int do_inquiry(struct fsg_common *common, struct fsg_buffhd *bh)
 {
+	char *VID = "sunplus";
+	char *PID = "SP7021";
+
 	struct fsg_lun *curlun = common->curlun;
 	u8	*buf = (u8 *) bh->buf;
 
+	// Windows need reply length 255
+	memset(buf, 0, 255);
+
 	if (!curlun) {		/* Unsupported LUNs are okay */
 		common->bad_lun_okay = 1;
-		memset(buf, 0, 36);
 		buf[0] = TYPE_NO_LUN;	/* Unsupported, no device-type */
-		buf[4] = 31;		/* Additional length */
-		return 36;
+		buf[4] = 250;		/* Additional length */
+		return 255;
 	}
 
 	buf[0] = curlun->cdrom ? TYPE_ROM : TYPE_DISK;
 	buf[1] = curlun->removable ? 0x80 : 0;
 	buf[2] = 2;		/* ANSI SCSI level 2 */
 	buf[3] = 2;		/* SCSI-2 INQUIRY data format */
-	buf[4] = 31;		/* Additional length */
-	buf[5] = 0;		/* No special options */
-	buf[6] = 0;
-	buf[7] = 0;
+	buf[4] = 250;	/* Additional length */
+
+	memcpy (&buf[8], VID, strlen(VID));
+	memcpy (&buf[16], PID, strlen(PID));
+	// memcpy (&buf[32], REV, sizeof(REV));
+	// memcpy (&buf[36], SER, sizeof(SER));
+
 	if (curlun->inquiry_string[0])
 		memcpy(buf + 8, curlun->inquiry_string,
 		       sizeof(curlun->inquiry_string));
-	else
-		memcpy(buf + 8, common->inquiry_string,
-		       sizeof(common->inquiry_string));
-	return 36;
+	return 255;
 }
 
 static int do_request_sense(struct fsg_common *common, struct fsg_buffhd *bh)
@@ -2065,6 +2070,12 @@ unknown_cmnd:
 		bh->inreq->length = reply;
 		bh->state = BUF_STATE_FULL;
 		common->residue -= reply;
+
+		// make comppatible with Windows
+		if (common->cmnd[0]==MODE_SENSE || 
+			common->cmnd[0]==READ_FORMAT_CAPACITIES ||
+			common->cmnd[0]==INQUIRY ||
+			common->cmnd[0]==READ_CAPACITY) common->residue = 0;
 	}				/* Otherwise it's already set */
 
 	return 0;

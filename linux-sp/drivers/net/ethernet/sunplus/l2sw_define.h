@@ -32,7 +32,7 @@
 //#define RX_POLLING
 
 #ifdef CONFIG_SOC_I143
-#define ZEBU_XTOR
+//#define ZEBU_XTOR
 
 #ifdef ZEBU_XTOR
 // mac_force_mode0[11:10]: force_gmii_en[1:0]   = 0x3 (enable force function)
@@ -65,13 +65,13 @@
 #define MAC_INT_IP_CHKSUM_ERR           (1<<23)
 #define MAC_INT_WDOG_TIMER1_EXP         (1<<22)
 #define MAC_INT_WDOG_TIMER0_EXP         (1<<21)
-#define MAC_INT_ATRUDER_ALERT           (1<<20)
+#define MAC_INT_INTRUDER_ALERT          (1<<20)
 #define MAC_INT_PORT_ST_CHG             (1<<19)
 #define MAC_INT_BC_STORM                (1<<18)
 #define MAC_INT_MUST_DROP_LAN           (1<<17)
 #define MAC_INT_GLOBAL_QUE_FULL         (1<<16)
-#define MAC_INT_TX_SOC0_PAUSE_ON        (1<<15)
-#define MAC_INT_RX_SOC0_QUE_FULL        (1<<14)
+#define MAC_INT_TX_SOC_PAUSE_ON         (1<<15)
+#define MAC_INT_RX_SOC_QUE_FULL         (1<<14)
 #define MAC_INT_TX_LAN1_QUE_FULL        (1<<9)
 #define MAC_INT_TX_LAN0_QUE_FULL        (1<<8)
 #define MAC_INT_RX_L_DESCF              (1<<7)
@@ -87,19 +87,21 @@
 #define MAC_INT_RX                      (MAC_INT_RX_DONE_H | MAC_INT_RX_DONE_L | MAC_INT_RX_DES_ERR)
 #define MAC_INT_TX                      (MAC_INT_TX_DONE_L | MAC_INT_TX_DONE_H | MAC_INT_TX_DES_ERR)
 #define MAC_INT_MASK_DEF                (MAC_INT_DAISY_MODE_CHG | MAC_INT_IP_CHKSUM_ERR | MAC_INT_WDOG_TIMER1_EXP | \
-					MAC_INT_WDOG_TIMER0_EXP | MAC_INT_ATRUDER_ALERT | MAC_INT_BC_STORM | \
-					MAC_INT_MUST_DROP_LAN | MAC_INT_GLOBAL_QUE_FULL | MAC_INT_TX_SOC0_PAUSE_ON | \
-					MAC_INT_RX_SOC0_QUE_FULL | MAC_INT_TX_LAN1_QUE_FULL | MAC_INT_TX_LAN0_QUE_FULL | \
+					MAC_INT_WDOG_TIMER0_EXP | MAC_INT_INTRUDER_ALERT | MAC_INT_BC_STORM | \
+					MAC_INT_MUST_DROP_LAN | MAC_INT_GLOBAL_QUE_FULL | MAC_INT_TX_SOC_PAUSE_ON | \
+					MAC_INT_RX_SOC_QUE_FULL | MAC_INT_TX_LAN1_QUE_FULL | MAC_INT_TX_LAN0_QUE_FULL | \
 					MAC_INT_RX_L_DESCF | MAC_INT_RX_H_DESCF)
 #else
-#define MAC_INT_RX                      (MAC_INT_RX_DONE_L | MAC_INT_RX_DONE_H)
-#define MAC_INT_RX_MASK_DEF             (MAC_INT_RX_L_DESCF | MAC_INT_RX_H_DESCF)
-#define MAC_INT_TX                      (MAC_INT_PORT_ST_CHG | MAC_INT_MEM_TEST_DONE | MAC_INT_TX_DONE_L | \
+// Note that due to a hardware bug, TCPUDP_APPEND_ERROR cannot be masked. Must handle it.
+#define MAC_INT_RX                      (MAC_INT_RX_DONE_L | MAC_INT_RX_DONE_H | MAC_INT_RX_L_DESCF | MAC_INT_RX_H_DESCF)
+#define MAC_INT_RX_MASK_DEF             (0)
+#define MAC_INT_TX                      (MAC_INT_TCPUDP_CHKSUM_ERR | MAC_INT_PORT_ST_CHG | MAC_INT_TX_DONE_L | \
 					MAC_INT_TX_DONE_H | MAC_INT_TX_DES_ERR | MAC_INT_RX_DES_ERR)
-#define MAC_INT_TX_MASK_DEF             (MAC_INT_DAISY_MODE_CHG | MAC_INT_TCPUDP_CHKSUM_ERR | MAC_INT_IP_CHKSUM_ERR | \
-					MAC_INT_WDOG_TIMER1_EXP | MAC_INT_WDOG_TIMER0_EXP | MAC_INT_ATRUDER_ALERT | \
+#define MAC_INT_TX_MASK_DEF             (MAC_INT_DAISY_MODE_CHG | MAC_INT_MEM_TEST_DONE | \
+					MAC_INT_TCPUDP_CHKSUM_ERR | MAC_INT_IP_CHKSUM_ERR | \
+					MAC_INT_WDOG_TIMER1_EXP | MAC_INT_WDOG_TIMER0_EXP | MAC_INT_INTRUDER_ALERT | \
 					MAC_INT_BC_STORM | MAC_INT_MUST_DROP_LAN | MAC_INT_GLOBAL_QUE_FULL | \
-					MAC_INT_TX_SOC0_PAUSE_ON | MAC_INT_RX_SOC0_QUE_FULL | MAC_INT_TX_LAN1_QUE_FULL | \
+					MAC_INT_TX_SOC_PAUSE_ON | MAC_INT_RX_SOC_QUE_FULL | MAC_INT_TX_LAN1_QUE_FULL | \
 					MAC_INT_TX_LAN0_QUE_FULL)
 #define MAC_INT_MASK_DEF                (MAC_INT_RX_MASK_DEF | MAC_INT_TX_MASK_DEF)
 #endif
@@ -191,8 +193,13 @@
 /*config descriptor*/
 #define TX_DESC_NUM                     16
 #define MAC_GUARD_DESC_NUM              2
+#ifdef CONFIG_SOC_SP7021
 #define RX_QUEUE0_DESC_NUM              16
 #define RX_QUEUE1_DESC_NUM              16
+#else
+#define RX_QUEUE0_DESC_NUM              64
+#define RX_QUEUE1_DESC_NUM              64
+#endif
 #define TX_DESC_QUEUE_NUM               1
 #define RX_DESC_QUEUE_NUM               2
 
@@ -259,12 +266,6 @@ struct l2sw_common {
 	spinlock_t lock;
 	spinlock_t ioctl_lock;
 	struct mutex store_mode;
-#ifdef CONFIG_SOC_SP7021
-	volatile u32 int_status;
-#else
-	volatile u32 tx_int_status;
-	volatile u32 rx_int_status;
-#endif
 
 #ifdef RX_POLLING
 	struct napi_struct napi;

@@ -11,7 +11,6 @@
 #include <linux/usb/sp_usb.h>
 #include <linux/nvmem-consumer.h>
 
-
 static struct clk *uphy1_clk;
 static struct resource *uphy1_res_mem;
 void __iomem *uphy1_base_addr = NULL;
@@ -194,6 +193,7 @@ static void uphy1_init(struct platform_device *pdev)
 
 	#ifdef CONFIG_USB_SUNPLUS_OTG
 	writel(RF_MASK_V_SET(1 << 13), uphy1_res_moon0 + PIN_MUX_CTRL);
+	writel(RF_MASK_V_CLR(1 << 12), uphy1_res_moon5 + USBC_CTL_OFFSET);
 	mdelay(1);
 	#endif
 #endif
@@ -267,8 +267,7 @@ static int sunplus_usb_phy1_probe(struct platform_device *pdev)
 	if (IS_ERR(uphy1_res_moon5)) {
 		return PTR_ERR(uphy1_res_moon5);
 	}
-#endif
-
+#endif 
 	uphy1_init(pdev);
 
 	writel(0x19, uphy1_base_addr + CDP_REG_OFFSET);

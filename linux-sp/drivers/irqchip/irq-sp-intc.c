@@ -183,7 +183,7 @@ static void sp_intc_set_prio(u32 hwirq, u32 prio)
 {
 	u32 idx, mask;
 
-	pr_info("set hwirq=%u prio=%u\n", hwirq, prio);
+	dprn("set hwirq=%u prio=%u\n", hwirq, prio);
 
 	if ((hwirq < sp_intc.hwirq_start) || (hwirq >= sp_intc.hwirq_end))
 		return;
@@ -247,30 +247,30 @@ static int sp_intc_get_ext1_irq(void)
 
 static void sp_intc_handle_ext0_cascaded(struct irq_desc *desc)
 {
-        struct irq_chip *host_chip = irq_desc_get_chip(desc);
+	struct irq_chip *host_chip = irq_desc_get_chip(desc);
 	int hwirq;
 
-        chained_irq_enter(host_chip, desc);
+	chained_irq_enter(host_chip, desc);
 
 	while ((hwirq = sp_intc_get_ext0_irq()) >= 0) {
-                generic_handle_irq(irq_find_mapping(sp_intc.domain, (unsigned int)hwirq));
-        }
+		generic_handle_irq(irq_find_mapping(sp_intc.domain, (unsigned int)hwirq));
+	}
 
-        chained_irq_exit(host_chip, desc);
+	chained_irq_exit(host_chip, desc);
 }
 
 static void sp_intc_handle_ext1_cascaded(struct irq_desc *desc)
 {
-        struct irq_chip *host_chip = irq_desc_get_chip(desc);
+	struct irq_chip *host_chip = irq_desc_get_chip(desc);
 	int hwirq;
 
-        chained_irq_enter(host_chip, desc);
+	chained_irq_enter(host_chip, desc);
 
 	while ((hwirq = sp_intc_get_ext1_irq()) >= 0) {
-                generic_handle_irq(irq_find_mapping(sp_intc.domain, (unsigned int)hwirq));
-        }
+		generic_handle_irq(irq_find_mapping(sp_intc.domain, (unsigned int)hwirq));
+	}
 
-        chained_irq_exit(host_chip, desc);
+	chained_irq_exit(host_chip, desc);
 }
 
 static int sp_intc_handle_one_round(struct pt_regs *regs)
@@ -311,7 +311,7 @@ static void __exception_irq_entry sp_intc_handle_irq(struct pt_regs *regs)
 }
 
 static int sp_intc_irq_domain_map(struct irq_domain *domain, unsigned int irq,
-                                  irq_hw_number_t hwirq)
+				  irq_hw_number_t hwirq)
 {
 	dprn("%s: irq=%d hwirq=%lu\n", __func__, irq, hwirq);
 

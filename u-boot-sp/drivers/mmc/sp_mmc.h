@@ -42,10 +42,26 @@
 #define CLOCK_48M	48000000
 #define CLOCK_50M	50000000
 
-#define CLOCK_180M  180000000
-#define CLOCK_202M  202500000
-#define CLOCK_240M  240000000
-#define CLOCK_270M  270000000
+#if defined(CONFIG_ARCH_PENTAGRAM) && !defined(CONFIG_TARGET_PENTAGRAM_I143_C)
+#define CLOCK_202M      202500000
+#elif defined(CONFIG_TARGET_PENTAGRAM_I143_P) || defined(CONFIG_TARGET_PENTAGRAM_I143_C)
+#define CLOCK_168M      168750000
+#define CLOCK_175M      175500000
+#define CLOCK_182M      182250000
+#define CLOCK_189M      189000000
+#define CLOCK_195M      195750000
+#define CLOCK_202M      202500000
+#define CLOCK_209M      209250000
+#define CLOCK_216M      216000000
+#define CLOCK_222M      222750000
+#define CLOCK_229M      229500000
+#define CLOCK_236M      236250000
+#define CLOCK_243M      243000000
+#define CLOCK_249M      249750000
+#define CLOCK_256M      256500000
+#define CLOCK_263M      263250000
+#define CLOCK_270M      270000000
+#endif
 
 typedef struct sp_mmc_dev_info {
 	uint	id;
@@ -53,9 +69,9 @@ typedef struct sp_mmc_dev_info {
 	uint	version;
 #define SP_MMC_VER_Q610	 1
 #define SP_MMC_VER_Q628	 2
+#define SP_MMC_VER_I143	 3
 
 	int (*set_clock)(struct sp_mmc_dev_info *dev);
-	int (*set_pinmux)(struct sp_mmc_dev_info *info);
 } sp_mmc_dev_info;
 
 typedef struct sp_mmc_timing_info {

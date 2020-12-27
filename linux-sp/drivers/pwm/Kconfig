@@ -434,14 +434,15 @@ config PWM_SPRD
 	  To compile this driver as a module, choose M here: the module
 	  will be called pwm-sprd.
 
-config PWM_SP7021
-	tristate "Sunplus SP7021 PWM support"
-	depends on SOC_SP7021
+config PWM_SUNPLUS
+	tristate "Sunplus PWM support"
+	depends on SOC_SP7021 || SOC_I143
+	default y if SOC_SP7021
 	help
 	  Generic PWM driver for Sunplus SP7021 and I143 SoC.
 
 	  To compile this driver as a module, choose M here: the module
-	  will be called pwm-sp7021.
+	  will be called pwm-sp7021 and pwm-i143.
 
 config PWM_STI
 	tristate "STiH4xx PWM support"

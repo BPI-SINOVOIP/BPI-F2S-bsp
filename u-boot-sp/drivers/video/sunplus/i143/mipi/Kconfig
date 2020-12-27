@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: GPL-2.0+
+#
+# Copyright (C) 2020 Sunplus - All Rights Reserved
+#
+# Authors: Cc Ho <cc.ho@sunplus.com>
+#
+
+config MIPI_VALID_SUNPLUS_I143
+	bool "Enable Sunplus I143 MIPI Validation"
+	depends on TARGET_PENTAGRAM_I143_P || TARGET_PENTAGRAM_I143_C
+	default n
+	help
+	  Enable Sunplus Video-In uboot command to validate Sunplus I143 MIPI CSI
+	  functions.

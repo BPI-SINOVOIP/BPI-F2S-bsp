@@ -1,0 +1,330 @@
+/dts-v1/;
+
+#include "sp7021-ChipC.dtsi"
+
+/ {
+	model = "SP7021 DSX Rev. A";
+
+	chosen {
+		bootargs = "console=ttyS0,115200 root=/dev/ram rw loglevel=8 earlyprintk";
+		stdout-path = "serial0:115200n8";
+	};
+
+	memory {
+		reg = <0x00000000 0x20000000>; /* 512MB */
+	};
+};
+
+&rtc {  charging-mode = <0x0E>;  };
+
+&sp_spinor0 {  status = "disabled";  };
+&spi_controller0 {  status = "disabled";  };
+&spi_controller1 {  status = "disabled";  };
+&spi_controller2 {  status = "disabled";  };
+&spi_controller3 {  status = "disabled";  };
+
+&sdio {
+ pinctrl-names = "default";
+ pinctrl-0 = <&pins_sdio &pins_sdio_reset>;
+ bus-width = <4>;
+ max-frequency = <40000000>; /* up to 52 */
+ // this: enable
+ status = "disabled";
+ brcmf1: bcrmf@1 {
+   reg = <1>;
+   compatible = "android,bcmdhd_wlan";
+   reset-gpios = <&pctl 82 GPIO_ACTIVE_LOW>;
+ };
+};
+
+&sp_uphy0 {
+ pinctrl-names = "default";
+ pinctrl-0 = <&pins_vbus_usb0>;
+ vbus-gpio = <&pctl 90 GPIO_ACTIVE_HIGH>;
+};
+
+&sp_uphy1 {
+  pinctrl-names = "default";
+  pinctrl-0 = <&pins_vbus_usb1>;
+  vbus-gpio = <&pctl 91 GPIO_ACTIVE_HIGH>;
+};
+
+&l2sw {
+ pinctrl-names = "default";
+ mode = <1>;
+ pinctrl-0 = <&ethA_pins &eth0_pins &eth1_pins>;
+};
+
+&mmc0 {
+ pinctrl-names = "default";
+ pinctrl-0 = <&emmc_mux>;
+};
+
+&mmc1 {
+ pinctrl-names = "default";
+ pinctrl-0 = <&mmc1_mux>;
+ cd-gpios = <&pctl 63 GPIO_ACTIVE_LOW>;
+};
+
+&hdmitx {
+ pinctrl-names = "default";
+ pinctrl-0 = <&hdmi_A_tx1>;
+};
+
+&uart1 {
+ pinctrl-names = "default";
+ pinctrl-0 = <&pins_uart1>;
+ status = "disabled";
+ // this: enable, pins_uart1
+};
+&uart2 {
+ pinctrl-names = "default";
+ pinctrl-0 = <&pins_uart2>;
+ status = "disabled";
+ // this: enable, pins_uart2
+};
+&uart3 {
+ pinctrl-names = "default";
+ pinctrl-0 = <&pins_uart3>;
+ status = "disabled";
+ // this: enable, pins_uart3
+};
+&uart4 {
+ pinctrl-names = "default";
+ /* pinctrl-0 = <&pins_uart4>; */
+ pinctrl-0 = <&pins_btuart &pins_bt_reset>;
+ status = "okay";
+ // this: enable (bt) | enable (uart4), pins_uart4
+};
+
+&i2cm0 {  status = "disabled";  };
+&i2cm1 {  status = "disabled";  };
+&i2cm2 {  status = "disabled";  };
+&i2cm3 {  status = "disabled";  };
+
+&pctl {
+ /*** all non-device binded that you want to set mode ***/
+ pinctrl-names = "default";
+ pinctrl-0 = <&pins_iopp_nobinded &pins_gpio_nobinded &func_zero>;
+
+ /* detouch any preset pins from this functions */
+ func_zero: func_zero {
+   sppctl,zero_func = <
+     MUXF_L2SW_LED_FLASH0
+     MUXF_L2SW_LED_ON0
+     MUXF_L2SW_LED_FLASH1
+     MUXF_L2SW_LED_ON1
+     MUXF_L2SW_P0_MAC_RMII_RXER
+     MUXF_L2SW_P1_MAC_RMII_RXER
+     GROP_SPI_FLASH
+   >;
+ };
+ 
+ pins_iopp_nobinded: pins_iopp_nobinded {
+    sppctl,pins = <
+    /* SPPCTL_IOPAD(97,SPPCTL_PCTL_G_IOPP,0,0) */
+    >;
+ };
+ pins_gpio_nobinded: pins_gpio_nobinded {
+    sppctl,pins = <
+      /*SPPCTL_IOPAD(42,SPPCTL_PCTL_G_GPIO,0,0)*/   /* was L2SW_LED_FLASH0 */
+      /*SPPCTL_IOPAD(51,SPPCTL_PCTL_G_GPIO,0,0)*/   /* was L2SW_LED_ON0 */
+      SPPCTL_IOPAD(30,SPPCTL_PCTL_G_GPIO,0,0)   /* was L2SW_LED_FLASH1 */
+      SPPCTL_IOPAD(39,SPPCTL_PCTL_G_GPIO,0,0)   /* was L2SW_LED_ON1  */
+    >;
+ };
+
+ pins_vbus_usb0: pins_vbus_usb0 {
+	sppctl,pins = <
+	  SPPCTL_IOPAD(90,SPPCTL_PCTL_G_GPIO,0,SPPCTL_PCTL_L_OUT)
+	>;
+ };
+ pins_vbus_usb1: pins_vbus_usb1 {
+    sppctl,pins = <
+	  SPPCTL_IOPAD(91,SPPCTL_PCTL_G_GPIO,0,SPPCTL_PCTL_L_OUT)
+	>;
+ };
+
+ leds_s0_def: user_leds_s0_def {
+    sppctl,pins = <
+      SPPCTL_IOPAD(1,SPPCTL_PCTL_G_GPIO,MUXF_GPIO,SPPCTL_PCTL_L_INV)
+      SPPCTL_IOPAD(2,SPPCTL_PCTL_G_GPIO,0,SPPCTL_PCTL_L_INV)
+    >;
+ };
+ leds_s0_slp: user_leds_s0_slp {
+    sppctl,pins = <
+      SPPCTL_IOPAD(1,SPPCTL_PCTL_G_GPIO,0,0)
+      SPPCTL_IOPAD(2,SPPCTL_PCTL_G_GPIO,0,0)
+    >;
+ };
+// this:
+ pins_uart1: pins_uart1 {
+    sppctl,pins = <
+      SPPCTL_IOPAD(8,SPPCTL_PCTL_G_PMUX,MUXF_UA1_TX,0)
+      SPPCTL_IOPAD(9,SPPCTL_PCTL_G_PMUX,MUXF_UA1_RX,0)
+      SPPCTL_IOPAD(10,SPPCTL_PCTL_G_PMUX,MUXF_UA1_RTS,0)
+      SPPCTL_IOPAD(11,SPPCTL_PCTL_G_PMUX,MUXF_UA1_CTS,0)
+    >;
+ };
+// this/
+// this:
+ pins_uart2: pins_uart2 {
+    sppctl,pins = <
+      SPPCTL_IOPAD(12,SPPCTL_PCTL_G_PMUX,MUXF_UA2_TX,0)
+      SPPCTL_IOPAD(13,SPPCTL_PCTL_G_PMUX,MUXF_UA2_RX,0)
+      SPPCTL_IOPAD(14,SPPCTL_PCTL_G_PMUX,MUXF_UA2_RTS,0)
+      SPPCTL_IOPAD(15,SPPCTL_PCTL_G_PMUX,MUXF_UA2_CTS,0)
+    >;
+ };
+// this/
+// this:
+ pins_uart3: pins_uart3 {
+    sppctl,pins = <
+      SPPCTL_IOPAD(16,SPPCTL_PCTL_G_PMUX,MUXF_UA3_TX,0)
+      SPPCTL_IOPAD(17,SPPCTL_PCTL_G_PMUX,MUXF_UA3_RX,0)
+      SPPCTL_IOPAD(18,SPPCTL_PCTL_G_PMUX,MUXF_UA3_RTS,0)
+      SPPCTL_IOPAD(19,SPPCTL_PCTL_G_PMUX,MUXF_UA3_CTS,0)
+    >;
+ };
+// this/
+// this:
+ pins_uart4: pins_uart4 {
+    sppctl,pins = <
+      SPPCTL_IOPAD(20,SPPCTL_PCTL_G_PMUX,MUXF_UA4_TX,0)
+      SPPCTL_IOPAD(21,SPPCTL_PCTL_G_PMUX,MUXF_UA4_RX,0)
+      SPPCTL_IOPAD(22,SPPCTL_PCTL_G_PMUX,MUXF_UA4_RTS,0)
+      SPPCTL_IOPAD(23,SPPCTL_PCTL_G_PMUX,MUXF_UA4_CTS,0)
+    >;
+ };
+// this/
+ pins_btuart: pins_btuart {
+    sppctl,pins = <
+      SPPCTL_IOPAD(40,SPPCTL_PCTL_G_PMUX,MUXF_UA4_RX,0)
+      SPPCTL_IOPAD(39,SPPCTL_PCTL_G_PMUX,MUXF_UA4_TX,0)
+      SPPCTL_IOPAD(38,SPPCTL_PCTL_G_PMUX,MUXF_UA4_RTS,SPPCTL_PCTL_L_ONV)
+      SPPCTL_IOPAD(41,SPPCTL_PCTL_G_PMUX,MUXF_UA4_CTS,0)
+    >;
+ };
+ pins_bt_reset: pins_bt_reset {
+    sppctl,pins = <
+      SPPCTL_IOPAD(83,SPPCTL_PCTL_G_GPIO,0,0)
+    >;
+ };
+ buzzer0_pins: user_buzzer0_pins {
+    sppctl,pins = <
+      SPPCTL_IOPAD(48,SPPCTL_PCTL_G_PMUX,MUXF_PWM0,0)
+    >;
+ };
+ pins_i2ctps: pins_i2ctps {
+    sppctl,pins = <
+      SPPCTL_IOPAD(6,SPPCTL_PCTL_G_GPIO,0,SPPCTL_PCTL_L_OUT|SPPCTL_PCTL_L_ONV|SPPCTL_PCTL_L_ODR)
+      SPPCTL_IOPAD(7,SPPCTL_PCTL_G_GPIO,0,SPPCTL_PCTL_L_OUT|SPPCTL_PCTL_L_ONV|SPPCTL_PCTL_L_ODR)
+    >;
+ };
+ hdmi_A_tx1: hdmi_A_tx1_pins {
+    sppctl,groups = "HDMI_TX1";
+    sppctl,function = "HDMI_TX";
+ };
+ /* for all eth */
+ ethA_pins: pinmux_ethA_pins {
+  sppctl,pins = <
+       SPPCTL_IOPAD(62,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_CLK_OUT,0)
+       SPPCTL_IOPAD(64,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_MAC_SMI_MDC,0)
+       SPPCTL_IOPAD(71,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_MAC_SMI_MDIO,0)
+  >;
+ };
+ eth0_pins: pinmux_eth0_pins {
+  sppctl,pins = <
+       SPPCTL_IOPAD(61,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_TXEN,0)
+       SPPCTL_IOPAD(59,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_TXD0,0)
+       SPPCTL_IOPAD(60,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_TXD1,0)
+       SPPCTL_IOPAD(56,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_CRSDV,0)
+       SPPCTL_IOPAD(57,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_RXD0,0)
+       SPPCTL_IOPAD(58,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_RXD1,0)
+  >;
+ };
+ eth1_pins: pinmux_eth1_pins {
+  sppctl,pins = <
+       SPPCTL_IOPAD(55,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_P1_MAC_RMII_TXEN,0)
+       SPPCTL_IOPAD(53,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_P1_MAC_RMII_TXD0,0)
+       SPPCTL_IOPAD(54,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_P1_MAC_RMII_TXD1,0)
+       SPPCTL_IOPAD(50,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_P1_MAC_RMII_CRSDV,0)
+       SPPCTL_IOPAD(51,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_P1_MAC_RMII_RXD0,0)
+       SPPCTL_IOPAD(52,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_P1_MAC_RMII_RXD1,0)
+  >;
+ };
+
+ mmc1_mux: mmc1_mux {
+	sppctl,groups = "SD_CARD";
+	sppctl,function = "SD_CARD";
+	sppctl,pins = < SPPCTL_IOPAD(63,SPPCTL_PCTL_G_GPIO,0,0) >;
+ };
+ pins_sdio: pins_sdio {
+	sppctl,pins = <
+		SPPCTL_IOPAD(47,SPPCTL_PCTL_G_PMUX,MUXF_SDIO_D1,0)
+		SPPCTL_IOPAD(46,SPPCTL_PCTL_G_PMUX,MUXF_SDIO_D0,0)
+		SPPCTL_IOPAD(45,SPPCTL_PCTL_G_PMUX,MUXF_SDIO_CLK,0)
+		SPPCTL_IOPAD(44,SPPCTL_PCTL_G_PMUX,MUXF_SDIO_CMD,0)
+		SPPCTL_IOPAD(43,SPPCTL_PCTL_G_PMUX,MUXF_SDIO_D3,0)
+		SPPCTL_IOPAD(42,SPPCTL_PCTL_G_PMUX,MUXF_SDIO_D2,0) >;
+ };
+ pins_sdio_reset: pins_sdio_reset {
+	sppctl,pins = <
+		/* additional reset pin for BRCM */
+		SPPCTL_IOPAD(82,SPPCTL_PCTL_G_GPIO,0,SPPCTL_PCTL_L_OU1)
+	>;
+ };
+
+};
+
+/ {
+	soc@B {
+		tpsid {
+        	    compatible = "tpsid";
+		    nvmem-cell-names = "mac_addr0";
+		    nvmem-cells = <&mac_addr0>;
+		};
+		leds {
+		    pinctrl-names = "default", "sleep";
+		    pinctrl-0 = <&leds_s0_def>;
+		    pinctrl-1 = <&leds_s0_slp>;
+		    compatible = "gpio-leds";
+		    led@1 {
+			label = "SR";
+			gpios = <&pctl 1 GPIO_ACTIVE_HIGH>;
+			linux,default-trigger = "heartbeat";
+			default-state = "off";
+		    };
+		    led@2 {
+			label = "SG";
+			gpios = <&pctl 2 GPIO_ACTIVE_HIGH>;
+			linux,default-trigger = "mmc0";
+			default-state = "off";
+		    };
+		};
+		buzzer0 {
+		    compatible = "pwm-beeper";
+		    pinctrl-names = "default";
+		    pinctrl-0 = <&buzzer0_pins>;
+		    pwms = <&pwm 0 1000000 0>;
+		};
+		i2c_tps: i2c-tps { /* eeprom */
+		    compatible = "i2c-gpio";
+		    i2c-gpio,scl-open-drain;
+		    i2c-gpio,sda-open-drain;
+		    i2c-gpio,delay-us = <1>;/* ~100 kHz */
+		    #address-cells = <1>;
+		    #size-cells = <0>;
+		    pinctrl-names = "default";
+		    pinctrl-0 = <&pins_i2ctps>;
+		    gpios = <&pctl 6 GPIO_ACTIVE_HIGH     /* SDA */
+			     &pctl 7 GPIO_ACTIVE_HIGH     /* SCL */
+                    >;
+		    eeprom: eeprom@50 {
+			compatible = "at,24c16";
+			reg = <0x50>;
+			pagesize = <16>;
+		    };
+		};
+	};
+};

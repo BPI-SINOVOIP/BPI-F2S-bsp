@@ -685,6 +685,7 @@ dtb-$(CONFIG_ARCH_PENTAGRAM) += sp7021-demov2.dtb
 dtb-$(CONFIG_ARCH_PENTAGRAM) += sp7021-demov3.dtb
 dtb-$(CONFIG_ARCH_PENTAGRAM) += sp7021-ev.dtb
 dtb-$(CONFIG_ARCH_PENTAGRAM) += sp7021-ltpp3g2revD.dtb
+dtb-$(CONFIG_ARCH_PENTAGRAM) += sp7021-dsx.dtb
 
 dtb-$(CONFIG_TARGET_STM32MP1) += \
 	stm32mp157c-ed1.dtb \

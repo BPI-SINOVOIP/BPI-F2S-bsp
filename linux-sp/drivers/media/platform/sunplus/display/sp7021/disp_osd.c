@@ -172,23 +172,24 @@ DRV_Status_e DRV_OSD_SetClut(DRV_OsdRegionHandle_t region, u32 *pClutDataPtr)
 	u32 copysize = 0;
 
 	if (pRegionManager && pClutDataPtr) {
-		switch (pRegionManager->Format) {
-		case DRV_OSD_REGION_FORMAT_8BPP:
+		//switch (pRegionManager->Format) {
+		//case DRV_OSD_REGION_FORMAT_8BPP:
 			copysize = 256 * 4;
-			break;
-		default:
-			goto Return;
-		}
+		//	break;
+		//default:
+		//	goto Return;
+		//}
 		memcpy(pRegionManager->Hdr_ClutAddr, pClutDataPtr, copysize);
 
 		return DRV_SUCCESS;
 	}
 
-Return:
-	sp_disp_err("Incorrect region handle, pClutDataPtr 0x%x\n",
-			(u32)pClutDataPtr);
-
-	return DRV_ERR_INVALID_HANDLE;
+//Return:
+//	sp_disp_err("Incorrect region handle, pClutDataPtr 0x%x\n",
+//			(u32)pClutDataPtr);
+//
+//	return DRV_ERR_INVALID_HANDLE;
+	return DRV_SUCCESS;
 }
 
 void DRV_OSD_IRQ(void)
@@ -403,16 +404,10 @@ void DRV_OSD_Set_UI_UnInit(void)
 	if (!gpOsdHeader || !gpWinRegion)
 		return;
 
-	if (gpWinRegion->Format == DRV_OSD_REGION_FORMAT_8BPP)
-		dma_free_coherent(NULL,
-				sizeof(struct HW_OSD_Header_s) + 1024,
-				gpOsdHeader,
-				gpOsdHeader_phy);
-	else
-		dma_free_coherent(NULL,
-				sizeof(struct HW_OSD_Header_s),
-				gpOsdHeader,
-				gpOsdHeader_phy);
+	dma_free_coherent(NULL,
+			sizeof(struct HW_OSD_Header_s) + 1024,
+			gpOsdHeader,
+			gpOsdHeader_phy);
 
 	dma_free_coherent(NULL,
 			sizeof(struct Region_Manager_s),
@@ -439,16 +434,10 @@ void DRV_OSD_Set_UI_Init(struct UI_FB_Info_t *pinfo)
 	pm_runtime_put(pDispWorkMem->pdev);		// Starting count timeout.
 #endif
 
-	if (pinfo->UI_ColorFmt == DRV_OSD_REGION_FORMAT_8BPP)
-		gpOsdHeader = dma_alloc_coherent(pDispWorkMem->pdev,
-				sizeof(struct HW_OSD_Header_s) + 1024,
-				&gpOsdHeader_phy,
-				GFP_KERNEL | __GFP_ZERO);
-	else
-		gpOsdHeader = dma_alloc_coherent(pDispWorkMem->pdev,
-				sizeof(struct HW_OSD_Header_s),
-				&gpOsdHeader_phy,
-				GFP_KERNEL | __GFP_ZERO);
+	gpOsdHeader = dma_alloc_coherent(pDispWorkMem->pdev,
+			sizeof(struct HW_OSD_Header_s) + 1024,
+			&gpOsdHeader_phy,
+			GFP_KERNEL | __GFP_ZERO);
 
 	if (!gpOsdHeader) {
 		sp_disp_err("malloc osd header fail\n");
@@ -579,7 +568,8 @@ u32 DRV_OSD_SetVisibleBuffer(u32 bBufferId)
 	struct Region_Manager_s *pRegionManager = gpWinRegion;
 
 	if (!pRegionManager)
-		return -1;
+		//return -1;
+		return 0;
 
 	pRegionManager->DirtyFlag |= REGION_ADDR_DIRTY;
 	pRegionManager->CurrBufID = bBufferId;

@@ -62,7 +62,7 @@ static int isp_test_probe(struct i2c_client *client, const struct i2c_device_id 
 
 	isp_test->client = client;
 	isp_test->sensor_data.mode = 0;
-	isp_test->sensor_data.fourcc = V4L2_PIX_FMT_YUYV;
+	isp_test->sensor_data.fourcc = V4L2_PIX_FMT_UYVY;
 	isp_test->cur_mode = &supported_modes[isp_test->sensor_data.mode];
 
 	mutex_init(&isp_test->mutex);

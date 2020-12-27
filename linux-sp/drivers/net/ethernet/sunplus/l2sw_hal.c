@@ -87,7 +87,7 @@ void mac_hw_addr_set(struct l2sw_mac *mac)
 	do {
 		reg = HWREG_R(wt_mac_ad0);
 		ndelay(10);
-		ETH_DEBUG(" wt_mac_ad0 = 0x%08x\n", reg);
+		ETH_DEBUG(" wt_mac_ad0 = %08x\n", reg);
 	} while ((reg&(0x1<<1)) == 0x0);
 	ETH_DEBUG(" mac_ad0 = %08x, mac_ad = %08x%04x\n", HWREG_R(wt_mac_ad0), HWREG_R(w_mac_47_16), HWREG_R(w_mac_15_0)&0xffff);
 
@@ -107,7 +107,7 @@ void mac_hw_addr_del(struct l2sw_mac *mac)
 	do {
 		reg = HWREG_R(wt_mac_ad0);
 		ndelay(10);
-		ETH_DEBUG(" wt_mac_ad0 = 0x%08x\n", reg);
+		ETH_DEBUG(" wt_mac_ad0 = %08x\n", reg);
 	} while ((reg&(0x1<<1)) == 0x0);
 	ETH_DEBUG(" mac_ad0 = %08x, mac_ad = %08x%04x\n", HWREG_R(wt_mac_ad0), HWREG_R(w_mac_47_16), HWREG_R(w_mac_15_0)&0xffff);
 
@@ -139,7 +139,7 @@ void mac_addr_table_del_all(void)
 		}
 
 		ETH_DEBUG(" addr_tbl_st = %08x\n", reg);
-		ETH_DEBUG(" @AT #%u: port=0x%01x, cpu=0x%01x, vid=%u, aging=%u, proxy=%u, mc_ingress=%u\n",
+		ETH_DEBUG(" @AT #%u: port=%01x, cpu=%01x, vid=%u, aging=%u, proxy=%u, mc_ingress=%u\n",
 			(reg>>22)&0x3ff, (reg>>12)&0x3, (reg>>10)&0x3, (reg>>7)&0x7,
 			(reg>>4)&0x7, (reg>>3)&0x1, (reg>>2)&0x1);
 
@@ -155,7 +155,7 @@ void mac_addr_table_del_all(void)
 			do {
 				reg = HWREG_R(wt_mac_ad0);
 				ndelay(10);
-				ETH_DEBUG(" wt_mac_ad0 = 0x%08x\n", reg);
+				ETH_DEBUG(" wt_mac_ad0 = %08x\n", reg);
 			} while ((reg&(0x1<<1)) == 0x0);
 			ETH_DEBUG(" mac_ad0 = %08x, mac_ad = %08x%04x\n", HWREG_R(wt_mac_ad0), HWREG_R(w_mac_47_16), HWREG_R(w_mac_15_0)&0xffff);
 		}
@@ -196,7 +196,7 @@ void mac_hw_addr_print(void)
 		regh = HWREG_R(MAC_ad_ser1);
 
 		//ETH_INFO(" addr_tbl_st = %08x\n", reg);
-		ETH_INFO(" AT #%u: port=0x%01x, cpu=0x%01x, vid=%u, aging=%u, proxy=%u, mc_ingress=%u,"
+		ETH_INFO(" AT #%u: port=%01x, cpu=%01x, vid=%u, aging=%u, proxy=%u, mc_ingress=%u,"
 			" HWaddr=%02x:%02x:%02x:%02x:%02x:%02x\n",
 			(reg>>22)&0x3ff, (reg>>12)&0x3, (reg>>10)&0x3, (reg>>7)&0x7,
 			(reg>>4)&0x7, (reg>>3)&0x1, (reg>>2)&0x1,
@@ -227,7 +227,7 @@ void mac_hw_init(struct l2sw_mac *mac)
 
 	// Threshold values
 	HWREG_W(fl_cntl_th,     0x4a3a2d1d);    // Fc_rls_th=0x4a,  Fc_set_th=0x3a,  Drop_rls_th=0x2d, Drop_set_th=0x1d
-	HWREG_W(cpu_fl_cntl_th, 0x6a5a1212);    // Cpu_rls_th=0x6a, Cpu_set_th=0x5a, Cpu_th=0x12,      Port_th=0x12
+	HWREG_W(cpu_fl_cntl_th, 0x4a3a1212);    // Cpu_rls_th=0x4a, Cpu_set_th=0x3a, Cpu_th=0x12,      Port_th=0x12
 	HWREG_W(pri_fl_cntl,    0xf6680000);    // mtcc_lmt=0xf, Pri_th_l=6, Pri_th_h=6, weigh_8x_en=1
 
 	// High-active LED
@@ -236,9 +236,9 @@ void mac_hw_init(struct l2sw_mac *mac)
 
 	/* phy address */
 	reg = HWREG_R(mac_force_mode);
-	HWREG_W(mac_force_mode, (reg & (~(0x1f<<16))) | ((mac->comm->phy1_addr&0x1f)<<16));
-	reg = HWREG_R(mac_force_mode);
-	HWREG_W(mac_force_mode, (reg & (~(0x1f<<24))) | ((mac->comm->phy2_addr&0x1f)<<24));
+	reg = (reg & (~(0x1f<<16))) | ((mac->comm->phy1_addr&0x1f)<<16);
+	reg = (reg & (~(0x1f<<24))) | ((mac->comm->phy2_addr&0x1f)<<24);
+	HWREG_W(mac_force_mode, reg);
 
 	//disable cpu port0 aging (12)
 	//disable cpu port0 learning (14)
@@ -439,19 +439,19 @@ void l2sw_enable_port(struct l2sw_mac *mac)
 
 	//phy address
 	reg = HWREG_R(mac_force_mode);
-	HWREG_W(mac_force_mode, (reg & (~(0x1f<<16))) | ((mac->comm->phy1_addr&0x1f)<<16));
-	reg = HWREG_R(mac_force_mode);
-	HWREG_W(mac_force_mode, (reg & (~(0x1f<<24))) | ((mac->comm->phy2_addr&0x1f)<<24));
+	reg = (reg & (~(0x1f<<16))) | ((mac->comm->phy1_addr&0x1f)<<16);
+	reg = (reg & (~(0x1f<<24))) | ((mac->comm->phy2_addr&0x1f)<<24);
+	HWREG_W(mac_force_mode, reg);
 	wmb();
 }
 
-int phy_cfg()
+int phy_cfg(struct l2sw_mac *mac)
 {
 	// Bug workaround:
 	// Flow-control of phy should be enabled. L2SW IP flow-control will refer
 	// to the bit to decide to enable or disable flow-control.
-	mdio_write(0, 4, mdio_read(0, 4) | (1<<10));
-	mdio_write(1, 4, mdio_read(1, 4) | (1<<10));
+	mdio_write(mac->comm->phy1_addr, 4, mdio_read(mac->comm->phy1_addr, 4) | (1<<10));
+	mdio_write(mac->comm->phy2_addr, 4, mdio_read(mac->comm->phy2_addr, 4) | (1<<10));
 
 	return 0;
 }

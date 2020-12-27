@@ -117,18 +117,3 @@ int board_late_init(void)
 	return 0;
 }
 #endif
-
-#ifdef CONFIG_ARMV7_NONSEC
-//void smp_kick_all_cpus(void) {}
-void smp_set_core_boot_addr(unsigned long addr, int corenr)
-{
-	reg_ptr cpu_boot_regs = (void *)(CONFIG_SMP_PEN_ADDR - 12);
-
-	/* wakeup core 1~3 */
-	cpu_boot_regs[0] = addr;
-	cpu_boot_regs[1] = addr;
-	cpu_boot_regs[2] = addr;
-
-	__asm__ __volatile__ ("dsb ishst; sev");
-}
-#endif

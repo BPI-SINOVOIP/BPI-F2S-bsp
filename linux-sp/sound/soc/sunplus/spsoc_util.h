@@ -8,7 +8,7 @@
 #include "types.h"
 
 extern void __iomem *audio_base;
-
+extern struct device_node *audionp;
 /**********************************************************
  * 			BASE
  **********************************************************/

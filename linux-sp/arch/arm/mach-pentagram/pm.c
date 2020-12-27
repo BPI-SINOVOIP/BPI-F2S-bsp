@@ -39,23 +39,23 @@ void sp7021_pm_central_suspend(void)
 	 * G0.20(moon0.20 ca7_ctl_cfg).1=NSLEEP_CORES : 0 sleep core2&3 , 1 not sleep(default)
 	 * G0.20(moon0.20 ca7_ctl_cfg).0=ISOLATE_CORES : 0 not isolate , 1 isolate(default)
 	 * G0.2(moon0.2 ca7_sw_rst) default as 32"h667f
-	 * G0.7(moon0.7 ca7_standbywfi).4=CA7_STANDBYWFIL2 RO 
+	 * G0.7(moon0.7 ca7_standbywfi).4=CA7_STANDBYWFIL2 RO
 	 * G0.7(moon0.7 ca7_standbywfi).3~0=CA7_STANDBYWFI RO : 0 processor not in WFI lower power state
-	 *                                                      1 processor in WFI lower power state 
-	 *                                                     
-	 *                                                       
+	 *                                                      1 processor in WFI lower power state
+	 *
+	 *
 	 */
-//	 while ((((readl((void __iomem *)A_SYSTEM_BASE + 0x1C))&(0xC)) != 0xC); //wait CA7_STANDBYWFI[3:2]=2"b11
-	 while (((readl(regs + 0x1C))&(0xC)) != 0xC); //wait CA7_STANDBYWFI[3:2]=2"b11
+//	while ((((readl((void __iomem *)A_SYSTEM_BASE + 0x1C))&(0xC)) != 0xC); //wait CA7_STANDBYWFI[3:2]=2"b11
+	while (((readl(regs + 0x1C))&(0xC)) != 0xC); //wait CA7_STANDBYWFI[3:2]=2"b11
 	/* MOON0 REG20(G0.20 ca7_ctl_cfg) : isolate cores and sleep core2&3 */
 	writel(0x3, regs + 0x50); /* isolate cores */
 	writel(0x1, regs + 0x50); /* sleep core2&3 */
 	/* MOON0 REG2(G0.2 ca7_sw_rst) : core2&3 set reset */
-	writel(0x667f, regs + 0x8); /* b16=CA7CORE3POR_RST_B=0 
-	                               b15=CA7CORE2POR_RST_B=0                
-	                               b12=CA7CORE3_RST_B=0                  
-	                               b11=CA7CORE2_RST_B=0 
-	                               b8=CA7DBG3_RST_B=0                 
+	writel(0x667f, regs + 0x8); /* b16=CA7CORE3POR_RST_B=0
+	                               b15=CA7CORE2POR_RST_B=0
+	                               b12=CA7CORE3_RST_B=0
+	                               b11=CA7CORE2_RST_B=0
+	                               b8=CA7DBG3_RST_B=0
 	                               b7=CA7DBG2_RST_B=0     */
 }
 
@@ -68,11 +68,11 @@ int sp7021_pm_central_resume(void)
 	writel(0x3, regs + 0x50); /* isolate cores */
 	writel(0x2, regs + 0x50); /* not sleep core2&3 */
 	/* MOON0 REG2(G0.2 ca7_sw_rst) : core2&3 set reset */
-	writel(0x1e67f, regs + 0x8); /* b16=CA7CORE3POR_RST_B=1 
-	                                b15=CA7CORE2POR_RST_B=1     */           
-	writel(0x1ffff, regs + 0x8); /* b12=CA7CORE3_RST_B=1                  
-	                                b11=CA7CORE2_RST_B=1 
-	                                b8=CA7DBG3_RST_B=1                 
+	writel(0x1e67f, regs + 0x8); /* b16=CA7CORE3POR_RST_B=1
+	                                b15=CA7CORE2POR_RST_B=1     */
+	writel(0x1ffff, regs + 0x8); /* b12=CA7CORE3_RST_B=1
+	                                b11=CA7CORE2_RST_B=1
+	                                b8=CA7DBG3_RST_B=1
 	                                b7=CA7DBG2_RST_B=1     */
 
 	return 0;
@@ -98,25 +98,25 @@ void sp7021_cpu_power_down(int cpu)
 	 * G0.20(moon0.20 ca7_ctl_cfg).1=NSLEEP_CORES : 0 sleep core2&3 , 1 not sleep(default)
 	 * G0.20(moon0.20 ca7_ctl_cfg).0=ISOLATE_CORES : 0 not isolate , 1 isolate(default)
 	 * G0.2(moon0.2 ca7_sw_rst) default as 32"h667f
-	 * G0.7(moon0.7 ca7_standbywfi).4=CA7_STANDBYWFIL2 RO 
+	 * G0.7(moon0.7 ca7_standbywfi).4=CA7_STANDBYWFIL2 RO
 	 * G0.7(moon0.7 ca7_standbywfi).3~0=CA7_STANDBYWFI RO : 0 processor not in WFI lower power state
-	 *                                                      1 processor in WFI lower power state 
-	 *                                                     
-	 *                                                       
+	 *                                                      1 processor in WFI lower power state
+	 *
+	 *
 	 */
-	 while (((readl(regs + 0x1C))&(0xC)) != 0xC); //wait CA7_STANDBYWFI[3:2]=2"b11
+	while (((readl(regs + 0x1C))&(0xC)) != 0xC); //wait CA7_STANDBYWFI[3:2]=2"b11
 	/* MOON0 REG20(G0.20 ca7_ctl_cfg) : isolate cores and sleep core2&3 */
 	writel(0x3, regs + 0x50); /* isolate cores */
 	writel(0x1, regs + 0x50); /* sleep core2&3 */
 	/* MOON0 REG2(G0.2 ca7_sw_rst) : core2&3 set reset */
-	writel(0x667f, regs + 0x8); /* b16=CA7CORE3POR_RST_B=0 
-	                               b15=CA7CORE2POR_RST_B=0                
-	                               b12=CA7CORE3_RST_B=0                  
-	                               b11=CA7CORE2_RST_B=0 
-	                               b8=CA7DBG3_RST_B=0                 
+	writel(0x667f, regs + 0x8); /* b16=CA7CORE3POR_RST_B=0
+	                               b15=CA7CORE2POR_RST_B=0
+	                               b12=CA7CORE3_RST_B=0
+	                               b11=CA7CORE2_RST_B=0
+	                               b8=CA7DBG3_RST_B=0
 	                               b7=CA7DBG2_RST_B=0     */
 }
-
+#if 0
 static int sp7021_wfi_finisher(unsigned long flags)
 {
 //	if (soc_is_exynos3250())
@@ -125,6 +125,7 @@ static int sp7021_wfi_finisher(unsigned long flags)
 
 	return -1;
 }
+#endif
 //static int sp7021_cpu0_enter_aftr(void)
 //{
 //	return 0;

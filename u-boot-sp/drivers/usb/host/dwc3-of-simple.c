@@ -91,6 +91,7 @@ static int dwc3_of_simple_remove(struct udevice *dev)
 }
 
 static const struct udevice_id dwc3_of_simple_ids[] = {
+	{ .compatible = "sunplus,i143-dwusb3" },
 	{ .compatible = "amlogic,meson-gxl-dwc3" },
 	{ .compatible = "ti,dwc3" },
 	{ }

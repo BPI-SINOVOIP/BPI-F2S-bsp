@@ -669,6 +669,8 @@ source "drivers/dma/sh/Kconfig"
 
 source "drivers/dma/ti/Kconfig"
 
+source "drivers/dma/sunplus/Kconfig"
+
 # clients
 comment "DMA Clients"
 	depends on DMA_ENGINE

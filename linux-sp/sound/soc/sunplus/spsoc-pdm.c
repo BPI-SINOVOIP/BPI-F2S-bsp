@@ -365,8 +365,12 @@ static int sp_pdm_probe(struct platform_device *pdev)
     	struct device *dev = &pdev->dev;
     	struct sp_pdm_info *sp_pdm;
     	int ret;
-
-    	AUD_INFO("%s IN\n", __func__);
+	
+	AUD_INFO("%s IN\n", __func__);
+        if (!of_device_is_available(audionp)) {
+		dev_err(&pdev->dev, "devicetree status is not available\n");
+		return -ENODEV;
+	}
 
     	sp_pdm = devm_kzalloc(&pdev->dev, sizeof(*sp_pdm), GFP_KERNEL);
     	if (!sp_pdm)

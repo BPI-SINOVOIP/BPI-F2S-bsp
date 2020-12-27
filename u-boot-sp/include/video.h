@@ -90,7 +90,7 @@ struct video_priv {
 	u32 colour_fg;
 	u32 colour_bg;
 	bool flush_dcache;
-#ifdef CONFIG_VIDEO_SP7021
+#if defined(CONFIG_VIDEO_SP7021) || defined(CONFIG_VIDEO_I143)
 	u32 *cmap;
 #else	
 	ushort *cmap;

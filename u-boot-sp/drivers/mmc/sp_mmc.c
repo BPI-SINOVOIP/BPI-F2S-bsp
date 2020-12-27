@@ -16,14 +16,16 @@
 
 #define MAX_SDDEVICES   2
 
-#define SPMMC_CLK_SRC CLOCK_270M    /* Host controller's clk source */
-#define SPMMC_ZEBU_CLK_SRC CLOCK_202M    /* Host controller's clk source */
+
+#if defined(CONFIG_ARCH_PENTAGRAM) && !defined(CONFIG_TARGET_PENTAGRAM_I143_C)
+#define SPMMC_CLK_SRC CLOCK_202M    /* Host controller's clk source */
+#elif defined(CONFIG_TARGET_PENTAGRAM_I143_P) || defined(CONFIG_TARGET_PENTAGRAM_I143_C)
+#define SPMMC_CLK_SRC CLOCK_222M    /* Host controller's clk source */
+#endif
 
 #define SPMMC_MAX_CLK CLOCK_25M     /* Max supported SD Card frequency */
 #define SPEMMC_MAX_CLK CLOCK_45M     /* Max supported emmc Card frequency */
-
 #define MAX_DLY_CLK  7
-
 
 /*
  * Freq. for identification mode(SD Spec): 100~400kHz
@@ -286,11 +288,8 @@ static void sp_mmc_set_clock(struct mmc *mmc, uint clock)
 		clock = mmc->cfg->f_min;
 	if (clock > mmc->cfg->f_max)
 		clock = mmc->cfg->f_max;
-
-	if (SP_MMC_VER_Q628 == host->dev_info.version)
-		sys_clk = SPMMC_ZEBU_CLK_SRC;
-	else
-		sys_clk = SPMMC_CLK_SRC;
+	
+	sys_clk = SPMMC_CLK_SRC;
 	clkrt = (sys_clk / clock) - 1;
 
 	/* Calculate the actual clock for the divider used */
@@ -1416,12 +1415,6 @@ static int sp_mmc_probe(struct udevice *dev)
 	IFPRINTK("dev_info.id = %d\n", host->dev_info.id);
 	IFPRINTK("host type: %s\n", (host->dev_info.type == SPMMC_DEVICE_TYPE_EMMC) ? "EMMC":"SD");
 	IFPRINTK("version type: %s\n", (host->dev_info.version == SP_MMC_VER_Q628) ? "Q628" : "Q610");
-	/* set pinmux on */
-	if (host->dev_info.set_pinmux) {
-		if (host->dev_info.set_pinmux(&host->dev_info)) {
-			return -ENODEV;
-		}
-	}
 
 	if (host->dev_info.set_clock) {
 		if (host->dev_info.set_clock(&host->dev_info)) {
@@ -1466,8 +1459,6 @@ static int sp_mmc_probe(struct udevice *dev)
 	return 0;
 }
 
-
-
 int sp_print_mmcinfo(struct mmc *mmc)
 {
 	struct sp_mmc_host *host = mmc->priv;
@@ -1483,77 +1474,60 @@ int sp_mmc_set_dmapio(struct mmc *mmc, uint val)
 	return 0;
 }
 
-
-#define REG_BASE           0x9c000000
-#define RF_GRP(_grp, _reg) ((((_grp) * 32 + (_reg)) * 4) + REG_BASE)
-#define RF_MASK_V(_mask, _val)       (((_mask) << 16) | (_val))
-#define RF_MASK_V_SET(_mask)         (((_mask) << 16) | (_mask))
-#define RF_MASK_V_CLR(_mask)         (((_mask) << 16) | 0)
-
-
-struct moon1_regs {
-	unsigned int sft_cfg[32];
-};
-#define MOON1_REG ((volatile struct moon1_regs *)RF_GRP(1, 0))
-
-
-int sd_set_pinmux(struct sp_mmc_dev_info *info)
-{
-	MOON1_REG->sft_cfg[1] = RF_MASK_V(1 << 6, 1 << 6);
-	return 0;
-}
-
-int emmc_set_pinmux(struct sp_mmc_dev_info *info)
-{
-	/* disable spi nor pimux   */
-	MOON1_REG->sft_cfg[1] = RF_MASK_V_CLR(0xf);
-	/* disable spi nand pinmux  */
-	MOON1_REG->sft_cfg[1] = RF_MASK_V_CLR(1 << 4);
-	/* enable emmc pinmux */
-	#if defined(CONFIG_TARGET_SUNPLUS_I143) || defined(CONFIG_TARGET_PENTAGRAM_I143_CP)
-	MOON1_REG->sft_cfg[1] = RF_MASK_V(1 << 2, 1 << 2);
-	#else
-	MOON1_REG->sft_cfg[1] = RF_MASK_V(1 << 5, 1 << 5);
-	#endif 
-	return 0;
-}
-
 static sp_mmc_dev_info q628_dev_info[] = {
+#if defined(CONFIG_ARCH_PENTAGRAM) && !defined(CONFIG_TARGET_PENTAGRAM_I143_C)
 	{
 		.id = 0,
 		.type = SPMMC_DEVICE_TYPE_EMMC,
 		.version = SP_MMC_VER_Q628,
-		.set_pinmux = emmc_set_pinmux,
 	},
 
 	{
 		.id = 1,
 		.type = SPMMC_DEVICE_TYPE_SD,
 		.version = SP_MMC_VER_Q628,
-		.set_pinmux = sd_set_pinmux,
 	},
+#elif defined(CONFIG_TARGET_PENTAGRAM_I143_P) || defined(CONFIG_TARGET_PENTAGRAM_I143_C)
+	{
+		.id = 0,
+		.type = SPMMC_DEVICE_TYPE_EMMC,
+		.version = SP_MMC_VER_I143,
+	},
+#endif	
 };
 
 
 static const struct udevice_id sunplus_mmc_ids[] = {
+#if defined(CONFIG_ARCH_PENTAGRAM) && !defined(CONFIG_TARGET_PENTAGRAM_I143_C)
+
+	#if defined(CONFIG_MMC_SP_7021_SD) 
+		{
+			.compatible	= "sunplus,sunplus-q628-sd",
+			.data		= (ulong)&q628_dev_info[1],
+		},
+		{
+			.compatible	= "sunplus,sp7021-card1",
+			.data		= (ulong)&q628_dev_info[1],
+		},
+	#endif
+
+	#if defined(CONFIG_MMC_SP_EMMC) && !defined(CONFIG_SP_SPINAND)
+		{
+			.compatible	= "sunplus,sunplus-q628-emmc",
+			.data		= (ulong)&q628_dev_info[0],
+		},
+		{
+			.compatible	= "sunplus,sp7021-emmc",
+			.data		= (ulong)&q628_dev_info[0],
+		},
+	#endif
+	
+#elif defined(CONFIG_TARGET_PENTAGRAM_I143_P) || defined(CONFIG_TARGET_PENTAGRAM_I143_C)
 	{
-		.compatible	= "sunplus,sunplus-q628-sd",
-		.data		= (ulong)&q628_dev_info[1],
-	},
-	{
-		.compatible	= "sunplus,sp7021-card1",
-		.data		= (ulong)&q628_dev_info[1],
-	},
-#ifndef CONFIG_SP_SPINAND
-	{
-		.compatible	= "sunplus,sunplus-q628-emmc",
+		.compatible	= "sunplus,i143-emmc",
 		.data		= (ulong)&q628_dev_info[0],
-	},
-	{
-		.compatible	= "sunplus,sp7021-emmc",
-		.data		= (ulong)&q628_dev_info[0],
-	},
-#endif
+	},	
+#endif 	
 	{
 	}
 };

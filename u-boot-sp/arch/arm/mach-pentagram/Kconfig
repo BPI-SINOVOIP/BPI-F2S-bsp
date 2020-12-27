@@ -8,6 +8,7 @@ config TARGET_PENTAGRAM_COMMON
 	select CPU_V7A
     #select CPU_V7_HAS_NONSEC
     #select CPU_V7_HAS_VIRT
+	select ARCH_SUPPORT_PSCI
 	select SYS_THUMB_BUILD
 
 config TARGET_PENTAGRAM_B_BOOT

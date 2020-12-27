@@ -285,9 +285,10 @@ typedef volatile struct reg_moon0_s
 	unsigned int clken[10]; // 0.1
 	unsigned int gclken[10]; // 0.11
 	unsigned int reset[10]; // 0.21
-	unsigned int hw_cfg; // 0.31      
+	unsigned int hw_cfg; // 0.31
 } reg_moon0_t;
 
+#ifdef CONFIG_SOC_SP7021
 typedef volatile struct reg_moon4_s
 {
 	unsigned int pllsp_ctl[7];  // 4.0
@@ -305,6 +306,29 @@ typedef volatile struct reg_moon4_s
 	unsigned int uphy0_sts;     // 4.30
 	unsigned int otp_st;        // 4.31
 } reg_moon4_t;
+#elif defined(CONFIG_SOC_I143)
+typedef volatile struct reg_moon4_s
+{
+	unsigned int sd_soft_pad_cfg[4];	// 4.0
+	unsigned int sdio_soft_pad_cfg[4];	// 4.4
+	unsigned int pllref_cfg;      		// 4.8
+	unsigned int pllsys_cfg;      		// 4.9
+	unsigned int pllfla_cfg;  		// 4.10
+	unsigned int pllgpu_cfg[2];      	// 4.11
+	unsigned int pllmip_cfg;  		// 4.13
+	unsigned int plleth_cfg;  		// 4.14
+	unsigned int plltv_cfg[4];        	// 4.15
+	unsigned int pllrsv_cfg1;      		// 4.19
+	unsigned int xtal_cfg;     		// 4.20
+	unsigned int mo4_cfg_21;    		// 4.21
+	unsigned int rsv0[4];     		// 4.22
+	unsigned int mo4_cfg_26;        	// 4.26
+	unsigned int mo4_clk_sel0;		// 4.27
+	unsigned int rsv1[2];     		// 4.28
+	unsigned int mo_hw_bo;     		// 4.30
+	unsigned int rsv2;     			// 4.31
+} reg_moon4_t;
+#endif
 
 typedef volatile struct reg_moon5_s {
 	unsigned int sft_cfg[32];

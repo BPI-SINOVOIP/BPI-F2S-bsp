@@ -22,7 +22,9 @@
 #define SPMMC_MAX_CLK	52000000
 #define SPMMC_MAX_BLK_COUNT 65536
 #define SPMMC_MAX_TUNABLE_DLY 7
-
+#ifdef CONFIG_SOC_I143
+#define SPMMC_SYS_CLK	270000000
+#endif 
 #define __rsvd_regs(l) __append_suffix(l, __COUNTER__)
 #define __append_suffix(l, s) _append_suffix(l, s)
 #define _append_suffix(l, s) reserved##s[l]

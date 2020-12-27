@@ -38,22 +38,12 @@
  **************************************************************************/
 //#define SP_DISP_DEBUG
 
-#if 0
-#define sp_disp_err(fmt, args...)		printk(KERN_ERR "[DISP][Err][%s:%d]"fmt, __func__, __LINE__, ##args)
-#define sp_disp_info(fmt, args...)		printk(KERN_INFO "[DISP][%s:%d]"fmt, __func__, __LINE__, ##args)
-#ifdef SP_DISP_DEBUG
-#define sp_disp_dbg(fmt, args...)		printk(KERN_INFO "[DISP][%s:%d]"fmt, __func__, __LINE__, ##args)
-#else
-#define sp_disp_dbg(fmt, args...)
-#endif
-#else
 #define sp_disp_err(fmt, args...)		printk(KERN_ERR "[DISP][Err]"fmt, ##args)
 #define sp_disp_info(fmt, args...)		printk(KERN_INFO "[DISP]"fmt, ##args)
 #ifdef SP_DISP_DEBUG
 #define sp_disp_dbg(fmt, args...)		printk(KERN_INFO "[DISP]"fmt, ##args)
 #else
 #define sp_disp_dbg(fmt, args...)
-#endif
 #endif
 
 #define ALIGNED(x, n)				((x) & (~(n - 1)))
@@ -117,7 +107,7 @@ struct sp_disp_layer {
 	struct sp_disp_buffer   *next_frm;		/* Pointer pointing to next v4l2_buffer */
 	struct vb2_queue   		buffer_queue;	/* Buffer queue used in video-buf2 */
 	struct list_head	    dma_queue;		/* Queue of filled frames */
-	spinlock_t				irqlock;		/* Used in video-buf */	
+	spinlock_t				irqlock;		/* Used in video-buf */
 	struct video_device 	video_dev;
 
 	struct v4l2_format 		fmt;            /* Used to store pixel format */
@@ -154,7 +144,7 @@ struct sp_disp_config {
 /* File handle structure */
 struct sp_disp_fh {
 	struct v4l2_fh fh;
-	struct sp_disp_device *disp_dev;	
+	struct sp_disp_device *disp_dev;
 	u8 io_allowed;							/* Indicates whether this file handle is doing IO */
 };
 
@@ -191,7 +181,7 @@ struct sp_disp_device {
 	struct clk *hdmi_clk;
 
 	struct reset_control *rstc;
-	
+
 	display_size_t		panelRes;
 
 #ifdef SP_DISP_V4L2_SUPPORT

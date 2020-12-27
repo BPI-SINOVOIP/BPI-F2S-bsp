@@ -1,0 +1,451 @@
+/dts-v1/;
+
+#include "sp7021-ChipC.dtsi"
+
+#define ENABLE_HDMITX
+//#define ENABLE_TTL_320X240
+//#define ENABLE_TTL_800X480
+//#define ENABLE_TTL_1024X600
+
+/ {
+	model = "SP7021/CA7/Ev";
+
+	chosen {
+		bootargs = "console=ttyS0,115200 root=/dev/ram rw loglevel=8 user_debug=255 earlyprintk";
+		stdout-path = "serial0:115200n8";
+	};
+
+	memory {
+		reg = <0x00000000 0x20000000>; /* 512MB */
+	};
+};
+
+&sp_display {
+	#ifdef ENABLE_HDMITX
+	ui_width = <720>;
+	ui_height = <480>;
+	ui_format = <0xe>;
+		/* 0x2 = 8bpp (ARGB)
+		 * 0x4 = YUY2
+		 * 0x8 = RGB565
+		 * 0x9 = ARGB1555
+		 * 0xa = RGBA4444
+		 * 0xb = ARGB4444
+		 * 0xd = RGBA8888
+		 * 0xe = ARGB8888 */
+	#endif
+
+	#ifdef ENABLE_TTL_320X240
+	ui_width = <320>;
+	ui_height = <240>;
+	ui_format = <0xe>;
+		/* 0x2 = 8bpp (ARGB)
+		 * 0x4 = YUY2
+		 * 0x8 = RGB565
+		 * 0x9 = ARGB1555
+		 * 0xa = RGBA4444
+		 * 0xb = ARGB4444
+		 * 0xd = RGBA8888
+		 * 0xe = ARGB8888 */
+
+	ttl-name = "winstar,3.5inchrgb,320X240";
+	ttl-clock-freq = <6413760>;
+	ttl-clock-divm = <20>;
+	ttl-clock-divn = <4>;
+	hactive = <320>;
+	hback-porch = <38>;
+	hfront-porch = <20>;
+	hsync-len = <30>;
+	vactive = <240>;
+	vback-porch = <15>;
+	vfront-porch =<4>;
+	vsync-len = <3>;
+	ttl-rgb-swap = <0>;
+	ttl-clock-pol = <1>;
+	ttl-vpp-adj = <21>;
+	ttl-osd-adj = <0>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pins_lcdif>;
+	#endif
+
+	#ifdef ENABLE_TTL_800X480
+	ui_width = <800>;
+	ui_height = <480>;
+	ui_format = <0xe>;
+		/* 0x2 = 8bpp (ARGB)
+		 * 0x4 = YUY2
+		 * 0x8 = RGB565
+		 * 0x9 = ARGB1555
+		 * 0xa = RGBA4444
+		 * 0xb = ARGB4444
+		 * 0xd = RGBA8888
+		 * 0xe = ARGB8888 */
+
+	ttl-name = "alientek,7inchrgb,800X480";
+	ttl-clock-freq = <33264000>;
+	ttl-clock-divm = <31>;
+	ttl-clock-divn = <39>;
+	hactive = <800>;
+	hback-porch = <46>;
+	hfront-porch = <190>;
+	hsync-len = <20>;
+	vactive = <480>;
+	vback-porch = <23>;
+	vfront-porch = <19>;
+	vsync-len = <3>;
+	ttl-rgb-swap = <1>;
+	ttl-clock-pol = <0>;
+	ttl-vpp-adj = <29>;
+	ttl-osd-adj = <0>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pins_lcdif>;
+	#endif
+
+	#ifdef ENABLE_TTL_1024X600
+	ui_width = <1024>;
+	ui_height = <600>;
+	ui_format = <0xe>;
+		/* 0x2 = 8bpp (ARGB)
+		 * 0x4 = YUY2
+		 * 0x8 = RGB565
+		 * 0x9 = ARGB1555
+		 * 0xa = RGBA4444
+		 * 0xb = ARGB4444
+		 * 0xd = RGBA8888
+		 * 0xe = ARGB8888 */
+
+	ttl-name = "WY101ML322HS18B,10.1inchrgb,1024X600";
+	ttl-clock-freq = <51206400>;
+	ttl-clock-divm =<8>;
+	ttl-clock-divn =<16>;
+	hactive = <1024>;
+	hback-porch = <140>;
+	hfront-porch =<160>;
+	hsync-len = <20>;
+	vactive = <600>;
+	vback-porch = <20>;
+	vfront-porch =<12>;
+	vsync-len = <3>;
+	ttl-rgb-swap = <0>;
+	ttl-clock-pol = <1>;
+	ttl-vpp-adj = <26>;
+	ttl-osd-adj = <0>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pins_lcdif>;
+	#endif
+
+};
+
+&spi_controller0 {
+	spi-max-frequency = <50000000>;
+	spi-cpha;
+	spi-cpol;
+	#address-cells = <1>;
+	#size-cells = <0>;
+	spi@0 {
+		compatible = "rohm,dh2228fv";
+		spi-max-frequency = <25000000>;
+		reg = <0x0>;
+	};
+	status = "disabled";
+};
+
+&spi_controller1 {
+	spi-max-frequency = <50000000>;
+	spi-cpha;
+	spi-cpol;
+	#address-cells = <1>;
+	#size-cells = <0>;
+	spi@0 {
+		compatible = "rohm,dh2228fv";
+		spi-max-frequency = <25000000>;
+		reg = <0x0>;
+	};
+	status = "disabled";
+};
+
+&spi_controller2 {
+	spi-max-frequency = <50000000>;
+	spi-cpha;
+	spi-cpol;
+	#address-cells = <1>;
+	#size-cells = <0>;
+	spi@0 {
+		compatible = "rohm,dh2228fv";
+		spi-max-frequency = <25000000>;
+		reg = <0x0>;
+	};
+	status = "disabled";
+};
+
+&spi_controller3 {
+	spi-max-frequency = <50000000>;
+	spi-slave;
+	status = "disabled";
+};
+
+&i2cm0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&i2cm0_pins>;
+	clock-frequency = <100000>;
+	status = "disabled";
+};
+
+&i2cm1 {
+	clock-frequency = <100000>;
+	status = "disabled";
+};
+
+&i2cm2 {
+	clock-frequency = <100000>;
+	status = "disabled";
+};
+
+&i2cm3 {
+	clock-frequency = <100000>;
+	status = "disabled";
+};
+
+&uart1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pins_uart1>;
+#if 0 //TTYS_GPIO in sp_uart.c
+	uart-gpio = <&pctl 0 GPIO_ACTIVE_HIGH>;
+#endif
+	status = "disabled";
+};
+
+&uart2 {
+	status = "disabled";
+};
+
+&uart3 {
+	status = "disabled";
+};
+
+&uart4 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pins_uart4>;
+	status = "disabled";
+};
+
+&sdio {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pins_sdio>;
+	status = "disabled";
+};
+
+&l2sw {
+	pinctrl-names = "default";
+	pinctrl-0 = <&l2sw_ev_two_phy_pins>;
+	#ifndef ENABLE_HDMITX
+	status = "disabled";
+	#endif
+	mode = < 0 >;
+		/* 0 = daisy-chain mode
+		 * 1 = dual NIC mode
+		 * 2 = daisy-chain mode (disable SA learning) */
+};
+
+&mmc0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&emmc_mux>;
+};
+
+&mmc1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&mmc1_mux &mmc1_mux_cd>;
+	cd-gpios = <&pctl 71 GPIO_ACTIVE_LOW>;
+	broken-cd;
+};
+
+&spinand0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pins_spinand0>;
+};
+
+&sp_spinor0 {
+	spi-max-frequency = <50000000>;
+	spi-chip-selection = <0>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&spi_flash2_mux &spi_fla4b2_mux>;
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		partition@0 {
+			label = "data";
+			reg = <0 0x200000>;
+		};
+		partition@200000 {
+			label = "data1";
+			reg = <0x200000 0xdff000>;
+		};
+	};
+};
+
+&hdmitx {
+	pinctrl-names = "default";
+	pinctrl-0 = <&hdmi_A_tx1>;
+	#ifndef ENABLE_HDMITX
+	status = "disabled";
+	#endif
+};
+
+&mipicsi0 {
+	i2c-id = <1>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&mipicsi0_pins>;
+	#ifndef ENABLE_HDMITX
+	status = "disabled";
+	#endif
+};
+
+&mipicsi1 {
+	status = "disabled";
+};
+
+&rtc {
+	charging-mode = <0xE>;
+	/*
+	 *      0xE     Disable
+	 *      0x1     0.86mA (2K Ohm with diode)
+	 *      0x5     1.81mA (250 Ohm with diode)
+	 *      0x9     2.07mA (50 Ohm with diode)
+	 *      0xD     16.0mA (0 Ohm with diode)
+	 *      0x3     1.36mA (2K Ohm without diode)
+	 *      0x7     3.99mA (250 Ohm without diode)
+	 *      0xB     4.41mA (50 Ohm without diode)
+	 *      0xF     16.0mA (0 Ohm without diode)    */
+};
+
+&audio {
+	pinctrl-names = "default";
+	pinctrl-0 = <&aud_i2s_in &aud_i2s_out &aud_spdi &aud_spdo &aud_pdmr>;
+	status = "disabled";
+};
+
+&pctl {
+	pinctrl-names = "default";
+
+	i2cm0_pins: i2cm0_pins {
+		sppctl,pins = <
+			SPPCTL_IOPAD(14,SPPCTL_PCTL_G_PMUX,MUXF_I2CM0_CLK,0)
+			SPPCTL_IOPAD(15,SPPCTL_PCTL_G_PMUX,MUXF_I2CM0_DAT,0)
+		>;
+	};
+
+	pins_spim0: pins_spim0 {
+		sppctl,pins = <
+			SPPCTL_IOPAD(8,SPPCTL_PCTL_G_PMUX,MUXF_SPIM0_INT,0)
+			SPPCTL_IOPAD(9,SPPCTL_PCTL_G_PMUX,MUXF_SPIM0_CLK,0)
+			SPPCTL_IOPAD(10,SPPCTL_PCTL_G_PMUX,MUXF_SPIM0_EN,0)
+			SPPCTL_IOPAD(11,SPPCTL_PCTL_G_PMUX,MUXF_SPIM0_DO,0)
+			SPPCTL_IOPAD(12,SPPCTL_PCTL_G_PMUX,MUXF_SPIM0_DI,0)
+		>;
+	};
+
+        pins_uart1: pins_uart1 {
+		sppctl,pins = <
+			SPPCTL_IOPAD(8,SPPCTL_PCTL_G_PMUX,MUXF_UA1_TX,0)
+			SPPCTL_IOPAD(9,SPPCTL_PCTL_G_PMUX,MUXF_UA1_RX,0)
+	#if 0 //TTYS_GPIO in sp_uart.c
+			SPPCTL_IOPAD(0, SPPCTL_PCTL_G_GPIO, 0, 1)
+	#endif
+		>;
+	};
+	
+	pins_uart4: pins_uart4 {
+		sppctl,pins = <
+			SPPCTL_IOPAD(16,SPPCTL_PCTL_G_PMUX,MUXF_UA4_TX,0)
+			SPPCTL_IOPAD(18,SPPCTL_PCTL_G_PMUX,MUXF_UA4_RX,0)
+			SPPCTL_IOPAD(20,SPPCTL_PCTL_G_PMUX,MUXF_UA4_RTS,0)
+			SPPCTL_IOPAD(22,SPPCTL_PCTL_G_PMUX,MUXF_UA4_CTS,0)
+		>;
+	};
+
+	l2sw_ev_two_phy_pins: pinmux_l2sw_ev_two_phy_pins {
+		sppctl,pins = <
+			SPPCTL_IOPAD(47,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_CLK_OUT,0)
+			SPPCTL_IOPAD(41,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_MAC_SMI_MDC,0)
+			SPPCTL_IOPAD(42,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_LED_FLASH0,0)
+			SPPCTL_IOPAD(30,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_LED_FLASH1,0)
+			SPPCTL_IOPAD(51,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_LED_ON0,0)
+			SPPCTL_IOPAD(39,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_LED_ON1,0)
+			SPPCTL_IOPAD(40,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_MAC_SMI_MDIO,0)
+			SPPCTL_IOPAD(50,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_TXEN,0)
+			SPPCTL_IOPAD(48,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_TXD0,0)
+			SPPCTL_IOPAD(49,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_TXD1,0)
+			SPPCTL_IOPAD(44,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_CRSDV,0)
+			SPPCTL_IOPAD(45,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_RXD0,0)
+			SPPCTL_IOPAD(46,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_RXD1,0)
+			SPPCTL_IOPAD(43,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_RXER,0)
+			SPPCTL_IOPAD(38,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_P1_MAC_RMII_TXEN,0)
+			SPPCTL_IOPAD(36,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_P1_MAC_RMII_TXD0,0)
+			SPPCTL_IOPAD(37,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_P1_MAC_RMII_TXD1,0)
+			SPPCTL_IOPAD(32,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_P1_MAC_RMII_CRSDV,0)
+			SPPCTL_IOPAD(33,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_P1_MAC_RMII_RXD0,0)
+			SPPCTL_IOPAD(34,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_P1_MAC_RMII_RXD1,0)
+			SPPCTL_IOPAD(31,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_P1_MAC_RMII_RXER,0)
+		>;
+		sppctl,zero_func = <
+			MUXF_DAISY_MODE
+		>;
+	};
+
+	l2sw_ev_one_phy_pins: pinmux_l2sw_ev_one_phy_pins {
+		sppctl,pins = <
+			SPPCTL_IOPAD(47,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_CLK_OUT,0)
+			SPPCTL_IOPAD(41,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_MAC_SMI_MDC,0)
+			SPPCTL_IOPAD(42,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_LED_FLASH0,0)
+			SPPCTL_IOPAD(51,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_LED_ON0,0)
+			SPPCTL_IOPAD(40,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_MAC_SMI_MDIO,0)
+			SPPCTL_IOPAD(50,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_TXEN,0)
+			SPPCTL_IOPAD(48,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_TXD0,0)
+			SPPCTL_IOPAD(49,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_TXD1,0)
+			SPPCTL_IOPAD(44,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_CRSDV,0)
+			SPPCTL_IOPAD(45,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_RXD0,0)
+			SPPCTL_IOPAD(46,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_RXD1,0)
+			SPPCTL_IOPAD(43,SPPCTL_PCTL_G_PMUX,MUXF_L2SW_P0_MAC_RMII_RXER,0)
+		>;
+		sppctl,zero_func = <
+			MUXF_L2SW_LED_FLASH1
+			MUXF_L2SW_LED_ON1
+			MUXF_L2SW_P1_MAC_RMII_TXEN
+			MUXF_L2SW_P1_MAC_RMII_TXD0
+			MUXF_L2SW_P1_MAC_RMII_TXD1
+			MUXF_L2SW_P1_MAC_RMII_CRSDV
+			MUXF_L2SW_P1_MAC_RMII_RXD0
+			MUXF_L2SW_P1_MAC_RMII_RXD1
+			MUXF_L2SW_P1_MAC_RMII_RXER
+			MUXF_DAISY_MODE
+		>;
+	};
+
+	pins_lcdif: pins_lcdif {
+		sppctl,groups = "LCDIF";
+		sppctl,function = "LCDIF";
+	};	
+
+	pins_sdio: pins_sdio {
+		sppctl,pins = <
+			SPPCTL_IOPAD(17,SPPCTL_PCTL_G_PMUX,MUXF_SDIO_D1,0)
+			SPPCTL_IOPAD(19,SPPCTL_PCTL_G_PMUX,MUXF_SDIO_D0,0)
+			SPPCTL_IOPAD(21,SPPCTL_PCTL_G_PMUX,MUXF_SDIO_CLK,0)
+			SPPCTL_IOPAD(23,SPPCTL_PCTL_G_PMUX,MUXF_SDIO_CMD,0)
+			SPPCTL_IOPAD(25,SPPCTL_PCTL_G_PMUX,MUXF_SDIO_D3,0)
+			SPPCTL_IOPAD(27,SPPCTL_PCTL_G_PMUX,MUXF_SDIO_D2,0)
+		>;
+	};
+
+	mmc1_mux_cd: mmc1_mux_cd {
+		sppctl,pins = < SPPCTL_IOPAD(71,SPPCTL_PCTL_G_GPIO,0,0) >;
+	};
+
+	mipicsi0_pins: pinmux_mipicsi0_pins {
+		sppctl,pins = <
+			SPPCTL_IOPAD(11,SPPCTL_PCTL_G_PMUX,MUXF_I2CM1_DAT,0)
+			SPPCTL_IOPAD(12,SPPCTL_PCTL_G_PMUX,MUXF_I2CM1_CLK,0)
+		>;
+	};
+};

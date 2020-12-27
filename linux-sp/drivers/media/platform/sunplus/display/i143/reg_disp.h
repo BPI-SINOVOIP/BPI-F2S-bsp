@@ -1,10 +1,15 @@
+/* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * Sunplus I143 Display driver register file
+ *
+ * Copyright (C) 2020 Sunplus Technology, Inc.
+ *
+ * Author: Hammer Hsieh <hammer.hsieh@sunplus.com>
+ *
+ */
+
 #ifndef __REG_DISP_H__
 #define __REG_DISP_H__
-/**
- * @file reg_disp.h
- * @brief
- * @author Hammer Hsieh
- */
 
 #include <linux/types.h>
 
@@ -282,39 +287,6 @@ typedef volatile struct _DISP_TGEN_REG_ {
 	u32 g213_reserved_4					; // 31
 } DISP_TGEN_REG_t;
 STATIC_ASSERT(sizeof(DISP_TGEN_REG_t) == (32 * 4));
-
-#if 0 //SP7021
-typedef volatile struct _DISP_DMIX_REG_ {
-	u32 dmix_config0					; // 00
-	u32 dmix_config1					; // 01
-	u32 dmix_config2					; // 02
-	u32 dmix_plane_alpha				; // 03
-	u32 dmix_plane_alpha2				; // 04
-	u32 dmix_plane_alpha3				; // 05
-	u32 g217_reserved0					; // 06
-	u32 dmix_chksum						; // 07
-	u32 dmix_ptg_config					; // 08
-	u32 dmix_ptg_config_2				; // 09
-	u32 dmix_ptg_config_3				; // 10
-	u32 dmix_ptg_config_4				; // 11
-	u32 dmix_ptg_config_5				; // 12
-	u32 dmix_ptg_config_6				; // 13
-	u32 g217_reserved1[2]				; // 14-15
-	u32 dmix_yc_adjust					; // 16
-	u32 dmix_luma_cp1					; // 17
-	u32 dmix_luma_cp2					; // 18
-	u32 dmix_luma_cp3					; // 19
-	u32 dmix_luma_slope0				; // 20
-	u32 dmix_luma_slope1				; // 21
-	u32 dmix_luma_slope2				; // 22
-	u32 dmix_luma_slope3				; // 23
-	u32 dmix_chroma_satcos				; // 24
-	u32 dmix_chroma_satsin				; // 25
-	u32 dmix_pix_en_sel					; // 26
-	u32 g217_reserved2[5]				; // 27~31
-} DISP_DMIX_REG_t;
-STATIC_ASSERT(sizeof(DISP_DMIX_REG_t) == (32 * 4));
-#endif
 
 typedef volatile struct _DISP_DMIX_REG_ {
 	u32 dmix_layer_config_0					; // 00

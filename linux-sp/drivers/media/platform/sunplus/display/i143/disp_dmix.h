@@ -1,7 +1,17 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (C) 2020 Sunplus Technology, Inc.
+ *
+ * Sunplus I143 Display driver for dmix header file
+ *
+ * Authors: Hammer Hsieh <hammer.hsieh@sunplus.com>
+ *
+ */
+
 #ifndef __DISP_DMIX_H__
 #define __DISP_DMIX_H__
 
-#include "display.h"
+#include <media/sunplus/disp/i143/display.h>
 
 #define DMIX_LUMA_OFFSET_MIN	(-50)
 #define DMIX_LUMA_OFFSET_MAX	(50)
@@ -102,7 +112,6 @@ void DRV_DMIX_Luma_Adjust_Set(DRV_DMIX_Luma_Adj_t *LumaAdjInfo);
 void DRV_DMIX_Luma_Adjust_Get(DRV_DMIX_Luma_Adj_t *LumaAdjInfo);
 void DRV_DMIX_Chroma_Adjust_Set(DRV_DMIX_Chroma_Adj_t *ChromaAdjInfo);
 void DRV_DMIX_Chroma_Adjust_Get(DRV_DMIX_Chroma_Adj_t *ChromaAdjInfo);
-void DRV_DMIX_dump(void);
 
 #endif	/* __DISP_DMIX_H__ */
 

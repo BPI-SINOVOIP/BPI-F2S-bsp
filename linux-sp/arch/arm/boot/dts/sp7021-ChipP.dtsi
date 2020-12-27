@@ -1,3 +1,7 @@
+/dts-v1/;
+
+#include "sp7021-common.dtsi"
+
 //#define ENABLE_QTEST_CBDMA
 / {
 	model = "Sunplus SP7021 (ARM926)";

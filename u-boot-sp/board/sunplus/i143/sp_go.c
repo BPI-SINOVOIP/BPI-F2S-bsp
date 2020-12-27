@@ -59,13 +59,13 @@ int sp_qk_uimage_verify(ulong img_addr, int verify)
 	/* original uImage header's magic */
 	if (!image_check_magic(hdr)) {
 		puts("Bad Magic Number\n");
-		return (int)NULL;
+		return (int)((u64)NULL);
 	}
 
 	/* hcrc by quick sunplus crc */
 	if (!sp_image_check_hcrc(hdr)) {
 		puts("Bad Header Checksum(Simplified)\n");
-		return (int)NULL;
+		return (int)((u64)NULL);
 	}
 
 	image_print_contents(hdr);
@@ -75,12 +75,12 @@ int sp_qk_uimage_verify(ulong img_addr, int verify)
 		puts("   Verifying Checksum ... ");
 		if (!sp_image_check_dcrc(hdr)) {
 			printf("Bad Data CRC(Simplified)\n");
-			return (int)NULL;
+			return (int)((u64)NULL);
 		}
 		puts("OK\n");
 	}
 
-	return (int)hdr;
+	return (int)((u64)hdr);
 }
 
 /* return 0 if failed otherwise return 1 */

@@ -1,0 +1,7 @@
+config USB_GADGET_SP7021
+ 	tristate "Sunplus SP7021 Gemini USB Device Controller"
+ 	depends on SOC_SP7021
+ 	select USB_GADGET_DUALSPEED
+ 	default y
+ 	help
+	   This option selects the USB device controller for Sunplus SP7021.

@@ -61,7 +61,9 @@
 /* #define CONFIG_SUNPLUS_SERIAL */
 
 /* Main storage selection */
-#if defined(CONFIG_SP_SPINAND)
+#if (SPINOR == 1) || (NOR_JFFS2 == 1)
+#define SP_MAIN_STORAGE			"nor"
+#elif defined(CONFIG_SP_SPINAND)
 #define SP_MAIN_STORAGE			"nand"
 #elif defined(CONFIG_MMC_SP_EMMC)
 #define SP_MAIN_STORAGE			"emmc"
@@ -243,7 +245,7 @@
 
 //#define SUPPROT_NFS_ROOTFS
 #ifdef SUPPROT_NFS_ROOTFS
-#define USE_NFS_ROOTFS  1
+#define USE_NFS_ROOTFS  		1
 #define NFS_ROOTFS_DIR			"/home/rootfsdir"
 #define NFS_ROOTFS_SERVER_IP 	172.28.114.216
 #define NFS_ROOTFS_CLINT_IP 	172.28.114.7
@@ -288,7 +290,27 @@
 		"source ${scriptaddr}; "\
 	"fi; "
 
+#if (NOR_JFFS2 == 1)
+#define NOR_LOAD_KERNEL \
+	dbg_scr("echo kernel from ${addr_src_kernel} to ${addr_dst_kernel} sz ${sz_kernel}; ") \
+	"setexpr kernel_off ${addr_src_kernel} - 0x98000000; " \
+	"sf probe 0 50000000; " \
+	"sf read ${addr_dst_kernel} ${kernel_off} ${sz_kernel}; " \
+	"setexpr sz_kernel ${sz_kernel} + 0xffff; " \
+	"setexpr sz_kernel ${sz_kernel} / 0x10000; " \
+	"setexpr sz_kernel ${sz_kernel} * 0x10000; " \
+	"setenv bootargs ${b_c} root=/dev/mtdblock6 rw rootfstype=jffs2 user_debug=255 rootwait " \
+	"mtdparts=9c000b00.spinor:64k@0(iboot)ro,64k(xboot)ro,128k(dtb),768k(uboot),1m(nonos),0x${sz_kernel}(kernel),-(rootfs); "
+#else
+#define NOR_LOAD_KERNEL \
+	"setexpr sz_kernel ${sz_kernel} + 3; setexpr sz_kernel ${sz_kernel} / 4; " \
+	dbg_scr("echo kernel from ${addr_src_kernel} to ${addr_dst_kernel} sz ${sz_kernel}; ") \
+	"cp.l ${addr_src_kernel} ${addr_dst_kernel} ${sz_kernel}; "
+#endif
+
 #define CONFIG_EXTRA_ENV_SETTINGS \
+"b_c=console=tty1 console=ttyS0,115200 earlyprintk\0" \
+"emmc_root=root=/dev/mmcblk0p8 rw rootwait\0" \
 "stdin=" STDIN_CFG "\0" \
 "stdout=" STDOUT_CFG "\0" \
 "stderr=" STDOUT_CFG "\0" \
@@ -338,18 +360,16 @@
 	"setenv tmpval 0; setexpr tmpaddr ${addr_tmp_header} + 0x0c; run be2le; " \
 	dbg_scr("md ${addr_tmp_header} 0x10; printenv tmpval; ") \
 	"setexpr sz_nonos ${tmpval} + 0x40; " \
-	"setexpr sz_nonos ${sz_nonos} + 4; setexpr sz_nonos ${sz_nonos} / 4; " \
+	"setexpr sz_nonos ${sz_nonos} + 3; setexpr sz_nonos ${sz_nonos} / 4; " \
 	dbg_scr("echo nonosize ${sz_nonos}  addr_dst_nonos ${addr_dst_nonos};") \
 	"cp.l ${addr_src_nonos} ${addr_dst_nonos} ${sz_nonos}; " \
-	"sp_nonos_go ${addr_dst_nonos};"\
+	"sp_nonos_go ${addr_dst_nonos}; "\
 	"cp.b ${addr_src_kernel} ${addr_tmp_header} 0x40; " \
 	"setenv tmpval 0; setexpr tmpaddr ${addr_tmp_header} + 0x0c; run be2le; " \
 	dbg_scr("md ${addr_tmp_header} 0x10; printenv tmpval; ") \
 	"setexpr sz_kernel ${tmpval} + 0x40; " \
-	"setexpr sz_kernel ${sz_kernel} + 72; " \
-	"setexpr sz_kernel ${sz_kernel} + 4; setexpr sz_kernel ${sz_kernel} / 4; " \
-	dbg_scr("echo kernel from ${addr_src_kernel} to ${addr_dst_kernel} sz ${sz_kernel}; ") \
-	"cp.l ${addr_src_kernel} ${addr_dst_kernel} ${sz_kernel}; " \
+	"setexpr sz_kernel ${sz_kernel} + 0x48; " \
+	NOR_LOAD_KERNEL \
 	dbg_scr("echo bootm ${addr_dst_kernel} - ${fdtcontroladdr}; ") \
 	"run boot_kernel \0" \
 "qk_romter_boot=cp.b ${addr_src_kernel} ${addr_tmp_header} 0x40; " \
@@ -361,20 +381,20 @@
 	"cp.l ${addr_src_kernel} ${addr_dst_kernel} ${sz_kernel}; " \
 	dbg_scr("echo sp_go ${addr_dst_kernel} ${fdtcontroladdr}; ") \
 	"sp_go ${addr_dst_kernel} ${fdtcontroladdr}\0" \
-"emmc_boot=	mmc read ${addr_tmp_header} ${addr_src_nonos} 0x1; " \
+"emmc_boot=mmc read ${addr_tmp_header} ${addr_src_nonos} 0x1; " \
 	"setenv tmpval 0; setexpr tmpaddr ${addr_tmp_header} + 0x0c; run be2le; " \
 	"setexpr sz_nonos ${tmpval} + 0x40; " \
 	"setexpr sz_nonos ${sz_nonos} + 0x200; setexpr sz_nonos ${sz_nonos} / 0x200; " \
 	dbg_scr("echo nonosize ${sz_nonos}  addr_dst_nonos ${addr_dst_nonos};")\
 	"mmc read ${addr_dst_nonos} ${addr_src_nonos} ${sz_nonos}; " \
-	"sp_nonos_go ${addr_dst_nonos};"\
+	"sp_nonos_go ${addr_dst_nonos}; "\
 	"mmc read ${addr_tmp_header} ${addr_src_kernel} 0x1; " \
 	"setenv tmpval 0; setexpr tmpaddr ${addr_tmp_header} + 0x0c; run be2le; " \
 	"setexpr sz_kernel ${tmpval} + 0x40; " \
-	"setexpr sz_kernel ${sz_kernel} + 72; " \
+	"setexpr sz_kernel ${sz_kernel} + 0x48; " \
 	"setexpr sz_kernel ${sz_kernel} + 0x200; setexpr sz_kernel ${sz_kernel} / 0x200; " \
 	"mmc read ${addr_dst_kernel} ${addr_src_kernel} ${sz_kernel}; " \
-	"setenv bootargs console=ttyS0,115200 earlyprintk root=/dev/mmcblk0p8 rw user_debug=255 rootwait ;" \
+	"setenv bootargs ${b_c} ${emmc_root} ${args_emmc} ${args_kern}; " \
 	"run boot_kernel \0" \
 "qk_emmc_boot=mmc read ${addr_tmp_header} ${addr_src_kernel} 0x1; " \
 	"setenv tmpval 0; setexpr tmpaddr ${addr_tmp_header} + 0x0c; run be2le; " \
@@ -387,19 +407,19 @@
 	"setexpr sz_nonos ${tmpval} + 0x40; " \
 	"nand read ${addr_dst_nonos} nonos ${sz_nonos}; " \
 	dbg_scr("echo nonosize ${sz_nonos}  addr_dst_nonos ${addr_dst_nonos};")\
-	"sp_nonos_go ${addr_dst_nonos};"\
+	"sp_nonos_go ${addr_dst_nonos}; "\
 	"nand read ${addr_tmp_header} kernel 0x40; " \
 	"setenv tmpval 0; setexpr tmpaddr ${addr_tmp_header} + 0x0c; run be2le; " \
 	dbg_scr("md ${addr_tmp_header} 0x10; printenv tmpval; ") \
 	"setexpr sz_kernel ${tmpval} + 0x40; " \
-	"setexpr sz_kernel ${sz_kernel} + 72; " \
+	"setexpr sz_kernel ${sz_kernel} + 0x48; " \
 	dbg_scr("echo from kernel partition to ${addr_dst_kernel} sz ${sz_kernel}; ") \
 	"nand read ${addr_dst_kernel} kernel ${sz_kernel}; " \
-	"setenv bootargs console=ttyS0,115200 earlyprintk root=ubi0:rootfs rw ubi.mtd=9,2048 rootflags=sync rootfstype=ubifs mtdparts=sp_spinand:128k(nand_header),128k(xboot1),1280k(uboot1),2560k(uboot2),512k(env),512k(env_redund),1m(nonos),256k(dtb),15m(kernel),-(rootfs) user_debug=255 rootwait ;" \
+	"setenv bootargs ${b_c} root=ubi0:rootfs rw ubi.mtd=9,2048 rootflags=sync rootfstype=ubifs mtdparts=sp_spinand:128k(nand_header),128k(xboot1),1280k(uboot1),2560k(uboot2),512k(env),512k(env_redund),1m(nonos),256k(dtb),15m(kernel),-(rootfs) user_debug=255 rootwait ;" \
 	"run boot_kernel \0" \
-"boot_kernel= "\
+"boot_kernel="\
 	"if itest ${if_use_nfs_rootfs} == 1; then " \
-		"setenv bootargs root=/dev/nfs nfsroot=${nfs_serverip}:${nfs_rootfs_dir} ip=${nfs_clintip}:${nfs_serverip}:${nfs_gatewayip}:${nfs_netmask}::eth0:off rdinit=/linuxrc noinitrd rw console=ttyS0,115200; "\
+		"setenv bootargs ${b_c} root=/dev/nfs nfsroot=${nfs_serverip}:${nfs_rootfs_dir} ip=${nfs_clintip}:${nfs_serverip}:${nfs_gatewayip}:${nfs_netmask}::eth0:off rdinit=/linuxrc noinitrd rw; "\
 	"fi; " \
 	"bootm ${addr_dst_kernel} - ${fdtcontroladdr}; " \
 	"\0" \
@@ -409,19 +429,27 @@
 	"mmc read ${addr_tmp_header} ${addr_src_kernel} 0x1; " \
 	"setenv tmpval 0; setexpr tmpaddr ${addr_tmp_header} + 0x0c; run be2le; " \
 	"setexpr sz_kernel ${tmpval} + 0x40; " \
-	"setexpr sz_kernel ${sz_kernel} + 72; " \
+	"setexpr sz_kernel ${sz_kernel} + 0x48; " \
 	"setexpr sz_kernel ${sz_kernel} + 0x200; setexpr sz_kernel ${sz_kernel} / 0x200; " \
 	"mmc read ${addr_dst_kernel} ${addr_src_kernel} ${sz_kernel}; " \
 	"sp_go ${addr_dst_kernel} ${fdtcontroladdr}\0" \
 "tftp_boot=setenv ethaddr ${macaddr} && printenv ethaddr; " \
 	"printenv serverip; " \
-	"dhcp ${addr_dst_nonos} ${serverip}:a926" __stringify(USER_NAME) "; " \
+	"setenv filesize 0; " \
+	"dhcp ${addr_dst_kernel} ${serverip}:a926" __stringify(USER_NAME) "; " \
 	"if test $filesize != 0; then " \
+		"setexpr tmpval $filesize + 3; setexpr tmpval $tmpval / 4; " \
+		"echo Copying nonos image to $addr_dst_nonos; " \
+		"cp.l $addr_dst_kernel $addr_dst_nonos $tmpval; " \
 		"echo \"## Booting A926 from image at ${addr_dst_nonos}\"; " \
 		"sp_nonos_go ${addr_dst_nonos}; " \
 	"fi; " \
-	"dhcp ${addr_dst_dtb} ${serverip}:dtb" __stringify(USER_NAME) "; " \
+	"dhcp ${addr_dst_dtb} ${serverip}:dtb" __stringify(USER_NAME) " && " \
 	"dhcp ${addr_dst_kernel} ${serverip}:uImage" __stringify(USER_NAME) "; " \
+	"if test $? != 0; then " \
+	"	echo Error occurred while getting images from tftp server!; " \
+	"	exit; " \
+	"fi; " \
 	"bootm ${addr_dst_kernel} - ${addr_dst_dtb}; " \
 	"\0" \
 "isp_usb=setenv isp_if usb && setenv isp_dev 0; " \
@@ -473,8 +501,8 @@
 #if 0
 /* romter test booting command */
 #define CONFIG_BOOTCOMMAND      "echo bootcmd started ; sp_preboot dump ; sp_preboot ; printenv ; \
-echo [cmd] cp.l 0x98600000 0x307FC0 0x280000 ; \
-cp.l 0x98600000 0x307FC0 0x280000 ; \
+echo [cmd] cp.l 0x98200000 0x307FC0 0x280000 ; \
+cp.l 0x98200000 0x307FC0 0x280000 ; \
 echo [cmd] cp.l 0x98020000 0x2FFFC0 0x400 ; \
 cp.l 0x98020000 0x2FFFC0 0x400 ; \
 sp_go 0x308000 0x300000"
@@ -587,6 +615,7 @@ mmc read 0x2fffc0 0x1422 0xa ; mmc read 0x307fc0 0x1822 0x30f0 ; sp_go 0x308000 
 #ifdef CONFIG_USB_KEYBOARD
 #define STDIN_CFG "usbkbd,serial"
 #define CONFIG_PREBOOT "usb start"
+#define CONFIG_BOOTDELAY 1
 #else
 #define STDIN_CFG "serial"
 #endif

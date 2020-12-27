@@ -504,7 +504,7 @@ static int sp_tdm_trigger(struct snd_pcm_substream *substream, int cmd,
                           struct snd_soc_dai *dai)
 {
     	int capture = (substream->stream == SNDRV_PCM_STREAM_CAPTURE);
-    	struct sp_tdm_info *sp_tdm = dev_get_drvdata(dai->dev);
+    	//struct sp_tdm_info *sp_tdm = dev_get_drvdata(dai->dev);
     	//unsigned int val;
     	int ret = 0;
 
@@ -562,7 +562,7 @@ static int sp_tdm_startup(struct snd_pcm_substream *substream,
                           struct snd_soc_dai *dai)
 {
     	int capture = (substream->stream == SNDRV_PCM_STREAM_CAPTURE);
-    	struct sp_tdm_info *sp_tdm = dev_get_drvdata(dai->dev);
+    	//struct sp_tdm_info *sp_tdm = dev_get_drvdata(dai->dev);
     	//int ret;
 
     	AUD_INFO("%s IN, operation c or p %d\n", __func__, capture);
@@ -579,7 +579,7 @@ static int sp_tdm_startup(struct snd_pcm_substream *substream,
 static void sp_tdm_shutdown(struct snd_pcm_substream *substream,
                             struct snd_soc_dai *dai)
 {
-    	struct sp_tdm_info *sp_tdm = dev_get_drvdata(dai->dev);
+    	//struct sp_tdm_info *sp_tdm = dev_get_drvdata(dai->dev);
     	int capture = (substream->stream == SNDRV_PCM_STREAM_CAPTURE);
 
     	AUD_INFO("%s IN\n", __func__ );
@@ -592,7 +592,7 @@ static void sp_tdm_shutdown(struct snd_pcm_substream *substream,
 
 static int sp_tdm_set_pll(struct snd_soc_dai *dai, int pll_id, int source,unsigned int freq_in, unsigned int freq_out)
 {
-    	struct sp_tdm_info *sp_tdm = dev_get_drvdata(dai->dev);
+    	//struct sp_tdm_info *sp_tdm = dev_get_drvdata(dai->dev);
 
     	AUD_INFO("%s IN, freq_out=%d\n", __func__, freq_out);
 
@@ -616,7 +616,7 @@ static const struct snd_soc_component_driver sp_tdm_component = {
 static void sp_tdm_init_state(struct sp_tdm_info *tdm)
 {
 	volatile RegisterFile_Audio * regs0 = (volatile RegisterFile_Audio*)audio_base;
-	int val;
+	//int val;
 	  
     	regs0->tdm_rx_cfg0 	= (0x0<<12);
     	regs0->tdm_rx_cfg1 	= 0x00100000;
@@ -655,8 +655,12 @@ static int sp_tdm_probe(struct platform_device *pdev)
     	struct device *dev = &pdev->dev;
     	struct sp_tdm_info *sp_tdm;
     	int ret;
-
-    	AUD_INFO("%s IN\n", __func__);
+	
+	AUD_INFO("%s IN\n", __func__);
+        if (!of_device_is_available(audionp)) {
+		dev_err(&pdev->dev, "devicetree status is not available\n");
+		return -ENODEV;
+	}
 
     	sp_tdm = devm_kzalloc(&pdev->dev, sizeof(*sp_tdm), GFP_KERNEL);
     	if (!sp_tdm)

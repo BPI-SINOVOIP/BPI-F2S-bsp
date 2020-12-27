@@ -77,4 +77,4 @@ obj-y += ti/
 obj-$(CONFIG_MEDIATEK_ETH) += mtk_eth.o
 obj-y += mscc_eswitch/
 obj-$(CONFIG_SUNPLUS_L2SW) += sunplus_l2sw.o
-obj-$(CONFIG_SUNPLUS_GL2SW) += sunplus_gl2sw.o
+obj-$(CONFIG_SUNPLUS_GL2SW) += sunplus_l2sw.o

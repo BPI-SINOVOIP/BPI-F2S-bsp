@@ -48,7 +48,13 @@ int sp7021_video_show_board_info(void)
 	char buf[255];
 	char *corp = "2020 Sunplus Technology Inc.\n";
 	struct udevice *dev, *con;
-	//const char *s;
+#ifdef CONFIG_DM_VIDEO
+#if defined(CONFIG_CMD_BMP)
+#ifdef CONFIG_DM_VIDEO_SP7021_LOGO
+	const char *s;
+#endif
+#endif
+#endif
 	vidinfo_t logo_info;
 	int ret;
 
@@ -66,7 +72,7 @@ int sp7021_video_show_board_info(void)
 		dram_size += gd->bd->bi_dram[i].size;
 
 	
-	len += sprintf(&buf[len], "SP7021-176-EMU V2.0 BOARD \n");
+	len += sprintf(&buf[len], "SP7021 Board Logo Display \n");
 
 	len += sprintf(&buf[len], "%ld MB SDRAM \n",
 		       dram_size >> 20);

@@ -30,6 +30,9 @@
 #define PLLSYS_CTL	REG(4, 26)
 #else
 #define PLLSYS_CTL	REG(9) // G4.9
+#define PLLFLA_CTL	REG(10)
+#define PLLGPU_CTL	REG(11)
+#define PLLCPU_CTL	REG(12)
 
 #define clk_readl	readl
 #define clk_writel	writel
@@ -94,13 +97,13 @@ static u32 gates[] = {
 	STC_AV0,
 	STC_AV1,
 	STC_AV2,
-	UA0 | P_EXTCLK,
-	UA1 | P_EXTCLK,
-	UA2 | P_EXTCLK,
-	UA3 | P_EXTCLK,
-	UA4 | P_EXTCLK,
-	HWUA | P_EXTCLK,
-	UADMA | P_EXTCLK,
+	UA0,
+	UA1,
+	UA2,
+	UA3,
+	UA4,
+	HWUA,
+	UADMA,
 
 	CBDMA0,
 	SPI_COMBO_0,
@@ -160,6 +163,9 @@ static void __iomem *clk_regs;
 static void __iomem *pll_regs;
 
 static DEFINE_SPINLOCK(pllsys_lock);
+static DEFINE_SPINLOCK(pllfla_lock);
+static DEFINE_SPINLOCK(pllgpu_lock);
+static DEFINE_SPINLOCK(pllcpu_lock);
 #if 0
 static DEFINE_SPINLOCK(plla_lock);
 static DEFINE_SPINLOCK(plle_lock);
@@ -759,9 +765,15 @@ static void __init sp_clkc_init(struct device_node *np)
 	clk_register_clkdev(clks[PLL_TV_A], NULL, "plltv_a");
 #endif
 
-	/* PLL_SYS */
+	/* PLL_SYS/PLL_FLA/PLL_GPU/PLL_CPU */
 	clks[PLL_SYS] = clk_register_sp_pll("pllsys", EXTCLK,
 			PLLSYS_CTL, 0, 1, 15, 13500000, 8, 6, &pllsys_lock);
+	clks[PLL_FLA] = clk_register_sp_pll("pllfla", EXTCLK,
+			PLLFLA_CTL, 0, 1, 15, 13500000, 8, 6, &pllfla_lock);
+	clks[PLL_GPU] = clk_register_sp_pll("pllgpu", EXTCLK,
+			PLLGPU_CTL, 0, 1, 15, 13500000, 8, 6, &pllgpu_lock);
+	clks[PLL_CPU] = clk_register_sp_pll("pllcpu", EXTCLK,
+			PLLCPU_CTL, 0, 1, 15, 13500000, 8, 6, &pllcpu_lock);
 
 	/* gates */
 	for (i = 0; i < ARRAY_SIZE(gates); i++) {

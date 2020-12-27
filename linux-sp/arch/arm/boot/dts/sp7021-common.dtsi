@@ -8,12 +8,20 @@
 #include <dt-bindings/interrupt-controller/irq.h>
 #include <dt-bindings/reset/sp-q628.h>
 #include <dt-bindings/gpio/gpio.h>
-#include <dt-bindings/pinctrl/sp7021.h>
+#include <dt-bindings/pinctrl/sppctl-sp7021.h>
 
-#define ENABLE_DMARX0
-#define ENABLE_DMARX1
-#define ENABLE_DMATX0
-#define ENABLE_DMATX1
+#ifndef ENABLE_DMARX0
+#define ENABLE_DMARX0 1
+#endif
+#ifndef ENABLE_DMARX1
+#define ENABLE_DMARX1 1
+#endif
+#ifndef ENABLE_DMATX0
+#define ENABLE_DMATX0 1
+#endif
+#ifndef ENABLE_DMATX1
+#define ENABLE_DMATX1 1
+#endif
 
 / {
 	aliases {
@@ -51,10 +59,12 @@
 		i2c2 = &i2cm2;
 		i2c3 = &i2cm3;
 
-		spi0 = &spi_controller0;
-		spi1 = &spi_controller1;
-		spi2 = &spi_controller2;
-		spi3 = &spi_controller3;
+		sp_spi0 = &spi_controller0;
+		sp_spi1 = &spi_controller1;
+		sp_spi2 = &spi_controller2;
+		sp_spi3 = &spi_controller3;
+
+		spi0 = &sp_spinor0;
 	};
 
 	reserved-memory {
@@ -65,6 +75,11 @@
 		iop_reserve: iop_device {
 			no-map;
 			reg = <0x00100000 0x00100000>;//SP_IOP_RESERVE_BASE SP_IOP_RESERVE_SIZE
+		};
+
+		a926_reserve: a926_memory {
+			no-map;
+			reg = <0x00000000 0x00100000>;
 		};
 	};
 
@@ -109,22 +124,6 @@
 		ranges;
 
 		interrupt-parent = <&intc>;
-
-		/* B modules */
-#if 0
-		intc: interrupt-controller@G15 {
-			compatible = "sunplus,sp-intc";
-			interrupt-controller;
-			#interrupt-cells = <2>;
-			reg = <0x9c000780 0x80>, /* G15 */
-			      <0x9c000a80 0x80>; /* G21 */
-			interrupt-parent = <&gic>;
-			interrupts = <GIC_SPI 5 IRQ_TYPE_LEVEL_HIGH>, /* EXT_INT0 */
-				     <GIC_SPI 6 IRQ_TYPE_LEVEL_HIGH>; /* EXT_INT1 */
-			ext0-mask = <0xf>; /* core0-3 */
-			ext1-mask = <0xe>; /* core1-3 */
-		};
-#endif
 
 #ifdef ENABLE_DMARX0
 		/* DMA Rx for UARTx */
@@ -218,7 +217,6 @@
 			interrupts = <134 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&clkc UA4>;
 			resets = <&rstc RST_UA4>;
-			status = "disabled";
 		};
 
 		rtc: serial@sp_rtc {
@@ -382,6 +380,18 @@
 				<93 IRQ_TYPE_EDGE_RISING>, /* icm1 */
 				<94 IRQ_TYPE_EDGE_RISING>, /* icm2 */
 				<95 IRQ_TYPE_EDGE_RISING>; /* icm3 */
+		};
+
+		fbio_led: fbio_led@70000000 {
+			compatible = "sunplus,sp7021-fbio-led";
+			clocks = <&clkc FIO_CTL>, <&clkc FPGA>;
+			clock-names = "fio", "fpga";
+			resets = <&rstc RST_FPGA>;
+			reg =
+				<0x9c106000 0x80>, /* fbio_ctl regs */
+				<0x70000000 0x10>; /* fbio_led regs */
+			interrupt-parent = <&intc>;
+			interrupts = <29 IRQ_TYPE_EDGE_RISING>; /* fpga_ext0 */
 		};
 
 		crypto: crypto@G84 {
@@ -752,7 +762,6 @@
 			cap-sdio-irq;
 			no-sd;
 			no-mmc;
-			status = "disabled";
 			#address-cells = <1>;
 			#size-cells = <0>;
 		};
@@ -880,16 +889,6 @@
 			reg = <0x9C000100 0x100>, <0x9C000300 0x80>, <0x9C000380 0x80>, <0x9C0032e4 0x1C>, <0x9C000080 0x20>;
 			gpio-controller;
 			#gpio-cells = <2>;
-			interrupt-parent = <&intc>;
-			interrupts =
-				<120 IRQ_TYPE_LEVEL_HIGH>,
-				<121 IRQ_TYPE_LEVEL_HIGH>,
-				<122 IRQ_TYPE_LEVEL_HIGH>,
-				<123 IRQ_TYPE_LEVEL_HIGH>,
-				<124 IRQ_TYPE_LEVEL_HIGH>,
-				<125 IRQ_TYPE_LEVEL_HIGH>,
-				<126 IRQ_TYPE_LEVEL_HIGH>,
-				<127 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&clkc GPIO>;
 			resets = <&rstc RST_GPIO>;
 
@@ -972,13 +971,11 @@
 				sppctl,groups = "HDMI_TX3";
 				sppctl,function = "HDMI_TX";
 			};
+
+			fpga_mux: fpga_mux {
+				sppctl,groups = "FPGA_IFX";
+				sppctl,function = "FPGA_IFX";
+			};
 		};
 	};
 };
-
-#include <dt-bindings/../generated/autoconf.h>
-#ifdef CONFIG_MACH_PENTAGRAM_SP7021_ACHIP
-#include "sp7021-ChipC.dtsi"
-#else
-#include "sp7021-ChipP.dtsi"
-#endif

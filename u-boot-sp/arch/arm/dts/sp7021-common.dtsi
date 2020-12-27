@@ -8,7 +8,7 @@
 #include <dt-bindings/interrupt-controller/irq.h>
 #include <dt-bindings/reset/sp-q628.h>
 #include <dt-bindings/gpio/gpio.h>
-#include <dt-bindings/pinctrl/sp7021.h>
+#include <dt-bindings/pinctrl/sppctl-sp7021.h>
 
 #define ENABLE_DMARX0
 #define ENABLE_DMARX1
@@ -51,10 +51,10 @@
 		i2c2 = &i2cm2;
 		i2c3 = &i2cm3;
 
-		spi0 = &spi_controller0;
-		spi1 = &spi_controller1;
-		spi2 = &spi_controller2;
-		spi3 = &spi_controller3;
+		sp_spi0 = &spi_controller0;
+		sp_spi1 = &spi_controller1;
+		sp_spi2 = &spi_controller2;
+		sp_spi3 = &spi_controller3;
 	};
 
 	reserved-memory {
@@ -65,6 +65,11 @@
 		iop_reserve: iop_device {
 			no-map;
 			reg = <0x00100000 0x00100000>;//SP_IOP_RESERVE_BASE SP_IOP_RESERVE_SIZE
+		};
+
+		a926_reserve: a926_memory {
+			no-map;
+			reg = <0x00000000 0x00100000>;
 		};
 	};
 
@@ -181,7 +186,7 @@
 			clocks = <&clkc UA0>;
 			resets = <&rstc RST_UA0>;
 			pinctrl-names = "default";
-			pinctrl-0 = <&pins_uart0>;
+			pinctrl-0 = <&pins_uart0>;		
 		};
 
 		uart1: serial@sp_uart1 {
@@ -218,7 +223,6 @@
 			interrupts = <134 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&clkc UA4>;
 			resets = <&rstc RST_UA4>;
-			status = "disabled";
 		};
 
 		rtc: serial@sp_rtc {
@@ -548,7 +552,7 @@
 			compatible = "sunplus,sp7021-usb-phy0";
 			clocks = <&clkc UPHY0>;
 			resets = <&rstc RST_UPHY0>;
-			reg = <0x9C004A80 0x80>;
+			reg = <0x9C004A80 0x80>, <0x9C000000 0x80>, <0x9C000200 0x80>;
 			interrupt-parent = <&intc>;
 			interrupts = <36 IRQ_TYPE_LEVEL_HIGH>;
 			nvmem-cell-names = "disc_vol0";
@@ -559,7 +563,7 @@
 			compatible = "sunplus,sp7021-usb-phy1";
 			clocks = <&clkc UPHY1>;
 			resets = <&rstc RST_UPHY1>;
-			reg = <0x9C004B00 0x80>;
+			reg = <0x9C004B00 0x80>, <0x9C000000 0x80>, <0x9C000200 0x80>;
 			interrupt-parent = <&intc>;
 			interrupts = <37 IRQ_TYPE_LEVEL_HIGH>;
 			nvmem-cell-names = "disc_vol1";
@@ -575,7 +579,7 @@
 			interrupts = <105 IRQ_TYPE_LEVEL_HIGH>;
 		};
 
-		sp_ehci0: usb@9C102100 {
+		sp_ehci0: usb@0x9C102100 {
 			compatible = "sunplus,sp7021-usb-ehci0";
 			clocks = <&clkc USBC0>;
 			resets = <&rstc RST_USBC0>;
@@ -584,7 +588,7 @@
 			interrupts = <14 IRQ_TYPE_LEVEL_HIGH>;
 		};
 
-		sp_ehci1: usb@9C103100 {
+		sp_ehci1: usb@0x9C103100 {
 			compatible = "sunplus,sp7021-usb-ehci1";
 			clocks = <&clkc USBC1>;
 			resets = <&rstc RST_USBC1>;
@@ -597,7 +601,7 @@
 			compatible = "sunplus,sp7021-usb-ohci0";
 			clocks = <&clkc USBC0>;
 			resets = <&rstc RST_USBC0>;
-			reg = <0x9C102080 0x68>;
+			reg = <0x9C102080 0x68>, <0x9C000000 0x80>;
 			interrupt-parent = <&intc>;
 			interrupts = <15 IRQ_TYPE_LEVEL_HIGH>;
 		};
@@ -606,7 +610,7 @@
 			compatible = "sunplus,sp7021-usb-ohci1";
 			clocks = <&clkc USBC1>;
 			resets = <&rstc RST_USBC1>;
-			reg = <0x9C103080 0x68>;
+			reg = <0x9C103080 0x68>, <0x9C000000 0x80>;
 			interrupt-parent = <&intc>;
 			interrupts = <18 IRQ_TYPE_LEVEL_HIGH>;
 		};
@@ -630,15 +634,15 @@
 		};
 
 		sp_otg0: usb@0x9c102400 {
-			compatible = "sunplus,sunplus-q628-usb-otg0";
-			reg = <0x9c102400 0x70>, <0x9c102880 0x80>, <0x9c000200 0x80>;
+			compatible = "sunplus,sp7021-usb-otg0";
+			reg = <0x9c102400 0x70>, <0x9c000200 0x80>;
 			interrupt-parent = <&intc>;
 			interrupts = <11 IRQ_TYPE_LEVEL_HIGH>;
 		};
 
 		sp_otg1: usb@0x9c103400 {
-			compatible = "sunplus,sunplus-q628-usb-otg1";
-			reg = <0x9c103400 0x70>, <0x9c103880 0x80>, <0x9c000200 0x80>;
+			compatible = "sunplus,sp7021-usb-otg1";
+			reg = <0x9c103400 0x70>, <0x9c000200 0x80>;
 			interrupt-parent = <&intc>;
 			interrupts = <10 IRQ_TYPE_LEVEL_HIGH>;
 		};
@@ -752,7 +756,6 @@
 			cap-sdio-irq;
 			no-sd;
 			no-mmc;
-			status = "disabled";
 			#address-cells = <1>;
 			#size-cells = <0>;
 		};
@@ -895,7 +898,7 @@
 
 			pins_uart0: pins_uart0 {
 				sppctl,groups = "UA0";
-				sppctl,function = "UA0";
+				sppctl,function = "UA0";			
 			};
 
 			emmc_mux: emmc_mux {

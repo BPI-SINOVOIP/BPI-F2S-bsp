@@ -8,16 +8,12 @@
 
 #define HWREG_W(M, N)           (l2sw_reg_base->M = N)
 #define HWREG_R(M)              (l2sw_reg_base->M)
-#define MOON5REG_W(M, N)        (moon5_reg_base->M = N)
-#define MOON5REG_R(M)           (moon5_reg_base->M)
 
 
 #define MDIO_RW_TIMEOUT_RETRY_NUMBERS 500
 
 
 int l2sw_reg_base_set(void __iomem *baseaddr);
-
-int moon5_reg_base_set(void __iomem *baseaddr);
 
 void mac_hw_stop(struct l2sw_mac *mac);
 
@@ -59,7 +55,7 @@ u32 read_sw_int_status(void);
 
 u32 read_port_ability(void);
 
-int phy_cfg(void);
+int phy_cfg(struct l2sw_mac *mac);
 
 void l2sw_enable_port(struct l2sw_mac *mac);
 

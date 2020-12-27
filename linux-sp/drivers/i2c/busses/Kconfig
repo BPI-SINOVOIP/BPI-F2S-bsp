@@ -1394,6 +1394,12 @@ config I2C_SUNPLUS
 	help
 	  This driver supports the I2C device on the Sunplus processor chip.
 
+config I2C_NEW_SUNPLUS
+	tristate "Sunplus I2C new driver"
+	depends on I2C_SUNPLUS
+	help
+	  This driver supports the I2C device on the Sunplus processor chip.
+
 config I2C_MIPI_SUNPLUS
 	tristate "Sunplus I143 MIPI I2C driver"
 	depends on SOC_I143

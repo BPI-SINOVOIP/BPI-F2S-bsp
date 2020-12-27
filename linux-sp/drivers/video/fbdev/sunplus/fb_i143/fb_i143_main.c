@@ -36,7 +36,7 @@
 #include <linux/of_address.h>
 #include <linux/dma-mapping.h>
 
-#include <media/sunplus/disp/sp7021/disp_osd.h>
+#include <media/sunplus/disp/i143/disp_osd.h>
 #include "fb_i143_main.h"
 
 /**************************************************************************
@@ -95,6 +95,9 @@ static struct fb_ops framebuffer_ops = {
 	.fb_pan_display		= _i143_fb_pan_display,
 	.fb_setcmap			= _i143_fb_setcmap,
 	.fb_ioctl			= _i143_fb_ioctl,
+	.fb_fillrect    	= cfb_fillrect,
+	.fb_copyarea    	= cfb_copyarea,
+	.fb_imageblit   	= cfb_imageblit,
 };
 
 static const struct of_device_id _i143_fb_dt_ids[] = {
@@ -167,6 +170,9 @@ static int _i143_fb_create_device(struct platform_device *pdev,
 	fbWorkMem->fbmem = (void __iomem *)dma_alloc_coherent(&pdev->dev,
 			fbWorkMem->fbsize, &fb_phymem, GFP_KERNEL | __GFP_ZERO);
 
+	/* I143_SYS_PORT */
+	//fb_phymem &= ~0x80000000;
+
 	if (!fbWorkMem->fbmem) {
 		mod_err(pdev, "malloc failed, size %d(%dx%dx(%d/8)*%d)\n",
 			fbWorkMem->fbsize,
@@ -177,21 +183,21 @@ static int _i143_fb_create_device(struct platform_device *pdev,
 		goto ERROR_HANDLE_FB_INIT;
 	}
 
-	if (fbWorkMem->ColorFmt == DRV_OSD_REGION_FORMAT_8BPP) {
-		fbWorkMem->fbmem_palette = kzalloc(FB_PALETTE_LEN, GFP_KERNEL);
+	//if (fbWorkMem->ColorFmt == DRV_OSD_REGION_FORMAT_8BPP) {
+	fbWorkMem->fbmem_palette = kzalloc(FB_PALETTE_LEN, GFP_KERNEL);
 
-		if (fbWorkMem->fbmem_palette == NULL)
-			goto ERROR_HANDLE_FB_INIT;
-	} else
-		fbWorkMem->fbmem_palette = NULL;
+	if (fbWorkMem->fbmem_palette == NULL)
+		goto ERROR_HANDLE_FB_INIT;
+	//} else
+	//	fbWorkMem->fbmem_palette = NULL;
 
 	fbinfo->fbops = &framebuffer_ops;
 	fbinfo->flags = FBINFO_FLAG_DEFAULT;
 
-	if (fbWorkMem->ColorFmt == DRV_OSD_REGION_FORMAT_8BPP)
+	//if (fbWorkMem->ColorFmt == DRV_OSD_REGION_FORMAT_8BPP)
 		fbinfo->pseudo_palette = fbWorkMem->fbmem_palette;
-	else
-		fbinfo->pseudo_palette = NULL;
+	//else
+	//	fbinfo->pseudo_palette = NULL;
 	fbinfo->screen_base = fbWorkMem->fbmem;
 	fbinfo->screen_size = fbWorkMem->fbsize;
 
@@ -270,14 +276,33 @@ static int _i143_fb_create_device(struct platform_device *pdev,
 		goto ERROR_HANDLE_FB_INIT;
 	}
 
+#ifdef CONFIG_MACH_PENTAGRAM_I143_ACHIP
 	Info->UI_bufAddr = (u32)fbinfo->fix.smem_start;
-	if (fbinfo->pseudo_palette)
-		Info->UI_bufAddr_pal = (u32)((u64)fbinfo->pseudo_palette);
-	else
-		Info->UI_bufAddr_pal = 0;
+	//if (fbinfo->pseudo_palette)
+		Info->UI_bufAddr_pal = (u32)fbinfo->pseudo_palette;
+	//else
+	//	Info->UI_bufAddr_pal = 0;
 	Info->UI_bufsize = fbWorkMem->fbsize;
 
-	mod_info(pdev, "mem VA 0x%x(PA 0x%x), Palette VA 0x%x(PA 0x%lx), UI Res %dx%d, size %d + %d\n",
+	mod_info(pdev, "mem VA 0x%x(PA 0x%x), Palette VA 0x%x(PA 0x%x), UI Res %dx%d, size %d + %d\n",
+			(u32)fbWorkMem->fbmem,
+			Info->UI_bufAddr,
+			(u32)fbWorkMem->fbmem_palette,
+			__pa(fbWorkMem->fbmem_palette),
+			fbWorkMem->fbwidth,
+			fbWorkMem->fbheight,
+			fbWorkMem->fbsize,
+			(fbWorkMem->ColorFmt == DRV_OSD_REGION_FORMAT_8BPP)
+			? FB_PALETTE_LEN : 0);
+#else
+	Info->UI_bufAddr = (u64)(fbinfo->fix.smem_start & ~0x80000000);
+	//if (fbinfo->pseudo_palette)
+		Info->UI_bufAddr_pal = (u64)fbinfo->pseudo_palette;
+	//else
+	//	Info->UI_bufAddr_pal = 0;
+	Info->UI_bufsize = fbWorkMem->fbsize;
+
+	mod_info(pdev, "mem VA 0x%x(PA 0x%llx), Palette VA 0x%x(PA 0x%lx), UI Res %dx%d, size %d + %d\n",
 			(u32)((u64)fbWorkMem->fbmem),
 			Info->UI_bufAddr,
 			(u32)((u64)fbWorkMem->fbmem_palette),
@@ -285,8 +310,10 @@ static int _i143_fb_create_device(struct platform_device *pdev,
 			fbWorkMem->fbwidth,
 			fbWorkMem->fbheight,
 			fbWorkMem->fbsize,
-			(fbWorkMem->ColorFmt == DRV_OSD_REGION_FORMAT_8BPP)
-			? FB_PALETTE_LEN : 0);
+			//(fbWorkMem->ColorFmt == DRV_OSD_REGION_FORMAT_8BPP)
+			//? FB_PALETTE_LEN : 0);
+			FB_PALETTE_LEN);
+#endif
 
 	gFB_INFO = fbinfo;
 
@@ -330,7 +357,7 @@ static int _i143_fb_ioctl(struct fb_info *fbinfo,
 {
 	switch (cmd) {
 	case FBIO_WAITFORVSYNC:
-		//DRV_OSD_WaitVSync(); TBD
+		DRV_OSD_WaitVSync();
 		break;
 	}
 
@@ -345,7 +372,7 @@ static int _i143_fb_setcmap(struct fb_cmap *cmap, struct fb_info *info)
 	unsigned short trans = ~0;
 	unsigned int *palette = (unsigned int *)info->pseudo_palette;
 
-	if ((fb_par->ColorFmt != DRV_OSD_REGION_FORMAT_8BPP) || (!palette))
+	if (!palette)
 		return -1;
 
 	red = cmap->red;
@@ -360,31 +387,97 @@ static int _i143_fb_setcmap(struct fb_cmap *cmap, struct fb_info *info)
 		if (transp)
 			trans = *(transp++);
 
-		palette[i] = i143_fb_chan_by_field((unsigned char)trans,
-				&info->var.transp);
-		palette[i] |= i143_fb_chan_by_field((unsigned char)*(red++),
-				&info->var.red);
-		palette[i] |= i143_fb_chan_by_field((unsigned char)*(green++),
-				&info->var.green);
-		palette[i] |= i143_fb_chan_by_field((unsigned char)*(blue++),
-				&info->var.blue);
+		if (fb_par->ColorFmt == DRV_OSD_REGION_FORMAT_ARGB_8888) {
+			palette[i] = 0xff000000;
+			palette[i] |= i143_fb_chan_by_field((unsigned char)*(red++),
+					&info->var.red);
+			palette[i] |= i143_fb_chan_by_field((unsigned char)*(green++),
+					&info->var.green);
+			palette[i] |= i143_fb_chan_by_field((unsigned char)*(blue++),
+					&info->var.blue);
+		}
+		else if (fb_par->ColorFmt == DRV_OSD_REGION_FORMAT_RGBA_8888) {
+			palette[i] = i143_fb_chan_by_field((unsigned char)*(red++),
+					&info->var.red);
+			palette[i] |= i143_fb_chan_by_field((unsigned char)*(green++),
+					&info->var.green);
+			palette[i] |= i143_fb_chan_by_field((unsigned char)*(blue++),
+					&info->var.blue);
+			palette[i] |= 0x000000ff;
+		}		
+		else if ( (fb_par->ColorFmt == DRV_OSD_REGION_FORMAT_8BPP) || 
+					(fb_par->ColorFmt == DRV_OSD_REGION_FORMAT_RGB_565) ) {
+			palette[i] = i143_fb_chan_by_field((unsigned char)trans,
+					&info->var.transp);
+			palette[i] |= i143_fb_chan_by_field((unsigned char)*(red++),
+					&info->var.red);
+			palette[i] |= i143_fb_chan_by_field((unsigned char)*(green++),
+					&info->var.green);
+			palette[i] |= i143_fb_chan_by_field((unsigned char)*(blue++),
+					&info->var.blue);
+		}
+		else if (fb_par->ColorFmt == DRV_OSD_REGION_FORMAT_ARGB_4444) {
+			palette[i] = 0xf000f000;
+			palette[i] |= i143_fb_chan_by_field((unsigned char)*(red++),
+					&info->var.red);
+			palette[i] |= i143_fb_chan_by_field((unsigned char)*(green++),
+					&info->var.green);
+			palette[i] |= i143_fb_chan_by_field((unsigned char)*(blue++),
+					&info->var.blue);
+		}
+		else if (fb_par->ColorFmt == DRV_OSD_REGION_FORMAT_RGBA_4444) {
+			palette[i] = i143_fb_chan_by_field((unsigned char)*(red++),
+					&info->var.red);
+			palette[i] |= i143_fb_chan_by_field((unsigned char)*(green++),
+					&info->var.green);
+			palette[i] |= i143_fb_chan_by_field((unsigned char)*(blue++),
+					&info->var.blue);
+			palette[i] |= 0x000f000f;
+		}
+		else if (fb_par->ColorFmt == DRV_OSD_REGION_FORMAT_ARGB_1555) {
+			palette[i] = 0x80008000;
+			palette[i] |= i143_fb_chan_by_field((unsigned char)*(red++),
+					&info->var.red);
+			palette[i] |= i143_fb_chan_by_field((unsigned char)*(green++),
+					&info->var.green);
+			palette[i] |= i143_fb_chan_by_field((unsigned char)*(blue++),
+					&info->var.blue);
+		}
 	}
+
+	if (fb_par->ColorFmt == DRV_OSD_REGION_FORMAT_YUY2) {
+		palette[0] = 0x80008000; //V Y U Y (black)
+		palette[1] = 0x7213D513; //V Y U Y
+		palette[2] = 0x38634763; //V Y U Y
+		palette[3] = 0x2B779C77; //V Y U Y
+		palette[4] = 0xD5326332; //V Y U Y
+		palette[5] = 0xC746B846; //V Y U Y
+		palette[6] = 0xB1644764; //V Y U Y
+		palette[7] = 0x80AA80AA; //V Y U Y
+		palette[8] = 0x80558055; //V Y U Y
+		palette[9] = 0x7268D568; //V Y U Y
+		palette[10] = 0x38B847B8; //V Y U Y
+		palette[11] = 0x2BCC9CCC; //V Y U Y
+		palette[12] = 0xD5876387; //V Y U Y
+		palette[13] = 0xC79BB89B; //V Y U Y
+		palette[14] = 0x8DEB2BEB; //V Y U Y
+		palette[15] = 0x80FF80FF; //V Y U Y (white)
+	}
+
 	return 0;
 }
 
 static int _i143_fb_remove(struct platform_device *pdev)
 {
 	if (gFB_INFO) {
-		//if (unregister_framebuffer(gFB_INFO))
-		//	mod_err(pdev, "unregister framebuffer error\n");
 		unregister_framebuffer(gFB_INFO);
 		framebuffer_release(gFB_INFO);
 		gFB_INFO = NULL;
 	}
 
-	//DRV_IRQ_DISABLE(); TBD
+	DRV_IRQ_DISABLE();
 	
-	//DRV_OSD_Set_UI_UnInit(); TBD
+	DRV_OSD_Set_UI_UnInit();
 
 	return 0;
 }
@@ -407,7 +500,6 @@ static int _i143_fb_probe(struct platform_device *pdev)
 
 	memset(&Info, 0, sizeof(struct UI_FB_Info_t));
 
-	#if 0 //TBD
 	ret = DRV_OSD_Get_UI_Res(&Info);
 
 	if (ret) {
@@ -426,14 +518,12 @@ static int _i143_fb_probe(struct platform_device *pdev)
 	if (_i143_fb_create_device(pdev, &Info))
 		goto ERROR_HANDLE_FB_INIT;
 
-	//DRV_OSD_Set_UI_Init(&Info); TBD
+	DRV_OSD_Set_UI_Init(&Info);
 	
-	//DRV_IRQ_ENABLE(); TBD
+	DRV_IRQ_ENABLE();
 
 	fb_par = (struct framebuffer_t *)gFB_INFO->par;
 	fb_par->OsdHandle = Info.UI_handle;
-
-	#endif
 	
 	return 0;
 
@@ -458,15 +548,14 @@ unsigned int i143_fb_chan_by_field(unsigned char chan,
 
 int i143_fb_swapbuf(u32 buf_id, int buf_max)
 {
-	//int ret = 0; TBD
+	int ret = 0;
 
 	if (buf_id >= buf_max)
 		return -1;
 
-	//ret = DRV_OSD_SetVisibleBuffer(buf_id); TBD
+	ret = DRV_OSD_SetVisibleBuffer(buf_id);
 
-	//return ret; TBD
-	return 0;
+	return ret;
 }
 
 MODULE_DESCRIPTION("I143 Framebuffer Driver");

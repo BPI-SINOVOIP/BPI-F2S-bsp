@@ -8,7 +8,6 @@ udc-core-y			:= core.o trace.o
 # USB peripheral controller drivers
 #
 obj-$(CONFIG_USB_GADGET)	+= udc-core.o
-obj-$(CONFIG_USB_GADGET_SUNPLUS)	+=sunplus_udc.o
 #obj-$(CONFIG_USB_DUMMY_HCD)	+= dummy_hcd.o
 #obj-$(CONFIG_USB_NET2272)	+= net2272.o
 #obj-$(CONFIG_USB_NET2280)	+= net2280.o
@@ -42,3 +41,5 @@ obj-$(CONFIG_USB_GADGET_SUNPLUS)	+=sunplus_udc.o
 #obj-$(CONFIG_USB_SNP_UDC_PLAT) += snps_udc_plat.o
 #obj-$(CONFIG_USB_ASPEED_VHUB)	+= aspeed-vhub/
 #obj-$(CONFIG_USB_BDC_UDC)	+= bdc/
+obj-$(CONFIG_USB_GADGET_I143)	+= sunplus/i143/
+obj-$(CONFIG_USB_GADGET_SP7021)	+= sunplus/sp7021/

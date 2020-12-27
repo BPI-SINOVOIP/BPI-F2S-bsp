@@ -1,6 +1,6 @@
 /*
  * SP7021 SoC thermal driver.
- * Copyright (C) SunPlus Tech/Tibbo Tech. 2019
+ * Copyright (C) Sunplus Tech/Tibbo Tech. 2019
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -237,7 +237,7 @@ static int sp7021_thermal_probe( struct platform_device *_pd) {
  platform_set_drvdata( _pd, sp_data);
  sp7021_get_otp_temp_coef( &( _pd->dev));
  ret = sp_thermal_register_sensor( _pd, sp_data, 0);
- if ( ret == 0) dev_info( &( _pd->dev), "by SunPlus (C) 2019");
+ if ( ret == 0) dev_info( &( _pd->dev), "by Sunplus (C) 2020");
  return( ret);  }
 
 static int sp7021_thermal_remove( struct platform_device *_pd) {

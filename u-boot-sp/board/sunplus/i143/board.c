@@ -1,7 +1,9 @@
 /*
  * SPDX-License-Identifier:	GPL-2.0+
  */
+#include <version.h>
 #include <common.h>
+#include <asm/arch/i143_common.h>
 
 #ifdef CONFIG_SP_SPINAND
 extern void board_spinand_init(void);
@@ -45,6 +47,35 @@ int board_eth_init(bd_t *bis)
 
 int misc_init_r(void)
 {
+
+#ifdef CONFIG_VIDEO_I143
+#ifdef CONFIG_DM_VIDEO_I143_LOGO
+#else
+	char desc[512]="rv64imafdc";;
+
+#ifdef CONFIG_OF_CONTROL
+	const char *model;
+#endif
+	unsigned long long size;
+	char buf[DISPLAY_OPTIONS_BANNER_LENGTH];
+	display_options_get_banner(true, buf, sizeof(buf));
+	printf("%s",buf);
+
+	printf("CPU:   %s\n", desc);
+
+#ifdef CONFIG_OF_CONTROL
+	model = fdt_getprop(gd->fdt_blob, 0, "model", NULL);
+
+	if (model)
+		printf("Model: %s\n", model);
+#endif
+	size = gd->ram_size;
+	printf("DRAM: ");
+	print_size(size,"");
+	printf("\n\n");
+#endif
+#endif
+
 	return 0;
 }
 
@@ -77,3 +108,12 @@ void board_nand_init(void)
 #endif
 }
 
+#ifdef CONFIG_BOARD_LATE_INIT
+int board_late_init(void)
+{
+#ifdef CONFIG_DM_VIDEO
+	i143_video_show_board_info();
+#endif
+	return 0;
+}
+#endif

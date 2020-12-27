@@ -435,7 +435,7 @@ config MTD_NAND_MESON
 
 config MTD_NAND_SUNPLUS
 	tristate "Support for NAND controller on Sunplus SoCs"
-	depends on ARCH_PENTAGRAM
+	depends on SOC_SP7021
 	help
 	  Enables support for NAND controller on Sunplus SoCs.
 	  This controller is found on Sunplus SoCs.

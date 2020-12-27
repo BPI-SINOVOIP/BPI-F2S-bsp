@@ -1,5 +1,5 @@
 config PINCTRL_SPPCTL
-	bool "SunPlus SP7021 pinmux and gpio driver"
+	bool "Sunplus SP7021 pinmux and gpio driver"
 	depends on SOC_SP7021
 	select PINMUX
 	select GENERIC_PINCTRL_GROUPS
@@ -12,14 +12,8 @@ config PINCTRL_SPPCTL
 	select GENERIC_IRQ_CHIP
 	select GPIOLIB_IRQCHIP
 	help
-	    Say Y here to support SunPlus SP7021 pinmux controller.
+	    Say Y here to support Sunplus SP7021 pinmux controller.
 	    GPIO is provided by the same driver.
-
-config PINCTRL_SPPCTL_DEBUG
-	bool "SunPlus SP7021 mux specific debug"
-	depends on SOC_SP7021 && DEBUG_PINCTRL
-	help
-	    Say Y if you need to debug SP7021 mux driver in-depth.
 
 config PINCTRL_SPPCTL_I143
 	bool "Sunplus I143 pinmux and gpio driver"
@@ -38,9 +32,8 @@ config PINCTRL_SPPCTL_I143
 	    Say Y here to support Sunplus I143 pinmux controller.
 	    GPIO is provided by the same driver.
 
-config PINCTRL_SPPCTL_I143_DEBUG
-	bool "Sunplus I143 mux specific debug"
-	depends on SOC_I143 && DEBUG_PINCTRL
+config PINCTRL_SPPCTL_DEBUG
+	bool "Sunplus pinmux specific debug"
+	depends on (SOC_SP7021 || SOC_I143) && DEBUG_PINCTRL
 	help
-	    Say Y if you need to debug i143 mux driver in-depth.
-
+	    Say Y if you need to debug Sunplus pinmux driver in-depth.

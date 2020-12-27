@@ -3111,4 +3111,6 @@
 
 #define PCI_VENDOR_ID_NCUBE		0x10ff
 
+#define PCI_DEVICE_ID_IVSHMEM	0x4106
+
 #endif /* _LINUX_PCI_IDS_H */

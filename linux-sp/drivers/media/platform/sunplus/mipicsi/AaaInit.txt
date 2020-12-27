@@ -1,0 +1,18 @@
+0xa7,         	// xdata	UCHAR	AeIndexMax60;   
+0xa7, 			// xdata	UCHAR	AeIndexMax50;   
+0x00,			// xdata	UCHAR	AeIndexMin60;   
+0x00,			// xdata	UCHAR	AeIndexMin50;   
+0x00, 0x74,		// xdata	USHORT	AeIndex;         
+0x00, 0x73,		// xdata	USHORT	AeIndexPrev;      
+0x04,			// xdata	UCHAR	AeDeadZone; 
+0x00, 0x30,	// xdata	USHORT	AeYTarget;  //0x2E
+0x5c,			// xdata	UCHAR	AwbBTargetMin;   
+0xba,			// xdata	UCHAR	AwbBTargetMax;   
+0x46,			// xdata	UCHAR	AwbRTargetMin;   
+0x80,			// xdata	UCHAR	AwbRTargetMax;   
+0x40,			// xdata	UCHAR	AwbGTargetMin;   
+0x40,			// xdata	UCHAR	AwbGTargetMax;   
+0x00, 0x70,		// xdata	USHORT	AwbRGainReg;        
+0x00, 0x40,		// xdata	USHORT	AwbGGainReg;        
+0x00, 0x6E,		// xdata	USHORT	AwbBGainReg;		
+0x03,			// xdata	UCHAR	AaaFreq;

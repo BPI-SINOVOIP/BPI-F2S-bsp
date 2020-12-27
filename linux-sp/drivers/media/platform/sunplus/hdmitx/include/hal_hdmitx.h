@@ -31,6 +31,7 @@
 #define FALSE (0)
 #define TRUE (1)
 
+#define CLKREF_XTAL
 //#define HDMITX_PTG
 
 /*----------------------------------------------------------------------------*
@@ -180,7 +181,7 @@ struct hal_hdmitx_audio_attribute {
 /*----------------------------------------------------------------------------*
  *					FUNCTION DECLARATIONS
  *---------------------------------------------------------------------------*/
-void hal_hdmitx_init(void __iomem *moon1base, void __iomem *hdmitxbase);
+void hal_hdmitx_init(void __iomem *hdmitxbase);
 
 void hal_hdmitx_deinit(void __iomem *hdmitxbase);
 

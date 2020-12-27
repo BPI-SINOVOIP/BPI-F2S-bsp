@@ -22,6 +22,7 @@
 #include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/reset-controller.h>
+#include <linux/reboot.h>
 
 #if defined(CONFIG_SOC_SP7021)
 #include <dt-bindings/reset/sp-q628.h>
@@ -35,7 +36,7 @@
 struct sp_reset_data {
 	struct reset_controller_dev	rcdev;
 	void __iomem			*membase;
-};
+} sp_reset;
 
 
 static inline struct sp_reset_data *
@@ -43,7 +44,6 @@ to_sp_reset_data(struct reset_controller_dev *rcdev)
 {
 	return container_of(rcdev, struct sp_reset_data, rcdev);
 }
-
 
 static int sp_reset_update(struct reset_controller_dev *rcdev,
 			      unsigned long id, bool assert)
@@ -57,13 +57,12 @@ static int sp_reset_update(struct reset_controller_dev *rcdev,
 	addr = data->membase + (bank * 4);
 
 	if (assert)
-	   writel(BITASSERT(offset,1), addr);
+		writel(BITASSERT(offset,1), addr);
 	else
-	   writel(BITASSERT(offset,0), addr);
+		writel(BITASSERT(offset,0), addr);
 
 	return 0;
 }
-
 
 static int sp_reset_assert(struct reset_controller_dev *rcdev,
 			      unsigned long id)
@@ -77,7 +76,6 @@ static int sp_reset_deassert(struct reset_controller_dev *rcdev,
 {
 	return sp_reset_update(rcdev, id, false);
 }
-
 
 static int sp_reset_status(struct reset_controller_dev *rcdev,
 			      unsigned long id)
@@ -93,6 +91,19 @@ static int sp_reset_status(struct reset_controller_dev *rcdev,
 	return !!(reg & BIT(offset));
 }
 
+static int sp_restart(struct notifier_block *this, unsigned long mode,
+				void *cmd)
+{
+	sp_reset_assert(&sp_reset.rcdev, RST_SYSTEM);
+	sp_reset_deassert(&sp_reset.rcdev, RST_SYSTEM);
+
+	return NOTIFY_DONE;
+}
+
+static struct notifier_block sp_restart_nb = {
+	.notifier_call = sp_restart,
+	.priority = 192,
+};
 
 static const struct reset_control_ops sp_reset_ops = {
 	.assert		= sp_reset_assert,
@@ -100,23 +111,17 @@ static const struct reset_control_ops sp_reset_ops = {
 	.status		= sp_reset_status,
 };
 
-
 static const struct of_device_id sp_reset_dt_ids[] = {
 	{ .compatible = "sunplus,sp-reset", },
 	{ /* sentinel */ },
 };
 
-
 static int sp_reset_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
-	struct sp_reset_data *data;
+	struct sp_reset_data *data = &sp_reset;
 	void __iomem *membase;
 	struct resource *res;
-
-	data = devm_kzalloc(dev, sizeof(*data), GFP_KERNEL);
-	if (!data)
-		return -ENOMEM;
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	//printk(KERN_INFO "res->start : 0x%x \n", res->start);
@@ -134,10 +139,10 @@ static int sp_reset_probe(struct platform_device *pdev)
  	data->rcdev.nr_resets = RST_MAX;
  	data->rcdev.ops = &sp_reset_ops;
  	data->rcdev.of_node = dev->of_node;
+	register_restart_handler(&sp_restart_nb);
 
  	return devm_reset_controller_register(dev, &data->rcdev);
 }
-
 
 static struct platform_driver sp_reset_driver = {
 	.probe	= sp_reset_probe,
@@ -147,8 +152,6 @@ static struct platform_driver sp_reset_driver = {
 	},
 };
 
-
-//builtin_platform_driver(stm32_reset_driver);
 static int __init sp_reset_init(void)
 {
 	return platform_driver_register(&sp_reset_driver);
@@ -157,6 +160,6 @@ arch_initcall(sp_reset_init);
 
 
 MODULE_AUTHOR("Edwin Chiu <edwin.chiu@sunplus.com>");
-MODULE_DESCRIPTION("SUNPLUS Reset Driver");
+MODULE_DESCRIPTION("Sunplus Reset Driver");
 MODULE_LICENSE("GPL");
-MODULE_ALIAS("platform:sp-reset");
+MODULE_ALIAS("platform: sp-reset");

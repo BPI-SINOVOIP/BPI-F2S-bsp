@@ -4,7 +4,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0+
  *
- * Ethernet driver for Sunplus L2SW (Q628)
+ * Ethernet driver for Sunplus L2SW and GL2SW
  *
 */
 
@@ -23,8 +23,10 @@
 extern int read_otp_data(int addr, char *value);
 
 
-static struct l2sw_reg* ls2w_reg_base = NULL;
+static struct l2sw_reg* l2sw_reg_base = NULL;
+#ifdef CONFIG_SUNPLUS_L2SW
 static struct moon5_reg* moon5_reg_base = NULL;
+#endif
 
 #if 0
 static void print_packet(char *p, int len)
@@ -34,7 +36,7 @@ static void print_packet(char *p, int len)
 	u32 LenType;
 	int i;
 
-	i = snprintf(buf, sizeof(buf), "MAC: DA=%pM, SA=%pM, ",	&p[0], &p[6]);
+	i = snprintf(buf, sizeof(buf), "MAC: DA=%pM, SA=%pM, ", &p[0], &p[6]);
 	p += 12;        // point to LenType
 
 	LenType = (((u32)p[0])<<8) + p[1];
@@ -227,6 +229,7 @@ static int l2sw_mdio_init(const char *name, struct udevice *priv)
 	return mdio_register(bus);
 }
 
+#ifndef ZEBU_XTOR
 static int l2sw_phy_init(struct emac_eth_dev *priv, void *dev)
 {
 	struct phy_device *phy_dev;
@@ -244,6 +247,7 @@ static int l2sw_phy_init(struct emac_eth_dev *priv, void *dev)
 
 	return 0;
 }
+#endif
 
 static void rx_descs_init(struct emac_eth_dev *priv)
 {
@@ -268,12 +272,12 @@ static void rx_descs_init(struct emac_eth_dev *priv)
 	}
 
 	// Flush all rx descriptors.
-	flush_dcache_range(DCACHE_ROUNDDN(priv->rx_desc), DCACHE_ROUNDUP((u32)priv->rx_desc+sizeof(priv->rx_desc)));
-	//eth_info("RX Queue: start = %08x, end = %08x\n", priv->rx_desc, &priv->rx_desc[CONFIG_RX_DESCR_NUM]);
+	flush_dcache_range(DCACHE_ROUNDDN(priv->rx_desc), DCACHE_ROUNDUP((long)priv->rx_desc+sizeof(priv->rx_desc)));
+	//eth_info("RX Queue: start = %px, end = %px\n", priv->rx_desc, &priv->rx_desc[CONFIG_RX_DESCR_NUM*CONFIG_RX_QUEUE_NUM]);
 
 	// Setup base address for high- and low-priority rx queue.
-	HWREG_W(rx_hbase_addr_0, (uintptr_t)&priv->rx_desc[0]);
-	HWREG_W(rx_lbase_addr_0, (uintptr_t)&priv->rx_desc[CONFIG_RX_DESCR_NUM]);
+	HWREG_W(rx_hbase_addr, (uintptr_t)&priv->rx_desc[0]);
+	HWREG_W(rx_lbase_addr, (uintptr_t)&priv->rx_desc[CONFIG_RX_DESCR_NUM]);
 }
 
 static void tx_descs_init(struct emac_eth_dev *priv)
@@ -284,7 +288,7 @@ static void tx_descs_init(struct emac_eth_dev *priv)
 
 	//eth_info("[%s] IN\n", __func__);
 
-	memset((void*)&priv->tx_desc[0], 0, sizeof(*txdesc)*(CONFIG_TX_DESCR_NUM*CONFIG_RX_QUEUE_NUM));
+	memset((void*)&priv->tx_desc[0], 0, sizeof(*txdesc)*(CONFIG_TX_DESCR_NUM*CONFIG_TX_QUEUE_NUM));
 	for (i = 0; i < (CONFIG_TX_DESCR_NUM*CONFIG_RX_QUEUE_NUM); i++) {
 		txdesc = &priv->tx_desc[i];
 		txdesc->addr1 = (uintptr_t)&txbuffs[i * CONFIG_ETH_BUFSIZE];
@@ -293,12 +297,12 @@ static void tx_descs_init(struct emac_eth_dev *priv)
 	priv->tx_pos = 0;
 
 	// Flush all tx descriptors.
-	flush_dcache_range(DCACHE_ROUNDDN(priv->tx_desc), DCACHE_ROUNDUP((u32)priv->tx_desc+sizeof(priv->tx_desc)));
-	//eth_info("TX Queue: start = %08x, end = %08x\n", priv->tx_desc, &priv->tx_desc[CONFIG_TX_DESCR_NUM]);
+	flush_dcache_range(DCACHE_ROUNDDN(priv->tx_desc), DCACHE_ROUNDUP((long)priv->tx_desc+sizeof(priv->tx_desc)));
+	//eth_info("TX Queue: start = %px, end = %px\n", priv->tx_desc, &priv->tx_desc[CONFIG_TX_DESCR_NUM*CONFIG_TX_QUEUE_NUM]);
 
 	// Setup base address for high- and low-priority tx queue.
-	HWREG_W(tx_hbase_addr_0, (uintptr_t)&priv->tx_desc[0]);
-	HWREG_W(tx_lbase_addr_0, (uintptr_t)&priv->tx_desc[CONFIG_TX_DESCR_NUM]);
+	HWREG_W(tx_hbase_addr, (uintptr_t)&priv->tx_desc[0]);
+	HWREG_W(tx_lbase_addr, (uintptr_t)&priv->tx_desc[CONFIG_TX_DESCR_NUM]);
 }
 
 #if 0
@@ -425,7 +429,7 @@ static int l2sw_eth_write_hwaddr(struct udevice *dev)
 	if (is_valid_ethaddr(pdata->enetaddr)) {
 		return _l2sw_write_hwaddr(priv, pdata->enetaddr);
 	} else {
-		eth_err("Invalid mac address = %pM!\n",	pdata->enetaddr);
+		eth_err("Invalid mac address = %pM!\n", pdata->enetaddr);
 	}
 
 	return -1;
@@ -441,7 +445,7 @@ static int l2sw_emac_eth_send(struct udevice *dev, void *packet, int len)
 
 	// Invalidate tx descriptor.
 	desc_start = DCACHE_ROUNDDN(txdesc);
-	desc_end = DCACHE_ROUNDUP((u32)txdesc + sizeof(*txdesc));
+	desc_end = DCACHE_ROUNDUP((long)txdesc + sizeof(*txdesc));
 	invalidate_dcache_range(desc_start, desc_end);
 
 	if (txdesc->cmd1 & OWN_BIT) {
@@ -449,10 +453,10 @@ static int l2sw_emac_eth_send(struct udevice *dev, void *packet, int len)
 		return -EPERM;
 	}
 
-	memcpy((void *)txdesc->addr1, packet, len);
+	memcpy((void*)(long)txdesc->addr1, packet, len);
 	if (len < TX_BUF_MIN_SZ)
 	{
-		memset((char*)txdesc->addr1+len, 0, TX_BUF_MIN_SZ-len);
+		memset((char*)(long)txdesc->addr1+len, 0, TX_BUF_MIN_SZ-len);
 		len = TX_BUF_MIN_SZ;
 	}
 
@@ -498,8 +502,8 @@ static int l2sw_emac_eth_recv(struct udevice *dev, int flags, uchar **packetp)
 	int status;
 
 	// Read status and clear.
-	status = HWREG_R(sw_int_status_0);
-	HWREG_W(sw_int_status_0, status);
+	status = HWREG_R(sw_int_status);
+	HWREG_W(sw_int_status, status);
 	//if (status != 0) {
 	//      eth_info("status = %08x\n", status);
 	//}
@@ -512,7 +516,7 @@ static int l2sw_emac_eth_recv(struct udevice *dev, int flags, uchar **packetp)
 
 		// Invalidate rx descriptor queue.
 		desc_start = DCACHE_ROUNDDN(rxdesc);
-		desc_end = DCACHE_ROUNDUP((u32)rxdesc+sizeof(u32));
+		desc_end = DCACHE_ROUNDUP((long)rxdesc+sizeof(u32));
 		invalidate_dcache_range(desc_start, desc_end);
 		cmd = rxdesc->cmd1;
 
@@ -537,7 +541,7 @@ static int l2sw_emac_eth_recv(struct udevice *dev, int flags, uchar **packetp)
 		data_end = DCACHE_ROUNDUP(rxdesc->addr1 + length);
 		invalidate_dcache_range(data_start, data_end);
 
-		//print_packet((char*)rxdesc->addr1, length);
+		//print_packet((char*)(long)rxdesc->addr1, length);
 
 		// Move to next descriptor and wrap-around if needed.
 		if (++rx_pos >= CONFIG_RX_DESCR_NUM) {
@@ -565,13 +569,13 @@ static int l2sw_eth_free_pkt(struct udevice *dev, uchar *packet, int length)
 	uintptr_t desc_start, desc_end;
 	u32 i;
 
-	i = ((int)packet - priv->rx_desc[0].addr1) / CONFIG_ETH_BUFSIZE;
+	i = (u32)(((long)packet - priv->rx_desc[0].addr1) / CONFIG_ETH_BUFSIZE);
 	if (i < (CONFIG_RX_DESCR_NUM * CONFIG_RX_QUEUE_NUM)) {
 		rxdesc = &priv->rx_desc[i];
 
 		// Invalidate rx descriptor.
 		desc_start = DCACHE_ROUNDDN(rxdesc);
-		desc_end = DCACHE_ROUNDUP((u32)rxdesc + sizeof(u32));
+		desc_end = DCACHE_ROUNDUP((long)rxdesc + sizeof(u32));
 		invalidate_dcache_range(desc_start, desc_end);
 
 		//eth_info("FR: rx_desc[%d], cmd1 = %08x, cmd2 = %08x, addr1 = %08x\n", i, rxdesc->cmd1, rxdesc->cmd2, rxdesc->addr1);
@@ -593,15 +597,20 @@ static void l2sw_soc_stop(void)
 	reg = HWREG_R(cpu_cntl);
 	HWREG_W(cpu_cntl, reg | (1<<6));
 
+#ifndef ZEBU_XTOR
+// Never disable lan port in force link-up mode.
 	reg = HWREG_R(port_cntl0);
 	HWREG_W(port_cntl0, reg | (3<<24));
+#endif
 
-	HWREG_W(sw_int_status_0, 0xffffffff);
+	HWREG_W(sw_int_status, 0xffffffff);
 }
 
 static void l2sw_emac_eth_stop(struct udevice *dev)
 {
+#ifndef ZEBU_XTOR
 	struct emac_eth_dev *priv = dev_get_priv(dev);
+#endif
 
 	//eth_info("[%s] IN\n", __func__);
 
@@ -609,9 +618,9 @@ static void l2sw_emac_eth_stop(struct udevice *dev)
 	l2sw_soc_stop();
 
 	dcache_enable();
-
+#ifndef ZEBU_XTOR
 	phy_shutdown(priv->phy_dev0);
-
+#endif
 	//mac_hw_addr_print();
 }
 
@@ -619,22 +628,57 @@ static void l2sw_emac_board_setup(struct emac_eth_dev *priv)
 {
 	u32 reg;
 
+#ifdef CONFIG_SUNPLUS_L2SW
 	// Set polarity of TX & RX
 	reg = MOON5REG_R(mo4_l2sw_clksw_ctl);
 	MOON5REG_W(mo4_l2sw_clksw_ctl, reg | (0xf<<16) | 0xf);
+#endif
 
 	// Set phy 0 address.
 	if (priv->phy_addr0 <= 31) {
+#ifdef CONFIG_SUNPLUS_GL2SW
+		reg = HWREG_R(mac_force_mode0);
+		HWREG_W(mac_force_mode0, (reg & (~(0x1f<<0))) | (priv->phy_addr0<<0));
+#else
 		reg = HWREG_R(mac_force_mode);
 		HWREG_W(mac_force_mode, (reg & (~(0x1f<<16))) | (priv->phy_addr0<<16));
+#endif
 	}
 
 	// Set phy 1 address.
 	if (priv->phy_addr1 <= 31) {
+#ifdef CONFIG_SUNPLUS_GL2SW
+		reg = HWREG_R(mac_force_mode0);
+		HWREG_W(mac_force_mode0, (reg & (~(0x1f<<5))) | (priv->phy_addr1<<5));
+#else
 		reg = HWREG_R(mac_force_mode);
 		HWREG_W(mac_force_mode, (reg & (~(0x1f<<24))) | (priv->phy_addr1<<24));
+#endif
 	}
+#ifdef CONFIG_SUNPLUS_GL2SW
+	//eth_info("mac_force_mode0 = %08x\n", HWREG_R(mac_force_mode0));
+#else
 	//eth_info("mac_force_mode = %08x\n", HWREG_R(mac_force_mode));
+#endif
+
+#ifdef ZEBU_XTOR
+	// enable lan 0 & lan 1 before force link-up
+	reg = HWREG_R(port_cntl0);
+	HWREG_W(port_cntl0, reg & (~(3<<24)));
+
+	reg = HWREG_R(mac_force_mode0);
+	reg |= MAC_FORCE_MODE0;
+	HWREG_W(mac_force_mode0, reg);
+	reg = HWREG_R(mac_force_mode1);
+	reg |= MAC_FORCE_MODE1;
+	HWREG_W(mac_force_mode1, reg);
+	//eth_info("mac_force_mode0 = %08x\n", HWREG_R(mac_force_mode0));
+	//eth_info("mac_force_mode1 = %08x\n", HWREG_R(mac_force_mode1));
+
+	// Invert RX clock and no delay
+	HWREG_W(p0_softpad_config, 0x00000020);
+	HWREG_W(p1_softpad_config, 0x00000020);
+#endif
 }
 
 static int l2sw_emac_eth_init(struct emac_eth_dev *priv, u8 *enetaddr)
@@ -646,7 +690,7 @@ static int l2sw_emac_eth_init(struct emac_eth_dev *priv, u8 *enetaddr)
 	// Stop receiving and tranferring.
 	l2sw_soc_stop();
 
-	HWREG_W(sw_int_mask_0, 0xffffffff);
+	HWREG_W(sw_int_mask, 0xffffffff);
 
 	// port 0: VLAN group 0
 	// port 1: VLAN group 0
@@ -680,13 +724,20 @@ static int l2sw_emac_eth_init(struct emac_eth_dev *priv, u8 *enetaddr)
 	rx_descs_init(priv);
 	tx_descs_init(priv);
 
+#ifdef CONFIG_SUNPLUS_GL2SW
+	// Softpad config
+	HWREG_W(p0_softpad_config, 0x2001);
+	HWREG_W(p1_softpad_config, 0x2001);
+#else
 	// High-active LED
 	reg = HWREG_R(led_port0);
 	HWREG_W(led_port0, reg | (1<<28));
+#endif
 
+#ifndef ZEBU_XTOR
 	// Start up PHY0 */
 	genphy_parse_link(priv->phy_dev0);
-
+#endif
 	return 0;
 }
 
@@ -704,10 +755,12 @@ static int l2sw_emac_eth_probe(struct udevice *dev)
 	}
 	priv->bus = miiphy_get_dev_by_name(dev->name);
 
+#ifndef ZEBU_XTOR
 	ret = l2sw_phy_init(priv, dev);
 	if (ret != 0) {
 		return ret;
 	}
+#endif
 
 	l2sw_emac_eth_init(dev->priv, pdata->enetaddr);
 
@@ -745,20 +798,30 @@ static int l2sw_emac_eth_ofdata_to_platdata(struct udevice *dev)
 	int i;
 	u8 otp_mac[ARP_HLEN];
 
-	ls2w_reg_base = (void*)devfdt_get_addr_name(dev, "l2sw");
-	pdata->iobase = (int)ls2w_reg_base;
-	//eth_info("ls2w_reg_base = %08x\n", (int)ls2w_reg_base);
-	if ((int)ls2w_reg_base == -1) {
+#ifdef CONFIG_SUNPLUS_GL2SW
+	l2sw_reg_base = (void*)devfdt_get_addr_name(dev, "gl2sw");
+#else
+	l2sw_reg_base = (void*)devfdt_get_addr_name(dev, "l2sw");
+#endif
+	pdata->iobase = (long)l2sw_reg_base;
+	//eth_info("l2sw_reg_base = %p\n", l2sw_reg_base);
+	if (l2sw_reg_base == (void*)-1) {
+#ifdef CONFIG_SUNPLUS_GL2SW
+		eth_err("Failed to get base address of GL2SW!\n");
+#else
 		eth_err("Failed to get base address of L2SW!\n");
+#endif
 		return -EINVAL;
 	}
 
+#ifdef CONFIG_SUNPLUS_L2SW
 	moon5_reg_base = (void*)devfdt_get_addr_name(dev, "moon5");
-	//eth_info("moon5_reg_base = %08x\n", (int)moon5_reg_base);
-	if ((int)moon5_reg_base == -1) {
+	//eth_info("moon5_reg_base = %p\n", moon5_reg_base);
+	if (moon5_reg_base == (void*)-1) {
 		eth_err("Failed to get base address of MOON5!\n");
 		return -EINVAL;
 	}
+#endif
 
 	pdata->phy_interface = -1;
 	priv->phy_addr0 = -1;
@@ -780,7 +843,11 @@ static int l2sw_emac_eth_ofdata_to_platdata(struct udevice *dev)
 	}
 	//eth_info("priv->phy_addr1 = %d\n", priv->phy_addr1);
 
+#ifdef CONFIG_SUNPLUS_GL2SW
+	pdata->phy_interface = phy_get_interface_by_name("rgmii");
+#else
 	pdata->phy_interface = phy_get_interface_by_name("rmii");
+#endif
 	//eth_info("phy_interface = %d\n", pdata->phy_interface);
 	if (pdata->phy_interface == -1) {
 		eth_err("Invalid PHY interface!\n");
@@ -816,13 +883,20 @@ static int l2sw_emac_eth_ofdata_to_platdata(struct udevice *dev)
 }
 
 static const struct udevice_id l2sw_emac_eth_ids[] = {
-	{.compatible = "sunplus,sunplus-q628-l2sw"},
+#ifdef CONFIG_SUNPLUS_GL2SW
+	{.compatible = "sunplus,i143-gl2sw"},
+#else
 	{.compatible = "sunplus,sp7021-l2sw"},
+#endif
 	{ }
 };
 
 U_BOOT_DRIVER(eth_sunplus_l2sw_emac) = {
+#ifdef CONFIG_SUNPLUS_GL2SW
+	.name                   = "eth_sunplus_gl2sw_emac",
+#else
 	.name                   = "eth_sunplus_l2sw_emac",
+#endif
 	.id                     = UCLASS_ETH,
 	.of_match               = l2sw_emac_eth_ids,
 	.ofdata_to_platdata     = l2sw_emac_eth_ofdata_to_platdata,

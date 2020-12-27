@@ -166,14 +166,14 @@ config SYS_ZEBU_ENV
 
 config SRCADDR_KERNEL
 	hex "Linux kernel source address"
-	default 0xF8600000
+	default 0x78600000
 	help
 	  Linux kernel source address
 	  Linux kernel image is stored in this address.
 
 config SRCADDR_FREERTOS
-	hex "DTB source address"
-	default 0xF8180000
+	hex "Freertos source address"
+	default 0x78180000
 	help
 	  DTB(device tree blob) source address
 	  DTB image is stored in this address.

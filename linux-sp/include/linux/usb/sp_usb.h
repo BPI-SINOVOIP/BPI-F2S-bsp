@@ -33,6 +33,7 @@
 
 #define PORT0_ENABLED				(1 << 0)
 #define PORT1_ENABLED				(1 << 1)
+#define PORT2_ENABLED				(1 << 3)
 #define POWER_SAVING_SET			(1 << 5)
 #define ECO_PATH_SET				(1 << 6)
 #define	UPHY_DISC_0				(1 << 2)
@@ -41,7 +42,7 @@
 #define USB_RESET_OFFSET			0x5C
 #ifdef CONFIG_SOC_SP7021
 #define PIN_MUX_CTRL				0x8C
-#elif defined(CONDIF_SOC_I143)
+#elif defined(CONFIG_SOC_I143)
 #define PIN_MUX_CTRL				0x88
 #endif
 

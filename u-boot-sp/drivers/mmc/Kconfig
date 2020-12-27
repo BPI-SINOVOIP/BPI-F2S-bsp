@@ -598,6 +598,7 @@ config STM32_SDMMC2
 	  This selects support for the SD/MMC controller on STM32H7 SoCs.
 	  If you have a board based on such a SoC and with a SD/MMC slot,
 	  say Y or M here.
+	  
 config MMC_SP_EMMC
 	bool "Sunplus eMMC Host Controller Interface support"
 	depends on DM_MMC && BLK
@@ -605,12 +606,20 @@ config MMC_SP_EMMC
 	  This selects the Sunplus eMMC Host Controller Interface.
 	  If you have a controller with this interface, say Y here.
 	  If unsure, say N.
-
-config MMC_SP_SD
-	bool "Sunplus SD Host Controller Interface support"
+	  
+config MMC_SP_7021_SD
+	bool "Sunplus SP7021 SD Host Controller Interface support"
 	depends on DM_MMC && BLK
 	help
-	  This selects the Sunplus SD Host Controller Interface.
+	  This selects the Sunplus SP7021 SD Host Controller Interface.
+	  If you have a controller with this interface, say Y here.
+	  If unsure, say N.
+	  
+config MMC_SP_SD
+	bool "Sunplus I143 SD Host Controller Interface support"
+	depends on DM_MMC && BLK
+	help
+	  This selects the Sunplus I143 SD Host Controller Interface.
 	  If you have a controller with this interface, say Y here.
 	  If unsure, say N.
 

@@ -62,6 +62,10 @@ config USB_PORT1
 	bool "Sunplus Gemini USB PORT 1"
 	default y
 
+config USB_PORT2
+	bool "Sunplus Gemini USB PORT 2"
+	default y
+	
 config USB_GADGET_ENABLED
 	bool
 	default y if (USB_PORT0 || USB_PORT1)

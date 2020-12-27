@@ -12,3 +12,6 @@ obj-$(CONFIG_SP_TIMER)	+= sp_timer.o
 # IP test
 # obj-y	+= rtc_tst.o
 # obj-y	+= dram_tst.o
+
+obj-$(CONFIG_ARMV7_NONSEC) += nonsec_virt.o
+obj-$(CONFIG_ARMV7_PSCI) += psci.o

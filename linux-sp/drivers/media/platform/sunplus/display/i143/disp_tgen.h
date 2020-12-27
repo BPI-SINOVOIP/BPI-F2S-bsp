@@ -1,7 +1,17 @@
+/* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * Sunplus I143 Display driver tgen header file
+ *
+ * Copyright (C) 2020 Sunplus Technology, Inc.
+ *
+ * Authors: Hammer Hsieh <hammer.hsieh@sunplus.com>
+ *
+ */
+
 #ifndef __DISP_TGEN_H__
 #define __DISP_TGEN_H__
 
-#include "display.h"
+#include <media/sunplus/disp/i143/display.h>
 
 typedef enum {
 	DRV_TGEN_VPP0 = 0,
@@ -46,7 +56,5 @@ int DRV_TGEN_Set(DRV_SetTGEN_t *SetTGEN);
 void DRV_TGEN_Get(DRV_SetTGEN_t *GetTGEN);
 void DRV_TGEN_Reset(void);
 int DRV_TGEN_Adjust(DRV_TGEN_Input_e Input, u32 Adjust);
-void DRV_TGEN_dump(void);
 
 #endif	//__DISP_TGEN_H__
-

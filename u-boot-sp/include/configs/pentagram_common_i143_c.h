@@ -227,7 +227,7 @@
 	"echo Stop; " \
 "fi"
 
-#define DSTADDR_KERNEL		0x20207fc0 
+#define DSTADDR_KERNEL		0x20207fc0
 #define DSTADDR_DTB			0x201F0000
 #define TMPADDR_HEADER		0x24000000
 
@@ -253,6 +253,9 @@
 #endif
 
 #define CONFIG_EXTRA_ENV_SETTINGS \
+"stdin=" STDIN_CFG "\0" \
+"stdout=" STDOUT_CFG "\0" \
+"stderr=" STDOUT_CFG "\0" \
 "bootinfo_base="		__stringify(SP_BOOTINFO_BASE) "\0" \
 "addr_src_kernel="		__stringify(CONFIG_SRCADDR_KERNEL) "\0" \
 "addr_src_dtb="			__stringify(CONFIG_SRCADDR_DTB) "\0" \
@@ -374,14 +377,37 @@
 
 #define CONFIG_ENV_OVERWRITE    /* Allow to overwrite ethaddr and serial */
 
-#if !defined(CONFIG_SP_SPINAND) && !defined(CONFIG_MMC_SP_EMMC)
+#if !defined(CONFIG_SP_SPINAND)
 #define SPEED_UP_SPI_NOR_CLK    /* Set CLK based on flash id */
+#endif
+
+#ifdef CONFIG_DM_VIDEO
+#define CONFIG_VIDEO_BMP_RLE8
+#define CONFIG_VIDEO_BMP_GZIP
+#define CONFIG_SYS_VIDEO_LOGO_MAX_SIZE (2<<20)
+#define CONFIG_BMP_16BPP
+#define CONFIG_BMP_24BPP
+#define CONFIG_BMP_32BPP
+#ifdef CONFIG_DM_VIDEO_I143_LOGO
+#define STDOUT_CFG "serial"
+#else
+#define STDOUT_CFG "vidconsole,serial"
+#endif
+#else
+#define STDOUT_CFG "serial"
 #endif
 
 #ifdef CONFIG_USB_OHCI_HCD
 /* USB Config */
 #define CONFIG_USB_OHCI_NEW			1
 #define CONFIG_SYS_USB_OHCI_MAX_ROOT_PORTS	2
+#endif
+
+#ifdef CONFIG_USB_KEYBOARD
+#define STDIN_CFG "usbkbd,serial"
+#define CONFIG_PREBOOT "usb start"
+#else
+#define STDIN_CFG "serial"
 #endif
 
 #endif /* __CONFIG_PENTAGRAM_H */

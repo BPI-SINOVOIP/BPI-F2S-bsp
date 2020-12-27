@@ -20,6 +20,7 @@
 
 #define AUD_FORMATS	(SNDRV_PCM_FMTBIT_S8 | SNDRV_PCM_FMTBIT_S16_LE | SNDRV_PCM_FMTBIT_S24_LE|SNDRV_PCM_FMTBIT_S24_3LE | SNDRV_PCM_FMTBIT_S32_LE)|(SNDRV_PCM_FMTBIT_S24_3BE )
 
+struct device_node *audionp;
 #if 0
 /*================================================================
  *						codec driver
@@ -317,7 +318,7 @@ static unsigned int audreg_read(struct snd_soc_component *component, unsigned in
 	//AUD_INFO("r*audio_base=%08x\n", audio_base);
 	addr_i = reg % 100;
 	addr_g = (reg - addr_i)/100 - 60;
-	addr = audio_base + addr_g*32*4 + addr_i*4;
+	addr = (int)(audio_base + addr_g*32*4 + addr_i*4);
 	val = (*(volatile unsigned int *)(addr));
 	//SYNCHRONIZE_IO;
     
@@ -333,7 +334,7 @@ static int audreg_write(struct snd_soc_component *component, unsigned int reg,un
 	//AUD_INFO("w*audio_base=%08x, val = 0x%x\n", audio_base, value);
 	addr_i = reg % 100;
 	addr_g = (reg - addr_i)/100 - 60;
-	addr = audio_base + addr_g*32*4 + addr_i*4;
+	addr = (int)(audio_base + addr_g*32*4 + addr_i*4);
 	(*(volatile unsigned int *)(addr)) = value;
 	//SYNCHRONIZE_IO;
 	  
@@ -371,6 +372,11 @@ static int aud_codec_probe(struct platform_device *pdev)
 {
 	int ret = 0;
 	AUD_INFO("%s IN\n", __func__);
+        audionp = of_find_node_by_name(NULL, "audio");
+        if (!of_device_is_available(audionp)) {
+		dev_err(&pdev->dev, "devicetree status is not available\n");
+		return -ENODEV;
+	}
 
 	ret = devm_snd_soc_register_component(&pdev->dev, &soc_codec_dev_aud,
 				  	      audcodec_dai, ARRAY_SIZE(audcodec_dai));

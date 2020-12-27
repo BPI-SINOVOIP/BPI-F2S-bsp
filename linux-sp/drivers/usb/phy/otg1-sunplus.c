@@ -11,7 +11,7 @@ static const struct of_device_id otg1_sunplus_dt_ids[] = {
 #ifdef CONFIG_SOC_SP7021
 	{ .compatible = "sunplus,sp7021-usb-otg1" },
 #elif defined(CONFIG_SOC_I143)
-	{ .compatible = "sunplus,sunplus-i143-usb-otg1" },
+	{ .compatible = "sunplus,i143-usb-otg1" },
 #endif
 	{ }
 };

@@ -51,7 +51,8 @@
 #define gadget_is_s3c_hsotg(g)		(!strcmp("s3c-hsotg", (g)->name))
 #define gadget_is_s3c_hsudc(g)		(!strcmp("s3c-hsudc", (g)->name))
 
-#define gadget_is_sp628(g)     !strcmp("sp_udc", (g)->name)
+#define gadget_is_sp628(g)		(!strcmp("sp_udc", (g)->name))
+#define gadget_is_i143(g)		(!strcmp("spnew_udc", (g)->name))
 
 #ifdef CONFIG_USB_GADGET_3502
 #define gadget_is_sp3502(g)	!strcmp("sp3502_udc", (g)->name)

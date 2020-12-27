@@ -475,8 +475,12 @@ static const struct snd_soc_component_driver sunplus_cpu_component = {
 static int aud_cpu_dai_probe(struct platform_device *pdev)
 {
 	int ret = 0;
+	
 	AUD_INFO("%s\n",__func__);
-
+        if (!of_device_is_available(audionp)) {
+		dev_err(&pdev->dev, "devicetree status is not available\n");
+		return -ENODEV;
+	}
 	AUDHW_pin_mx();
 	//AUDHW_clk_cfg();
 	AUDHW_Mixer_Setting();

@@ -55,6 +55,7 @@ obj-$(CONFIG_CXL_BASE)		+= cxl/
 obj-$(CONFIG_PCI_ENDPOINT_TEST)	+= pci_endpoint_test.o
 obj-$(CONFIG_SUNPLUS_IOP)	+= iop/
 obj-$(CONFIG_SP_ICM) += sp_icm.o
+obj-$(CONFIG_SP_FBIO_LED) += sp_fbio_led.o
 obj-$(CONFIG_OCXL)		+= ocxl/
 obj-y				+= cardreader/
 obj-$(CONFIG_PVPANIC)   	+= pvpanic.o

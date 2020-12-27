@@ -164,8 +164,8 @@ config VIDEO_TI_CAL
 source "drivers/media/platform/sunplus/display/sp7021/Kconfig"
 source "drivers/media/platform/sunplus/display/i143/Kconfig"
 source "drivers/media/platform/sunplus/hdmitx/Kconfig"
-source "drivers/media/platform/sunplus/video/Kconfig"
 source "drivers/media/platform/sunplus/mipicsi/Kconfig"
+source "drivers/media/platform/sunplus/video/Kconfig"
 
 endif # V4L_PLATFORM_DRIVERS
 

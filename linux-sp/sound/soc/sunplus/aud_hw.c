@@ -109,7 +109,7 @@ void AUDHW_pin_mx(void)
 {
 	//int i;
 	volatile RegisterFile_G1 * regs0 = (volatile RegisterFile_G1 *)REG(1,0);
-	volatile RegisterFile_G2 * regs1 = (volatile RegisterFile_G2 *)REG(2,0);
+	//volatile RegisterFile_G2 * regs1 = (volatile RegisterFile_G2 *)REG(2,0);
 
 	//i = regs0->rf_sft_cfg1;
 	//regs0->rf_sft_cfg1 = (0xFFFF0000 | i | (0x1 << 15));

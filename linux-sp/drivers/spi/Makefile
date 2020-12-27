@@ -122,8 +122,8 @@ obj-$(CONFIG_SPI_XLP)			+= spi-xlp.o
 obj-$(CONFIG_SPI_XTENSA_XTFPGA)		+= spi-xtensa-xtfpga.o
 obj-$(CONFIG_SPI_ZYNQ_QSPI)		+= spi-zynq-qspi.o
 obj-$(CONFIG_SPI_ZYNQMP_GQSPI)		+= spi-zynqmp-gqspi.o
-obj-$(CONFIG_SPI_SUNPLUS_SP7021)	+= spi-sp7021-controller.o
-obj-$(CONFIG_SPI_SUNPLUS_I143)	+= spi-i143-controller.o
+obj-$(CONFIG_SPI_SUNPLUS_SP7021)	+= spi-sunplus-sp7021.o
+obj-$(CONFIG_SPI_SUNPLUS_I143)   	+= spi-sunplus-i143.o
 
 # SPI slave protocol handlers
 obj-$(CONFIG_SPI_SLAVE_TIME)		+= spi-slave-time.o

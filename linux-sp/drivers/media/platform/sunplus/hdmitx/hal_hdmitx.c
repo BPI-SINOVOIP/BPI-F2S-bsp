@@ -119,6 +119,7 @@ static void apply_pixel_clock(void __iomem *moon4base)
 			break;
 	}
 
+#ifdef CONFIG_SOC_SP7021
 	if (g_pll_tv_cfg[clk_mode].bypass == ENABLE) {
 		pMoon4Reg->plltv_ctl[0] = 0x80000000 | (0x1 << 15);
 	} else {
@@ -126,6 +127,31 @@ static void apply_pixel_clock(void __iomem *moon4base)
 		pMoon4Reg->plltv_ctl[1] = 0x01800000 | (g_pll_tv_cfg[clk_mode].r << 7);
 		pMoon4Reg->plltv_ctl[2] = 0x7fff0000 | (g_pll_tv_cfg[clk_mode].m << 8) | (g_pll_tv_cfg[clk_mode].n);
 	}
+#elif defined(CONFIG_SOC_I143)
+	pMoon4Reg->plltv_cfg[2] = 0x81000100;
+	#ifdef CLKREF_XTAL
+	pMoon4Reg->plltv_cfg[3] = 0x80070004;
+	#else
+	pMoon4Reg->plltv_cfg[3] = 0x80078004;
+	#endif
+
+	if (g_pll_tv_cfg[clk_mode].bypass == ENABLE) {
+		pMoon4Reg->plltv_cfg[2] = 0x20700000 | (0x1 << 13) | (0x1 << 6);
+	} else {
+		pMoon4Reg->plltv_cfg[0] = 0x37ff0000 | (g_pll_tv_cfg[clk_mode].pstdiv << 12) \
+								| (g_pll_tv_cfg[clk_mode].m_sdm << 0);
+
+		pMoon4Reg->plltv_cfg[1] = 0x6fff0000 | (g_pll_tv_cfg[clk_mode].ph_step_sel << 13) \
+								| (g_pll_tv_cfg[clk_mode].divr << 10) \
+								| (g_pll_tv_cfg[clk_mode].divn << 4) \
+								| (g_pll_tv_cfg[clk_mode].icp << 0);
+
+		pMoon4Reg->plltv_cfg[2] = 0x203f0000 | (g_pll_tv_cfg[clk_mode].divm << 4) \
+								| (g_pll_tv_cfg[clk_mode].ph_sel << 0);
+
+		pMoon4Reg->plltv_cfg[3] = 0x7ff00000 | (g_pll_tv_cfg[clk_mode].k_sdm << 4);
+	}
+#endif
 }
 
 void apply_phy(void __iomem *moon5base, void __iomem *hdmitxbase)
@@ -151,10 +177,18 @@ void apply_phy(void __iomem *moon5base, void __iomem *hdmitxbase)
 
 	phy_cfg = &g_phy_cfg[timing][depth];
 
+#ifdef CONFIG_SOC_SP7021
 	pMoon5Reg->sft_cfg[4] = 0x1f70000 | ((phy_cfg->aclk_mode & 0x3) << 7) \
 								| ((phy_cfg->is_data_double & 0x1) << 6) \
 								| ((phy_cfg->kv_mode & 0x3) << 4) \
 								| ((phy_cfg->term_mode & 0x7) << 0);
+#elif defined(CONFIG_SOC_I143)
+	pMoon5Reg->sft_cfg[1] = 0x1b70000 | ((phy_cfg->aclk_mode & 0x3) << 7) \
+								| ((phy_cfg->kv_mode & 0x3) << 4) \
+								| ((phy_cfg->term_mode & 0x7) << 0);
+
+	pMoon5Reg->sft_cfg[6] = 0x000f0000;
+#endif
 
 	value = pHdmitxReg->hdmi_tmdstx_ctrl1;
 	mask  = 0xfff3;
@@ -167,17 +201,35 @@ void apply_phy(void __iomem *moon5base, void __iomem *hdmitxbase)
 										| ((phy_cfg->is_clk_inv & 0x1) << 0);
 
 	value = pHdmitxReg->hdmi_tmdstx_ctrl2;
+#ifdef CONFIG_SOC_SP7021
 	mask  = 0xf7f2;
 	pHdmitxReg->hdmi_tmdstx_ctrl2 = (value & (~mask)) | ((phy_cfg->icp_mod_mode & 0xf) << 12) \
 										| ((phy_cfg->pd_d_mode & 0x7) << 8) \
 										| ((phy_cfg->cpst_mode & 0xf) << 4) \
 										| ((phy_cfg->icp_mode & 0x1) << 1);
+#elif defined(CONFIG_SOC_I143)
+	mask  = 0xfff2;
+	pHdmitxReg->hdmi_tmdstx_ctrl2 = (value & (~mask)) | ((phy_cfg->icp_mod_mode & 0xf) << 12) \
+										| ((phy_cfg->pd_emp_mode & 0x1) << 11) \
+										| ((phy_cfg->pd_d_mode & 0x7) << 8) \
+										| ((phy_cfg->cpst_mode & 0xf) << 4) \
+										| ((phy_cfg->icp_mode & 0x1) << 1);
+#endif
+
 
 	value = pHdmitxReg->hdmi_tmdstx_ctrl3;
+#ifdef CONFIG_SOC_SP7021
 	mask  = 0xef3f;
 	pHdmitxReg->hdmi_tmdstx_ctrl3 = (value & (~mask)) | ((phy_cfg->bgr_mode & 0x7) << 13) \
 										| ((phy_cfg->sw_ctrl & 0xf) << 8) \
 										| ((phy_cfg->dsel_mode & 0x3f) << 0);
+#elif defined(CONFIG_SOC_I143)
+	mask  = 0xefff;
+	pHdmitxReg->hdmi_tmdstx_ctrl3 = (value & (~mask)) | ((phy_cfg->bgr_mode & 0x7) << 13) \
+										| ((phy_cfg->sw_ctrl & 0xf) << 8) \
+										| ((phy_cfg->kv_sel & 0x3) << 6) \
+										| ((phy_cfg->dsel_mode & 0x3f) << 0);
+#endif
 
 	value = pHdmitxReg->hdmi_tmdstx_ctrl4;
 	mask  = 0xfc3f;
@@ -557,10 +609,9 @@ static void apply_audio(void __iomem *hdmitxbase)
 	pHdmitxReg->hdmi_arc_n_value1     = cts_n;
 }
 
-void hal_hdmitx_init(void __iomem *moon1base, void __iomem *hdmitxbase)
+void hal_hdmitx_init(void __iomem *hdmitxbase)
 {
 	reg_hdmitx_t *pHdmitxReg = (reg_hdmitx_t *)hdmitxbase;
-//	reg_moon1_t *pMoon1Reg = (reg_moon1_t *)moon1base;
 
 	/*apply phy general configures*/
 
@@ -574,9 +625,6 @@ void hal_hdmitx_init(void __iomem *moon1base, void __iomem *hdmitxbase)
 	/*enable interrupt*/
 	pHdmitxReg->hdmi_intr0_unmask |= (HDMITX_INTERRUPT0_MASK_HDP | HDMITX_INTERRUPT0_MASK_RSEN);
 	pHdmitxReg->hdmi_intr1_unmask |= (HDMITX_INTERRUPT1_MASK_DDC_FIFO_FULL);
-
-	/*configure DDC_SDA, DDC_SCL, HDMI_HPD and HDMI_CEC*/
-	//pMoon1Reg->sft_cfg[1] = 0x60006000;
 
 	/*set DDC i2c slave device address*/
 	pHdmitxReg->hdmi_ddc_slv_device_addr = DDC_SLV_DEVICE_ADDR;

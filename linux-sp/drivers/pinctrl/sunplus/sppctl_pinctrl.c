@@ -1,6 +1,6 @@
 /*
  * SP7021 pinmux controller driver.
- * Copyright (C) SunPlus Tech/Tibbo Tech. 2019
+ * Copyright (C) Sunplus Tech/Tibbo Tech. 2020
  * Author: Dvorkin Dmitry <dvorkin@tibbo.com>
  *
  * This program is free software; you can redistribute it and/or modify
@@ -18,8 +18,11 @@
 #include "../pinctrl-utils.h"
 #include "../devicetree.h"
 #include "sppctl_pinctrl.h"
-#include "sp7021_gpio_ops.h"
+#include "sppctl_gpio_ops.h"
 
+#ifdef CONFIG_PINCTRL_SPPCTL
+#define SUPPORT_PINMUX
+#endif
 
 char const ** unq_grps = NULL;
 size_t unq_grpsSZ = 0;
@@ -34,13 +37,13 @@ int stpctl_c_p_get(struct pinctrl_dev *_pd, unsigned _pin, unsigned long *_cfg)
 	KDBG(_pd->dev, "%s(%d)\n", __FUNCTION__, _pin);
 	switch (param) {
 	case PIN_CONFIG_DRIVE_OPEN_DRAIN:
-		if (!sp7021gpio_u_isodr(&(pctrl->gpiod->chip), _pin)) return (-EINVAL);
+		if (!sppctlgpio_u_isodr(&(pctrl->gpiod->chip), _pin)) return (-EINVAL);
 		break;
 	case PIN_CONFIG_OUTPUT:
-		if (!sp7021gpio_u_gfrst(&(pctrl->gpiod->chip), _pin)) return (-EINVAL);
-		if (!sp7021gpio_u_magpi(&(pctrl->gpiod->chip), _pin)) return (-EINVAL);
-		if (sp7021gpio_f_gdi(&(pctrl->gpiod->chip), _pin) != 0) return (-EINVAL);
-		arg = sp7021gpio_f_get(&(pctrl->gpiod->chip), _pin);
+		if (!sppctlgpio_u_gfrst(&(pctrl->gpiod->chip), _pin)) return (-EINVAL);
+		if (!sppctlgpio_u_magpi(&(pctrl->gpiod->chip), _pin)) return (-EINVAL);
+		if (sppctlgpio_f_gdi(&(pctrl->gpiod->chip), _pin) != 0) return (-EINVAL);
+		arg = sppctlgpio_f_get(&(pctrl->gpiod->chip), _pin);
 		break;
 	default:
 		//KINF(_pd->dev, "%s(%d) skipping:x%X\n", __FUNCTION__, _pin, param);
@@ -58,30 +61,30 @@ int stpctl_c_p_set(struct pinctrl_dev *_pd, unsigned _pin, unsigned long *_ca, u
 	KDBG(_pd->dev, "%s(%d,%ld,%d)\n", __FUNCTION__, _pin, *_ca, _clen);
 	// special handling for IOP
 	if (_ca[i] == 0xFF) {
-		sp7021gpio_u_magpi_set(&(pctrl->gpiod->chip), _pin, muxF_G, muxM_I);
+		sppctlgpio_u_magpi_set(&(pctrl->gpiod->chip), _pin, muxF_G, muxM_I);
 		return (0);
 	}
 
 	for (i = 0; i < _clen; i++) {
-		if (_ca[i] & SP7021_PCTL_L_OUT) {
+		if (_ca[i] & SPPCTL_PCTL_L_OUT) {
 			KDBG(_pd->dev, "%d:OUT\n", i);
-			sp7021gpio_f_sou(&(pctrl->gpiod->chip), _pin, 0);
+			sppctlgpio_f_sou(&(pctrl->gpiod->chip), _pin, 0);
 		}
-		if (_ca[i] & SP7021_PCTL_L_OU1) {
+		if (_ca[i] & SPPCTL_PCTL_L_OU1) {
 			KDBG(_pd->dev, "%d:OU1\n", i);
-			sp7021gpio_f_sou(&(pctrl->gpiod->chip), _pin, 1);
+			sppctlgpio_f_sou(&(pctrl->gpiod->chip), _pin, 1);
 		}
-		if (_ca[i] & SP7021_PCTL_L_INV) {
+		if (_ca[i] & SPPCTL_PCTL_L_INV) {
 			KDBG(_pd->dev, "%d:INV\n", i);
-			sp7021gpio_u_siinv(&(pctrl->gpiod->chip), _pin);
+			sppctlgpio_u_siinv(&(pctrl->gpiod->chip), _pin);
 		}
-		if (_ca[i] & SP7021_PCTL_L_ONV) {
+		if (_ca[i] & SPPCTL_PCTL_L_ONV) {
 			KDBG(_pd->dev, "%d:ONV\n", i);
-			sp7021gpio_u_soinv(&(pctrl->gpiod->chip), _pin);
+			sppctlgpio_u_soinv(&(pctrl->gpiod->chip), _pin);
 		}
-		if (_ca[i] & SP7021_PCTL_L_ODR) {
+		if (_ca[i] & SPPCTL_PCTL_L_ODR) {
 			KDBG(_pd->dev, "%d:ODR\n", i);
-			sp7021gpio_u_seodr(&(pctrl->gpiod->chip), _pin, 1);
+			sppctlgpio_u_seodr(&(pctrl->gpiod->chip), _pin, 1);
 		}
 		// FIXME: add pullup/pulldown, irq enable/disable
 	}
@@ -167,13 +170,13 @@ int stpctl_m_f_grp(struct pinctrl_dev *_pd, unsigned _fid, const char * const **
 	case fOFF_I:
 	case fOFF_0:   // gen GPIO/IOP: all groups = all pins
 		*_gnum = GPIS_listSZ;
-		*grps = sp7021gpio_list_s;
+		*grps = sppctlgpio_list_s;
 		break;
-	case fOFF_M:   // MUX :
+	case fOFF_M:   // pin-mux
 		*_gnum = PMUX_listSZ;
-		*grps = sp7021pmux_list_s;
+		*grps = sppctlpmux_list_s;
 		break;
-	case fOFF_G:   // some IOP func
+	case fOFF_G:   // pin-group
 		if (!f->grps) break;
 		*_gnum = f->gnum;
 		*grps = (const char * const *)f->grps_sa;
@@ -205,17 +208,17 @@ int stpctl_m_mux(struct pinctrl_dev *_pd, unsigned _fid, unsigned _gid)
 		}
 		break;
 	case fOFF_M:   // MUX :
-		sp7021gpio_u_magpi_set(&(pctrl->gpiod->chip), _gid, muxF_M, muxMKEEP);
+		sppctlgpio_u_magpi_set(&(pctrl->gpiod->chip), _gid, muxF_M, muxMKEEP);
 		sppctl_pin_set(pctrl, (_gid == 0 ? _gid : _gid - 7), _fid - 2);    // pin, fun FIXME
 		break;
 	case fOFF_G:   // GROUP
 		for (i = 0; i < f->grps[g2fpm.g_idx].pnum; i++) {
-			sp7021gpio_u_magpi_set(&(pctrl->gpiod->chip), f->grps[g2fpm.g_idx].pins[i], muxF_M, muxMKEEP);
+			sppctlgpio_u_magpi_set(&(pctrl->gpiod->chip), f->grps[g2fpm.g_idx].pins[i], muxF_M, muxMKEEP);
 		}
 		sppctl_gmx_set(pctrl, f->roff, f->boff, f->blen, f->grps[g2fpm.g_idx].gval);
 		break;
 	case fOFF_I:   // IOP
-		sp7021gpio_u_magpi_set(&(pctrl->gpiod->chip), _gid, muxF_G, muxM_I);
+		sppctlgpio_u_magpi_set(&(pctrl->gpiod->chip), _gid, muxF_G, muxM_I);
 		break;
 	default:
 		KERR(_pd->dev, "%s(_fid:%d) unknown fOFF %d\n", __FUNCTION__, _fid, f->freg);
@@ -231,14 +234,14 @@ int stpctl_m_gpio_req(struct pinctrl_dev *_pd, struct pinctrl_gpio_range *range,
 	int g_f, g_m;
 
 	KDBG(_pd->dev, "%s(%d)\n", __FUNCTION__, _pin);
-	g_f = sp7021gpio_u_gfrst(&(pctrl->gpiod->chip), _pin);
-	g_m = sp7021gpio_u_magpi(&(pctrl->gpiod->chip), _pin);
+	g_f = sppctlgpio_u_gfrst(&(pctrl->gpiod->chip), _pin);
+	g_m = sppctlgpio_u_magpi(&(pctrl->gpiod->chip), _pin);
 	if (g_f == muxF_G &&  g_m == muxM_G) return (0);
 
 	pdesc = pin_desc_get(_pd, _pin);
 	// in non-gpio state: is it claimed already?
 	if (pdesc->mux_owner) return (-EACCES);
-	sp7021gpio_u_magpi_set(&(pctrl->gpiod->chip), _pin, muxF_G, muxM_G);
+	sppctlgpio_u_magpi_set(&(pctrl->gpiod->chip), _pin, muxF_G, muxM_G);
 	return (0);
 }
 
@@ -287,7 +290,7 @@ int stpctl_o_g_pins(struct pinctrl_dev *_pd, unsigned _gid, const unsigned **pin
 	// MUX | GPIO | IOP: 1 pin -> 1 group
 	if (f->freg != fOFF_G) {
 		*num_pins = 1;
-		*pins = &sp7021pins_G[_gid];
+		*pins = &sppctlpins_G[_gid];
 		return (0);
 	}
 
@@ -308,8 +311,8 @@ void stpctl_o_show(struct pinctrl_dev *_pd, struct seq_file *_s, unsigned _n)
 	uint8_t g_f, g_m;
 
 	seq_printf(_s, "%s", dev_name(_pd->dev));
-	g_f = sp7021gpio_u_gfrst(&(p->gpiod->chip), _n);
-	g_m = sp7021gpio_u_magpi(&(p->gpiod->chip), _n);
+	g_f = sppctlgpio_u_gfrst(&(p->gpiod->chip), _n);
+	g_m = sppctlgpio_u_magpi(&(p->gpiod->chip), _n);
 	tmpp = "?";
 	if (g_f &&  g_m) tmpp = "GPIO";
 	if (g_f && !g_m) tmpp = " IOP";
@@ -332,22 +335,39 @@ int stpctl_o_n2map(struct pinctrl_dev *_pd, struct device_node *_dn, struct pinc
 	struct property *prop;
 	const char *s_f, *s_g;
 	int nmG = of_property_count_strings(_dn, "sppctl,groups");
+	func_t *f = NULL;
 
 	//print_device_tree_node(_dn, 0);
 	if (nmG <= 0) nmG = 0;
 
 	parent = of_get_parent(_dn);
 	*_nm = size/sizeof(*list);
+
+	// Check if out of range or invalid?
+	for (i = 0; i < (*_nm); i++) {
+		dt_pin = be32_to_cpu(list[i]);
+		p_p = SPPCTL_PCTLD_P(dt_pin);
+		p_g = SPPCTL_PCTLD_G(dt_pin);
+		if ((p_p >= sppctlpins_allSZ)
+#ifndef SUPPORT_PINMUX
+			|| (p_g == SPPCTL_PCTL_G_PMUX)
+#endif
+		) {
+			KDBG(_pd->dev, "Invalid pin property at index %d (0x%08x)\n", i, dt_pin);
+			return -EINVAL;
+		}
+	}
+
 	*_map = kcalloc(*_nm + nmG, sizeof(**_map), GFP_KERNEL);
 	for (i = 0; i < (*_nm); i++) {
 		dt_pin = be32_to_cpu(list[i]);
-		p_p = SP7021_PCTLD_P(dt_pin);
-		p_g = SP7021_PCTLD_G(dt_pin);
-		p_f = SP7021_PCTLD_F(dt_pin);
-		p_l = SP7021_PCTLD_L(dt_pin);
+		p_p = SPPCTL_PCTLD_P(dt_pin);
+		p_g = SPPCTL_PCTLD_G(dt_pin);
+		p_f = SPPCTL_PCTLD_F(dt_pin);
+		p_l = SPPCTL_PCTLD_L(dt_pin);
 		(* _map)[i].name = parent->name;
-		KDBG(_pd->dev, "map [%d]=%d p=%d g=%d f=%d l=%d\n", i, dt_pin, p_p, p_g, p_f, p_l);
-		if (p_g == SP7021_PCTL_G_GPIO) {
+		KDBG(_pd->dev, "map [%d]=%08x p=%d g=%d f=%d l=%d\n", i, dt_pin, p_p, p_g, p_f, p_l);
+		if (p_g == SPPCTL_PCTL_G_GPIO) {
 			// look into parse_dt_cfg(),
 			(* _map)[i].type = PIN_MAP_TYPE_CONFIGS_PIN;
 			(* _map)[i].data.configs.num_configs = 1;
@@ -356,7 +376,7 @@ int stpctl_o_n2map(struct pinctrl_dev *_pd, struct device_node *_dn, struct pinc
 			*configs = p_l;
 			(* _map)[i].data.configs.configs = configs;
 			KDBG(_pd->dev, "%s(%d) = x%X\n", (* _map)[i].data.configs.group_or_pin, p_p, p_l);
-		} else if (p_g == SP7021_PCTL_G_IOPP) {
+		} else if (p_g == SPPCTL_PCTL_G_IOPP) {
 			(* _map)[i].type = PIN_MAP_TYPE_CONFIGS_PIN;
 			(* _map)[i].data.configs.num_configs = 1;
 			(* _map)[i].data.configs.group_or_pin = pin_get_name(_pd, p_p);
@@ -372,7 +392,7 @@ int stpctl_o_n2map(struct pinctrl_dev *_pd, struct device_node *_dn, struct pinc
 		}
 	}
 
-	// handle function and group (IOP)
+	// handle pin-group function
 	if (nmG > 0 && of_property_read_string(_dn, "sppctl,function", &s_f) == 0) {
 		KDBG(_pd->dev, "found func: %s\n", s_f);
 		of_property_for_each_string(_dn, "sppctl,groups", prop, s_g) {
@@ -390,8 +410,23 @@ int stpctl_o_n2map(struct pinctrl_dev *_pd, struct device_node *_dn, struct pinc
 	if (list) {
 		for (i = 0; i < size/sizeof(*list); i++) {
 			dt_fun = be32_to_cpu(list[i]);
-			KDBG(_pd->dev, "zero func: %d\n", dt_fun);
-			sppctl_pin_set(pctrl, 0, dt_fun - 2);
+			if ( dt_fun >= list_funcsSZ) {
+			  KERR( _pd->dev, "zero func %d out of range\n", dt_fun);
+			  continue;  }
+			f = &( list_funcs[ dt_fun]);
+			switch ( f->freg) {
+				case fOFF_M:
+					KDBG( _pd->dev, "zero func: %d (%s)\n", dt_fun, f->name);
+					sppctl_pin_set( pctrl, 0, dt_fun - 2);
+					break;
+				case fOFF_G:
+					KDBG( _pd->dev, "zero group: %d (%s)\n", dt_fun, f->name);
+					sppctl_gmx_set( pctrl, f->roff, f->boff, f->blen, 0);
+					break;
+				default:
+					KERR( _pd->dev, "wrong zero group: %d (%s)\n", dt_fun, f->name);
+					break;
+			}
 		}
 	}
 
@@ -411,7 +446,9 @@ static struct pinctrl_ops sppctl_pctl_ops = {
 	.get_groups_count = stpctl_o_g_cnt,
 	.get_group_name   = stpctl_o_g_nam,
 	.get_group_pins   = stpctl_o_g_pins,
+#ifdef CONFIG_DEBUG_FS
 	.pin_dbg_show     = stpctl_o_show,
+#endif
 	.dt_node_to_map   = stpctl_o_n2map,
 	.dt_free_map      = stpctl_o_mfre,
 };
@@ -440,7 +477,7 @@ void group_groups(struct platform_device *_pd)
 	// groups == pins
 	j = 0;
 	for (i = 0; i < GPIS_listSZ; i++) {
-		unq_grps[i] = sp7021gpio_list_s[i];
+		unq_grps[i] = sppctlgpio_list_s[i];
 		g2fp_maps[i].f_idx = 0;
 		g2fp_maps[i].g_idx = i;
 	}
@@ -457,7 +494,7 @@ void group_groups(struct platform_device *_pd)
 			j++;
 		}
 	}
-	KINF(&(_pd->dev), "funcs:%d unq_grps:%d\n", list_funcsSZ, unq_grpsSZ);
+	KINF(&(_pd->dev), "funcs: %zd unq_grps: %zd\n", list_funcsSZ, unq_grpsSZ);
 }
 
 // ---------- main (exported) functions
@@ -471,8 +508,8 @@ int sppctl_pinctrl_init(struct platform_device *_pd)
 	// init pdesc
 	_p->pdesc.owner = THIS_MODULE;
 	_p->pdesc.name = dev_name(&(_pd->dev));
-	_p->pdesc.pins = &(sp7021pins_all[0]);
-	_p->pdesc.npins = sp7021pins_allSZ;
+	_p->pdesc.pins = &(sppctlpins_all[0]);
+	_p->pdesc.npins = sppctlpins_allSZ;
 	_p->pdesc.pctlops = &sppctl_pctl_ops;
 	_p->pdesc.confops = &sppctl_pconf_ops;
 	_p->pdesc.pmxops = &sppctl_pinmux_ops;
